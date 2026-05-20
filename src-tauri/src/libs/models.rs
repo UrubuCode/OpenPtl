@@ -336,7 +336,7 @@ pub struct AuthServer {
     #[serde(default)]
     pub official: bool,
     pub client_id: Option<String>,
-    #[serde(default)]
+    #[serde(skip, default)]
     pub from_remote: bool,
 }
 
