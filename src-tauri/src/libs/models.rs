@@ -349,6 +349,7 @@ impl AuthServer {
             author: Some("https://github.com/urubucode".to_string()),
             official: true,
             client_id: None,
+            from_remote: false,
         }
     }
 }
