@@ -14,7 +14,7 @@ pub const RELEASE_CHECK_USER_AGENT: &str = "OpenPtl-Updater";
 
 /// Remote JSON list of authentication servers.
 pub const AUTH_SERVERS_REMOTE_URL: &str =
-    "https://raw.githubusercontent.com/urubucode/OpenPtl/main/auth-servers.json";
+    "https://raw.githubusercontent.com/UrubuCode/OpenPtl/refs/heads/main/auth-servers.json";
 
 /// Local fallback list bundled with the application.
 pub const AUTH_SERVERS_LOCAL_FALLBACK_JSON: &str = include_str!("../../auth-servers.json");

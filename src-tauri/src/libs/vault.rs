@@ -461,8 +461,11 @@ impl VaultManager {
         }
 
         let payload = self.payload_mut()?;
-        for server in remote {
-            if !payload.auth_servers.iter().any(|s| s.id == server.id) {
+        for mut server in remote {
+            server.from_remote = true;
+            if let Some(existing) = payload.auth_servers.iter_mut().find(|s| s.id == server.id) {
+                *existing = server;
+            } else {
                 payload.auth_servers.push(server);
             }
         }
@@ -505,6 +508,16 @@ impl VaultManager {
         self.assert_unlocked()?;
         if id == "default" {
             return Err(anyhow!("Nao e possivel remover o servidor padrao"));
+        }
+        let is_remote = self
+            .payload()?
+            .auth_servers
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.from_remote)
+            .unwrap_or(false);
+        if is_remote {
+            return Err(anyhow!("Nao e possivel remover servidor remoto"));
         }
         let payload = self.payload_mut()?;
         payload.auth_servers.retain(|s| s.id != id);

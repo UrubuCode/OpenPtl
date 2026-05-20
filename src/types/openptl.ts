@@ -16,6 +16,8 @@ export interface AuthServer {
   address: string;
   author?: string | null;
   official: boolean;
+  client_id?: string | null;
+  from_remote: boolean;
 }
 
 export interface VaultStatus {

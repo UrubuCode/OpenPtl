@@ -336,6 +336,8 @@ pub struct AuthServer {
     #[serde(default)]
     pub official: bool,
     pub client_id: Option<String>,
+    #[serde(default)]
+    pub from_remote: bool,
 }
 
 impl AuthServer {

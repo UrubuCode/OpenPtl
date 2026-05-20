@@ -251,6 +251,7 @@ export function SettingsPage() {
       address,
       author: values.author.trim() || null,
       official: false,
+      from_remote: false,
     };
     await api.authServerSave(payload);
     const next = await api.authServersList();
@@ -261,7 +262,7 @@ export function SettingsPage() {
 
   async function handleDeleteServer(id: string) {
     const target = authServers.find((server) => server.id === id);
-    if (!target || !target.id.startsWith("local:")) {
+    if (!target || !target.id.startsWith("local:") || target.from_remote) {
       return;
     }
 
@@ -325,7 +326,7 @@ export function SettingsPage() {
   }
 
   function isUserManagedServer(server: AuthServer): boolean {
-    return server.id.startsWith("local:");
+    return server.id.startsWith("local:") && !server.from_remote;
   }
 
   const tabLabels = {
