@@ -31,10 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Extract & verify version
         id: ver
         shell: bash
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          conf_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "tag=${tag_version} conf=${conf_version}"
+          if [ "$tag_version" != "$conf_version" ]; then
+            echo "::error::Tag v${tag_version} does not match tauri.conf.json version ${conf_version}"
+            exit 1
+          fi
+          echo "version=${tag_version}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -66,9 +74,6 @@ jobs:
             patchelf \
             libxdo-dev \
             libssl-dev
-
-      - name: Sync version from tag
-        run: node scripts/sync-version.mjs ${{ steps.ver.outputs.version }}
 
       - name: Install JS deps
         run: bun install --frozen-lockfile
