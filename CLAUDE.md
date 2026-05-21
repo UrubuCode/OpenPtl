@@ -1,26 +1,26 @@
 # CLAUDE.md — OpenPtl
 
-## Visão geral
+## Overview
 
-Aplicação desktop de gerenciamento de conexões remotas (SSH, SFTP, FTP/FTPS, SMB, RDP). Construída com **Tauri 2 + React 19 + TypeScript** no frontend e **Rust** no backend.
+Desktop application for managing remote connections (SSH, SFTP, FTP/FTPS, SMB, RDP). Built with **Tauri 2 + React 19 + TypeScript** on the frontend and **Rust** on the backend.
 
-## Estrutura do projeto
+## Project structure
 
 ```
 src/                        # Frontend React/TypeScript
-  App.tsx                   # Root: roteamento, modais globais (sync auth, conflitos, etc.)
+  App.tsx                   # Root: routing, global modals (sync auth, conflicts, etc.)
   store/
-    app-store.ts            # Zustand store (estado global)
-    app-store.types.ts      # Tipos do store
+    app-store.ts            # Zustand store (global state)
+    app-store.types.ts      # Store types
   functions/
     vault-actions.ts        # bootstrap, vaultInit/Unlock/Lock, loadWorkspace, runSync
     connection-actions.ts   # openSsh, openSftpWorkspace, openRdp
     session-actions.ts      # ensureSessionListeners, disconnectSession, sshWrite
     sftp-editor-actions.ts  # openTab (editor), saveEditor
   pages/
-    sections/               # Páginas da sidebar (home, keychain, known-hosts, notes, settings, etc.)
+    sections/               # Sidebar pages (home, keychain, known-hosts, notes, settings, etc.)
     tabs/
-      workspace-tab-page.tsx  # Workspace completo: blocos SSH/SFTP/RDP/editor, drag, transfers
+      workspace-tab-page.tsx  # Full workspace: SSH/SFTP/RDP/editor blocks, drag, transfers
       workspace/
         terminal.tsx          # TerminalBlockView (xterm.js)
         sftp.tsx              # SftpBlockView (file browser)
@@ -31,81 +31,94 @@ src/                        # Frontend React/TypeScript
     layout/                 # AppSidebar, AppHeader, WorkTabs
     workspace/              # WorkspaceBlockController (react-rnd)
     drawers/                # HostFormDrawer, KeychainFormDrawer
-  langs/                    # i18n (en_US, pt_BR)
-  types/                    # openptl.ts (tipos compartilhados frontend/backend)
+  langs/                    # i18n — see section below
+  types/                    # openptl.ts (types shared between frontend and backend)
   lib/
-    tauri.ts                # Wrapper de todos os comandos Tauri (api.*)
+    tauri.ts                # Wrapper for all Tauri commands (api.*)
 
-src-tauri/src/              # Backend Rust
-  lib.rs                    # Todos os comandos Tauri registrados (>2000 linhas)
+src-tauri/src/              # Rust backend
+  lib.rs                    # All registered Tauri commands (>2000 lines)
   libs/
-    vault.rs                # Cofre criptografado (Argon2 + AES-GCM), perfis, keychains
-    sync.rs                 # Sincronização com servidor (Google OAuth, push/pull)
-    remote_fs.rs            # SFTP/FTP/FTPS/SMB — operações de arquivo remoto
-    shared_fs.rs            # Operações de arquivo locais + remoto unificadas
-    transfer.rs             # Transferências de arquivo entre endpoints
-    key_actions.rs          # Captura de input global (rdev) para RDP/SSH
-    task.rs                 # Task runner assíncrono interno
-    models.rs               # Structs compartilhadas entre libs
+    vault.rs                # Encrypted vault (Argon2 + AES-GCM), profiles, keychains
+    sync.rs                 # Server sync (Google OAuth, push/pull)
+    remote_fs.rs            # SFTP/FTP/FTPS/SMB — remote file operations
+    shared_fs.rs            # Unified local + remote file operations
+    transfer.rs             # File transfers between endpoints
+    key_actions.rs          # Global input capture (rdev) for RDP/SSH
+    task.rs                 # Internal async task runner
+    models.rs               # Structs shared across libs
 
-server/src/index.js         # Cloudflare Worker — broker OAuth Google para sync
+server/src/index.js         # Cloudflare Worker — Google OAuth broker for sync
 ```
 
-## Comandos essenciais
+## Essential commands
 
 ```bash
-# Desenvolvimento
-npm run tauri dev          # Inicia app Tauri com hot-reload
+# Development
+npm run tauri dev          # Start Tauri app with hot-reload
 
 # Build
 npm run build              # Build frontend (tsc + vite)
-npm run tauri build        # Build completo (frontend + Rust + instalador)
+npm run tauri build        # Full build (frontend + Rust + installer)
 
 # Type check
-npx tsc --noEmit           # Verifica tipos TypeScript sem compilar
+npx tsc --noEmit           # Check TypeScript types without compiling
 ```
 
-## Arquitetura de workspace
+## i18n — translations
 
-O workspace usa blocos flutuantes (react-rnd). Cada bloco tem:
+All user-facing strings must be added to **both** translation files:
+
+- `src/langs/en_US/` — English strings
+- `src/langs/pt_BR/` — Portuguese (Brazil) strings
+
+The shared type lives in `src/langs/types.ts` (`AppDictionary`). Adding a new string requires:
+1. Add the key to the relevant interface in `types.ts`
+2. Add the English value in the corresponding `en_US/*.ts` file
+3. Add the Portuguese value in the corresponding `pt_BR/*.ts` file
+
+**Never hardcode visible strings in Portuguese or English in component files.** Always use the `useT()` hook and reference a key from `AppDictionary`.
+
+## Workspace architecture
+
+The workspace uses floating blocks (react-rnd). Each block has:
 - `connectStage: ConnectStage` — `"connecting" | "ready" | "error" | "verifying_fingerprint" | "awaiting_password"`
-- `pendingProfileId` — perfil aguardando conexão
-- Retry automático com countdown via `connectRetryTimersRef`
-- Cancel token via `connectCancelTokenRef` — incrementado no cancel, verificado após cada `await`
+- `pendingProfileId` — profile pending connection
+- Auto-retry with countdown via `connectRetryTimersRef`
+- Cancel token via `connectCancelTokenRef` — incremented on cancel, checked after each `await`
 
-Funções chave em `workspace-tab-page.tsx`:
-- `resolvePendingTerminalConnection` — conecta SSH, gerencia stages, retry
-- `resolvePendingSftpConnection` — conecta SFTP via SSH
-- `resolvePendingRdpConnection` — conecta RDP via IronRDP
+Key functions in `workspace-tab-page.tsx`:
+- `resolvePendingTerminalConnection` — connects SSH, manages stages, retry
+- `resolvePendingSftpConnection` — connects SFTP over SSH
+- `resolvePendingRdpConnection` — connects RDP via IronRDP
 
-## Vault (cofre)
+## Vault
 
-Todo dado sensível (perfis, keychains, settings) fica em arquivo binário cifrado com AES-GCM. A chave deriva da master password via Argon2. O vault pode sincronizar com servidor via Google OAuth (`sync.rs`).
+All sensitive data (profiles, keychains, settings) is stored in an AES-GCM encrypted binary file. The key derives from the master password via Argon2. The vault can sync with a server via Google OAuth (`sync.rs`).
 
-`bootstrap()` em `vault-actions.ts`:
-1. Chama `api.syncCancel()` para cancelar qualquer sync em andamento (previne softlock no F5)
-2. Chega status do vault
-3. Se desbloqueado, chama `loadWorkspace()` (pode fazer sync pull na startup)
+`bootstrap()` in `vault-actions.ts`:
+1. Calls `api.syncCancel()` to cancel any in-progress sync (prevents softlock on F5)
+2. Checks vault status
+3. If unlocked, calls `loadWorkspace()` (may perform a sync pull on startup)
 
-## Padrões de código
+## Code conventions
 
-- **Sem comentários** salvo WHY não-óbvio
-- Callbacks de workspace passados via props tipadas (não context)
-- Estado de bloco mutado somente via `setBlocks((current) => current.map(...))`
-- Chamadas ao backend: sempre `api.*()` de `src/lib/tauri.ts`
-- i18n: `useT()` hook — nunca strings hardcoded visíveis ao usuário (exceto logs internos)
-- Snapshots de workspace salvos em `workspaceSnapshotsByTab` — blocos com `connectStage: "connecting"` são resetados para `"error"` no restore
+- **No comments** unless the WHY is non-obvious
+- Workspace callbacks passed as typed props (not context)
+- Block state mutated only via `setBlocks((current) => current.map(...))`
+- All backend calls via `api.*()` from `src/lib/tauri.ts`
+- Workspace snapshots stored in `workspaceSnapshotsByTab` — blocks with `connectStage: "connecting"` are reset to `"error"` on restore
 
-## Sincronização / Auth
+## Sync / Auth
 
-- Login via modal de seleção de servidor → `runSync("login", address)` → OAuth Google
-- Durante login: `loginServerBusy = true`, mas cancelar é sempre permitido via `cancelLoginServer()`
-- F5 durante login: `syncCancel()` no bootstrap libera o lock do backend
+- Login via server selection modal → `runSync("login", address)` → Google OAuth
+- While logging in: `loginServerBusy = true`, but cancel is always allowed via `cancelLoginServer()`
+- F5 during login: `syncCancel()` in bootstrap releases the backend lock
 
-## Protocolos suportados
+## Supported protocols
 
-| Protocolo | Backend | UI |
-|-----------|---------|-----|
+| Protocol | Backend | UI |
+|----------|---------|-----|
 | SSH | russh | TerminalBlock (xterm.js) |
 | SFTP | russh-sftp | SftpBlock |
 | FTP/FTPS | suppaftp | SftpBlock |
@@ -114,5 +127,5 @@ Todo dado sensível (perfis, keychains, settings) fica em arquivo binário cifra
 
 ## Deep links
 
-Formato: `openptl://ssh/host:port` ou direto `ssh://user@host:port`  
-Processados em `App.tsx` via `parseConnectionDeepLink()` → enfileirados em `pendingDeepLinks`.
+Format: `openptl://ssh/host:port` or direct `ssh://user@host:port`  
+Processed in `App.tsx` via `parseConnectionDeepLink()` → queued into `pendingDeepLinks`.
