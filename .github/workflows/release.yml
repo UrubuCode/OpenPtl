@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: macos-arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            name: macos-x64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            name: linux
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract & verify version
+        id: ver
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          conf_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "tag=${tag_version} conf=${conf_version}"
+          if [ "$tag_version" != "$conf_version" ]; then
+            echo "::error::Tag v${tag_version} does not match tauri.conf.json version ${conf_version}"
+            exit 1
+          fi
+          echo "version=${tag_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - name: Install Linux deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "OpenPtl v${{ steps.ver.outputs.version }}"
+          releaseBody: |
+            Automated release for ${{ github.ref_name }}.
+
+            Downloads:
+            - Windows: `.msi` / `.exe`
+            - macOS: `.dmg` (arm64 + x64)
+            - Linux: `.deb` / `.AppImage`
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+  publish-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build landing page
+        run: node scripts/build-pages.mjs
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
