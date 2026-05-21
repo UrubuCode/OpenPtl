@@ -252,19 +252,8 @@ const BASE_STYLE = `
 // ─── Crypto ─────────────────────────────────────────────────────────
 
 async function deriveAesKey(clientId) {
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(clientId),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits'],
-  );
-  const keyBits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: new TextEncoder().encode('openptl-auth-v1'), iterations: 1, hash: 'SHA-256' },
-    keyMaterial,
-    256,
-  );
-  return crypto.subtle.importKey('raw', keyBits, { name: 'AES-GCM' }, false, ['encrypt']);
+  const keyBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(clientId));
+  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
 }
 
 async function encryptCallbackData(payload, clientId) {
@@ -464,7 +453,7 @@ async function handleGoogleCallback(request, env) {
 
 // ─── Callback HTML (OpenPtl Design System) ────────────────────────
 
-function renderCallbackHTML({ tokens, user, error }) {
+function renderCallbackHTML({ tokens, user, error, clientId }) {
   const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
   const xIcon     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
   const userIcon  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
@@ -552,12 +541,7 @@ function renderCallbackHTML({ tokens, user, error }) {
     </div>
 
     <div class="info-block animate-fade-in delay-3">
-      <p>Seus tokens foram enviados com segurança para o aplicativo. Esta janela será fechada automaticamente.</p>
-    </div>
-
-    <div class="closing-text animate-fade-in delay-3">
-      <span class="spinner"></span>
-      Fechando...
+      <p>Seus tokens foram enviados com segurança para o aplicativo. Você pode fechar esta janela.</p>
     </div>
   </div>
 
@@ -574,14 +558,8 @@ function renderCallbackHTML({ tokens, user, error }) {
       if (clientId) {
         try {
           const enc = new TextEncoder();
-          const keyMaterial = await crypto.subtle.importKey(
-            'raw', enc.encode(clientId), { name: 'PBKDF2' }, false, ['deriveBits']
-          );
-          const keyBits = await crypto.subtle.deriveBits(
-            { name: 'PBKDF2', salt: enc.encode('openptl-auth-v1'), iterations: 1, hash: 'SHA-256' },
-            keyMaterial, 256
-          );
-          const key = await crypto.subtle.importKey('raw', keyBits, { name: 'AES-GCM' }, false, ['encrypt']);
+          const keyBytes = await crypto.subtle.digest('SHA-256', enc.encode(clientId));
+          const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
           const iv = crypto.getRandomValues(new Uint8Array(12));
           const ciphertext = await crypto.subtle.encrypt(
             { name: 'AES-GCM', iv },
@@ -605,7 +583,16 @@ function renderCallbackHTML({ tokens, user, error }) {
     }
 
     buildDeeplinkUrl().then(url => {
-      try { window.location.href = url; } catch (_) {}
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (_) {
+        try { window.location.href = url; } catch (_2) {}
+      }
     });
     setTimeout(() => window.close(), 3000);
   <\/script>

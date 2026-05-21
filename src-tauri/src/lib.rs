@@ -2291,15 +2291,26 @@ fn resolve_server_addresses_with_override(
 
 #[tauri::command]
 async fn sync_push(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<SyncState, String> {
-    let (server_address, fallbacks) = {
+    let (server_address, fallbacks, local_files) = {
         let vault = state.vault.lock().await;
-        resolve_server_addresses(&vault)?
+        let (addr, fb) = resolve_server_addresses(&vault)?;
+        let files = vault.list_local_bin_files().map_err(app_error)?;
+        (addr, fb, files)
     };
-    let mut sync = state.sync.lock().await;
-    let mut vault = state.vault.lock().await;
-    sync.push(&app, &mut vault, &server_address, &fallbacks)
-        .await
-        .map_err(app_error)
+    // vault lock released — network ops run without blocking other commands
+    let new_meta = {
+        let mut sync = state.sync.lock().await;
+        sync.push(&app, local_files, &server_address, &fallbacks)
+            .await
+            .map_err(app_error)?
+    };
+    {
+        let mut vault = state.vault.lock().await;
+        vault.set_sync_metadata(new_meta.clone()).map_err(app_error)?;
+    }
+    let state_val = SyncState::ok("sync_push_success", new_meta.last_sync_at);
+    app.emit("sync:status", &state_val).ok();
+    Ok(state_val)
 }
 
 #[tauri::command]
@@ -2308,11 +2319,32 @@ async fn sync_pull(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<
         let vault = state.vault.lock().await;
         resolve_server_addresses(&vault)?
     };
-    let mut sync = state.sync.lock().await;
-    let mut vault = state.vault.lock().await;
-    sync.pull(&app, &mut vault, &server_address, &fallbacks)
-        .await
-        .map_err(app_error)
+    // vault lock released — network ops run without blocking other commands
+    let snapshot = {
+        let mut sync = state.sync.lock().await;
+        sync.pull(&app, &server_address, &fallbacks)
+            .await
+            .map_err(app_error)?
+    };
+    let Some(snapshot) = snapshot else {
+        let state_val = SyncState::idle("sync_backup_not_found");
+        app.emit("sync:status", &state_val).ok();
+        return Ok(state_val);
+    };
+    let new_meta = {
+        let mut vault = state.vault.lock().await;
+        vault.replace_local_files(&snapshot).map_err(app_error)?;
+        let mut meta = vault.sync_metadata().map_err(app_error)?;
+        let now = chrono::Utc::now();
+        meta.last_sync_at = Some(now.to_rfc3339());
+        meta.last_remote_modified = Some(now.to_rfc3339());
+        meta.last_local_change = now.timestamp();
+        vault.set_sync_metadata(meta.clone()).map_err(app_error)?;
+        meta
+    };
+    let state_val = SyncState::ok("sync_pull_success", new_meta.last_sync_at);
+    app.emit("sync:status", &state_val).ok();
+    Ok(state_val)
 }
 
 #[tauri::command]
@@ -2896,6 +2928,8 @@ pub fn run() {
                     }
                 });
             }
+
+            app.deep_link().register_all().ok();
 
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 for url in urls {

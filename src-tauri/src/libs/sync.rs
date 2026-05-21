@@ -29,8 +29,8 @@ use crate::{
     },
     libs::models::{
         BackendMessage, RecoveryProbeResult, SyncConflictDecision, SyncConflictItem,
-        SyncConflictKind, SyncConflictPreview, SyncKeepSide, SyncLoggedUser, SyncState,
-        VaultStatus,
+        SyncConflictKind, SyncConflictPreview, SyncKeepSide, SyncLoggedUser, SyncMetadata,
+        SyncState, VaultStatus,
     },
     libs::vault::VaultManager,
 };
@@ -177,7 +177,7 @@ impl SyncManager {
         client_id: Option<String>,
     ) -> Result<SyncState> {
         clear_sync_cancel();
-        set_pending_client_id(client_id);
+        set_pending_client_id(client_id.clone());
         let pending = SyncState {
             connected: false,
             status: "running".to_string(),
@@ -191,7 +191,10 @@ impl SyncManager {
         #[cfg(target_os = "windows")]
         {
             clear_auth_callback_queue();
-            let login_url = format!("{}/auth/google", server_address);
+            let login_url = match &client_id {
+                Some(cid) => format!("{}/auth/google?client_id={}", server_address, urlencoding::encode(cid)),
+                None => format!("{}/auth/google", server_address),
+            };
             open::that_detached(&login_url).context("Falha ao abrir navegador para login")?;
             let result = tokio::select! {
                 result = tokio::time::timeout(AUTH_DEEPLINK_TIMEOUT, wait_for_auth_callback()) => {
@@ -213,11 +216,19 @@ impl SyncManager {
                 .context("Falha ao abrir porta local para callback")?;
             let local_port = listener.local_addr()?.port();
             let callback_url = format!("http://localhost:{}/callback", local_port);
-            let login_url = format!(
-                "{}/auth/google?local_callback={}",
-                server_address,
-                urlencoding::encode(&callback_url)
-            );
+            let login_url = match &client_id {
+                Some(cid) => format!(
+                    "{}/auth/google?local_callback={}&client_id={}",
+                    server_address,
+                    urlencoding::encode(&callback_url),
+                    urlencoding::encode(cid)
+                ),
+                None => format!(
+                    "{}/auth/google?local_callback={}",
+                    server_address,
+                    urlencoding::encode(&callback_url)
+                ),
+            };
 
             open::that_detached(&login_url).context("Falha ao abrir navegador para login")?;
             let result = tokio::select! {
@@ -259,17 +270,15 @@ impl SyncManager {
     pub async fn push(
         &mut self,
         app: &tauri::AppHandle,
-        vault: &mut VaultManager,
+        local_files: Vec<(String, Vec<u8>)>,
         server_address: &str,
         fallback_addresses: &[String],
-    ) -> Result<SyncState> {
+    ) -> Result<SyncMetadata> {
         clear_sync_cancel();
         let access_token =
             access_token_from_refresh_with_fallback(server_address, fallback_addresses).await?;
         if is_sync_cancelled() {
-            let state = cancelled_state();
-            app.emit("sync:status", &state).ok();
-            return Ok(state);
+            return Err(anyhow!("sync_cancelled"));
         }
 
         let client = Client::new();
@@ -278,7 +287,6 @@ impl SyncManager {
             .ok_or_else(|| anyhow!("Falha ao preparar pasta OpenPtl no Google Drive"))?;
         let remote_files = list_drive_bin_files(&client, &access_token, &folder_id).await?;
 
-        let local_files = vault.list_local_bin_files()?;
         let mut local_names = HashSet::new();
         for (name, _) in &local_files {
             local_names.insert(name.clone());
@@ -308,9 +316,9 @@ impl SyncManager {
             );
         }
 
-        for (name, metadata) in remote_files {
+        for (name, file_meta) in remote_files {
             if !local_names.contains(&name) {
-                delete_drive_file(&client, &access_token, &metadata.id).await?;
+                delete_drive_file(&client, &access_token, &file_meta.id).await?;
                 processed_steps = processed_steps.saturating_add(1);
                 emit_sync_progress(
                     app,
@@ -322,40 +330,32 @@ impl SyncManager {
             }
         }
 
-        let now = Utc::now();
-        let mut metadata = vault.sync_metadata()?;
-        metadata.last_remote_modified = Some(now.to_rfc3339());
-        metadata.last_sync_at = Some(now.to_rfc3339());
-        metadata.last_local_change = now.timestamp();
-        vault.set_sync_metadata(metadata.clone())?;
-
-        let state = SyncState::ok("sync_push_success", metadata.last_sync_at);
         emit_sync_progress(app, "complete", None, total_steps, total_steps);
-        app.emit("sync:status", &state).ok();
-        Ok(state)
+
+        let now = Utc::now();
+        Ok(SyncMetadata {
+            last_remote_modified: Some(now.to_rfc3339()),
+            last_sync_at: Some(now.to_rfc3339()),
+            last_local_change: now.timestamp(),
+        })
     }
 
     pub async fn pull(
         &mut self,
         app: &tauri::AppHandle,
-        vault: &mut VaultManager,
         server_address: &str,
         fallback_addresses: &[String],
-    ) -> Result<SyncState> {
+    ) -> Result<Option<HashMap<String, Vec<u8>>>> {
         clear_sync_cancel();
         let access_token =
             access_token_from_refresh_with_fallback(server_address, fallback_addresses).await?;
         if is_sync_cancelled() {
-            let state = cancelled_state();
-            app.emit("sync:status", &state).ok();
-            return Ok(state);
+            return Err(anyhow!("sync_cancelled"));
         }
 
         let client = Client::new();
         let Some(folder_id) = ensure_openptl_folder(&client, &access_token, false).await? else {
-            let state = SyncState::idle("sync_backup_not_found");
-            app.emit("sync:status", &state).ok();
-            return Ok(state);
+            return Ok(None);
         };
 
         let remote_files = list_drive_bin_files(&client, &access_token, &folder_id).await?;
@@ -363,17 +363,15 @@ impl SyncManager {
             || !remote_files.contains_key(PROFILE_FILE_NAME)
             || !remote_files.contains_key(MANIFEST_FILE_NAME)
         {
-            let state = SyncState::idle("sync_backup_incomplete");
-            app.emit("sync:status", &state).ok();
-            return Ok(state);
+            return Ok(None);
         }
 
         let total_steps = remote_files.len();
         let mut processed_steps = 0usize;
         emit_sync_progress(app, "downloading", None, processed_steps, total_steps);
         let mut snapshot = HashMap::new();
-        for (name, metadata) in &remote_files {
-            let bytes = download_file_bytes(&client, &access_token, &metadata.id).await?;
+        for (name, file_meta) in &remote_files {
+            let bytes = download_file_bytes(&client, &access_token, &file_meta.id).await?;
             snapshot.insert(name.clone(), bytes);
             processed_steps = processed_steps.saturating_add(1);
             emit_sync_progress(
@@ -385,19 +383,8 @@ impl SyncManager {
             );
         }
 
-        vault.replace_local_files(&snapshot)?;
-
-        let now = Utc::now();
-        let mut next_metadata = vault.sync_metadata()?;
-        next_metadata.last_sync_at = Some(now.to_rfc3339());
-        next_metadata.last_remote_modified = Some(now.to_rfc3339());
-        next_metadata.last_local_change = now.timestamp();
-        vault.set_sync_metadata(next_metadata.clone())?;
-
-        let state = SyncState::ok("sync_pull_success", next_metadata.last_sync_at);
         emit_sync_progress(app, "complete", None, total_steps, total_steps);
-        app.emit("sync:status", &state).ok();
-        Ok(state)
+        Ok(Some(snapshot))
     }
 
     pub async fn startup_conflicts(

@@ -14,6 +14,7 @@ import { conflicts } from "./conflicts";
 import { toasts } from "./toasts";
 import { common } from "./common";
 import { backendMessages } from "./backend-messages";
+import { notes } from "./notes";
 
 export const ptBR: AppDictionary = {
   app,
@@ -21,6 +22,7 @@ export const ptBR: AppDictionary = {
     home: "Home",
     keychain: "Keychain",
     knownHosts: "Known Hosts",
+    notes: "Notas",
     settings: "Configurações",
     debugLogs: "Logs",
     about: "Sobre",
@@ -42,4 +44,5 @@ export const ptBR: AppDictionary = {
   toasts,
   backendMessages,
   common,
+  notes,
 };

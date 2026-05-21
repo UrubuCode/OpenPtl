@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import pkg from "../../../package.json";
-import { Bug, CircleHelp, Globe, Home, KeyRound, NotebookTabs, Plus, Settings2 } from "lucide-react";
+import { Bug, CircleHelp, Globe, Home, KeyRound, NotebookTabs, Plus, Settings2, StickyNote } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,7 @@ const iconBySection: Record<SidebarSection, typeof Home> = {
   home: Home,
   keychain: KeyRound,
   known_hosts: NotebookTabs,
+  notes: StickyNote,
   settings: Settings2,
   debug_logs: Bug,
   about: CircleHelp,
@@ -48,8 +49,9 @@ export function AppSidebar({ current, onSelect }: AppSidebarProps) {
         { id: "home" as const, label: t.sidebar.home },
         { id: "keychain" as const, label: t.sidebar.keychain },
         { id: "known_hosts" as const, label: t.sidebar.knownHosts },
+        { id: "notes" as const, label: t.sidebar.notes },
       ] satisfies Array<{ id: SidebarSection; label: string }>,
-    [t.sidebar.home, t.sidebar.keychain, t.sidebar.knownHosts],
+    [t.sidebar.home, t.sidebar.keychain, t.sidebar.knownHosts, t.sidebar.notes],
   );
 
   const systemItems = useMemo(

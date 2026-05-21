@@ -42,6 +42,7 @@ export interface AppDictionary {
     home: string;
     keychain: string;
     knownHosts: string;
+    notes: string;
     settings: string;
     debugLogs: string;
     about: string;
@@ -669,6 +670,48 @@ export interface AppDictionary {
     mediaCantExport: string;
     fileTooLarge: string;
     knownHostRemoved: string;
+  };
+  notes: {
+    title: string;
+    subtitle: string;
+    newNote: string;
+    searchPlaceholder: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    addFirst: string;
+    pinned: string;
+    all: string;
+    pin: string;
+    unpin: string;
+    edit: string;
+    remove: string;
+    colorLabel: string;
+    titleLabel: string;
+    titlePlaceholder: string;
+    contentLabel: string;
+    contentPlaceholder: string;
+    mentionHint: string;
+    colors: {
+      default: string;
+      yellow: string;
+      blue: string;
+      green: string;
+      pink: string;
+      purple: string;
+      red: string;
+      orange: string;
+      cyan: string;
+    };
+    drawer: {
+      titleNew: string;
+      titleEdit: string;
+      description: string;
+      cancel: string;
+      save: string;
+    };
+    deleteConfirmTitle: string;
+    deleteConfirmMessage: string;
+    deleteConfirmAction: string;
   };
   backendMessages: Record<string, string>;
   common: {

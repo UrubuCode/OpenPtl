@@ -14,6 +14,7 @@ import { conflicts } from "./conflicts";
 import { toasts } from "./toasts";
 import { common } from "./common";
 import { backendMessages } from "./backend-messages";
+import { notes } from "./notes";
 
 export const enUS: AppDictionary = {
   app,
@@ -21,6 +22,7 @@ export const enUS: AppDictionary = {
     home: "Home",
     keychain: "Keychain",
     knownHosts: "Known Hosts",
+    notes: "Notes",
     settings: "Settings",
     debugLogs: "Logs",
     about: "About",
@@ -42,4 +44,5 @@ export const enUS: AppDictionary = {
   toasts,
   backendMessages,
   common,
+  notes,
 };
