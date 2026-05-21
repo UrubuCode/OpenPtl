@@ -35,6 +35,10 @@ use protocols::rdp::{
     RdpInputBatch, RdpSessionControlEvent, RdpSessionFocusInput, RdpSessionManager,
     RdpSessionOptions, RdpSessionStartResult,
 };
+use protocols::vnc::{
+    VncInputBatch, VncSessionControlEvent, VncSessionFocusInput, VncSessionManager,
+    VncSessionOptions, VncSessionStartResult,
+};
 use protocols::ssh::{
     known_hosts_add, known_hosts_ensure, known_hosts_list, known_hosts_remove, SshManager,
 };
@@ -61,6 +65,7 @@ struct AppState {
     vault: Mutex<VaultManager>,
     ssh: Mutex<SshManager>,
     rdp_sessions: Mutex<RdpSessionManager>,
+    vnc_sessions: Mutex<VncSessionManager>,
     key_actions: KeyActionsService,
     sync: Mutex<SyncManager>,
     deeplink_queue: StdMutex<Vec<String>>,
@@ -215,7 +220,15 @@ fn protocol_label(protocol: &ConnectionProtocol) -> &'static str {
         ConnectionProtocol::Ftps => "FTPS",
         ConnectionProtocol::Smb => "SMB",
         ConnectionProtocol::Rdp => "RDP",
+        ConnectionProtocol::Vnc => "VNC",
     }
+}
+
+fn ftp_profile_for_protocol(mut profile: ConnectionProfile, protocol: &ConnectionProtocol) -> ConnectionProfile {
+    if matches!(protocol, ConnectionProtocol::Ftps) {
+        profile.ftp_tls = true;
+    }
+    profile
 }
 
 fn supports_profile_protocol(profile: &ConnectionProfile, protocol: &ConnectionProtocol) -> bool {
@@ -506,8 +519,10 @@ async fn endpoint_file_size(
         } => {
             let profile = resolve_profile_for_file_protocol(state, profile_id, protocol).await?;
             match protocol {
-                ConnectionProtocol::Ftp => ftp::file_size(&profile, path, false).map_err(app_error),
-                ConnectionProtocol::Ftps => ftp::file_size(&profile, path, true).map_err(app_error),
+                ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+                    let p = ftp_profile_for_protocol(profile, protocol);
+                    ftp::file_size(&p, path).map_err(app_error)
+                }
                 ConnectionProtocol::Smb => smb::file_size(&profile, path).await.map_err(app_error),
                 _ => Err(format!(
                     "Protocolo {} nao suportado para leitura remota.",
@@ -566,15 +581,9 @@ where
         } => {
             let profile = resolve_profile_for_file_protocol(state, profile_id, protocol).await?;
             match protocol {
-                ConnectionProtocol::Ftp => {
-                    ftp::download_to_writer(&profile, path, writer, chunk_size, false, |bytes| {
-                        on_chunk(bytes)
-                    })
-                    .map_err(app_error)
-                    .map(|_| ())
-                }
-                ConnectionProtocol::Ftps => {
-                    ftp::download_to_writer(&profile, path, writer, chunk_size, true, |bytes| {
+                ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+                    let p = ftp_profile_for_protocol(profile, protocol);
+                    ftp::download_to_writer(&p, path, writer, chunk_size, |bytes| {
                         on_chunk(bytes)
                     })
                     .map_err(app_error)
@@ -648,15 +657,9 @@ where
         } => {
             let profile = resolve_profile_for_file_protocol(state, profile_id, protocol).await?;
             match protocol {
-                ConnectionProtocol::Ftp => {
-                    ftp::upload_from_reader(&profile, path, reader, chunk_size, false, |bytes| {
-                        on_chunk(bytes)
-                    })
-                    .map_err(app_error)
-                    .map(|_| ())
-                }
-                ConnectionProtocol::Ftps => {
-                    ftp::upload_from_reader(&profile, path, reader, chunk_size, true, |bytes| {
+                ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+                    let p = ftp_profile_for_protocol(profile, protocol);
+                    ftp::upload_from_reader(&p, path, reader, chunk_size, |bytes| {
                         on_chunk(bytes)
                     })
                     .map_err(app_error)
@@ -1064,6 +1067,122 @@ async fn rdp_session_stop(state: State<'_, AppState>, session_id: String) -> Res
 }
 
 #[tauri::command]
+async fn vnc_session_start(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    password_override: Option<String>,
+    control_channel: tauri::ipc::Channel<VncSessionControlEvent>,
+    video_rects_channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
+    cursor_channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
+    webrtc_enabled: Option<bool>,
+) -> Result<VncSessionStartResult, String> {
+    let profile = match resolve_profile_with_keychain(&state, &profile_id).await {
+        Ok(value) => value,
+        Err(error) => {
+            return Ok(VncSessionStartResult::Error {
+                message: BackendMessage::key(error),
+            })
+        }
+    };
+
+    let host = profile.host.trim().to_string();
+    if host.is_empty() {
+        return Ok(VncSessionStartResult::Error {
+            message: BackendMessage::key("vnc_host_invalid"),
+        });
+    }
+
+    let password = normalize_optional_input(
+        password_override.or_else(|| profile.password.clone()),
+    );
+
+    let options = VncSessionOptions {
+        host,
+        port: if profile.port == 0 { 5900 } else { profile.port },
+        password: password.unwrap_or_default(),
+        timeout_seconds: 20,
+        webrtc_enabled: webrtc_enabled.unwrap_or(false),
+    };
+
+    let mut manager = state.vnc_sessions.lock().await;
+    Ok(manager.start(options, control_channel, video_rects_channel, cursor_channel, app))
+}
+
+#[tauri::command]
+async fn vnc_session_focus(
+    state: State<'_, AppState>,
+    session_id: String,
+    focus: VncSessionFocusInput,
+) -> Result<(), String> {
+    let mut manager = state.vnc_sessions.lock().await;
+    manager.focus(session_id.as_str(), focus).map_err(app_error)
+}
+
+#[tauri::command]
+async fn vnc_input_batch(
+    state: State<'_, AppState>,
+    session_id: String,
+    batch: VncInputBatch,
+) -> Result<(), String> {
+    let mut manager = state.vnc_sessions.lock().await;
+    manager.input_batch(session_id.as_str(), batch).map_err(app_error)
+}
+
+#[tauri::command]
+async fn vnc_session_stop(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    let mut manager = state.vnc_sessions.lock().await;
+    manager.stop(session_id.as_str()).map_err(app_error)
+}
+
+#[tauri::command]
+async fn vnc_webrtc_offer(session_id: String) -> Result<serde_json::Value, String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "vnc_webrtc_peer_not_found".to_string())?;
+    let offer = peer.create_offer().await.map_err(app_error)?;
+    serde_json::to_value(offer).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn vnc_webrtc_answer(
+    session_id: String,
+    answer: serde_json::Value,
+) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "vnc_webrtc_peer_not_found".to_string())?;
+    let answer: webrtc::peer_connection::sdp::session_description::RTCSessionDescription =
+        serde_json::from_value(answer).map_err(|e| e.to_string())?;
+    peer.accept_answer(answer).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn vnc_webrtc_ice(
+    session_id: String,
+    candidate: serde_json::Value,
+) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "vnc_webrtc_peer_not_found".to_string())?;
+    let cand: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
+        serde_json::from_value(candidate).map_err(|e| e.to_string())?;
+    peer.add_remote_ice(cand).await.map_err(app_error)
+}
+
+#[tauri::command]
 fn key_actions_set_active_workspace(
     state: State<'_, AppState>,
     target: Option<KeyActionsActiveTargetInput>,
@@ -1327,8 +1446,10 @@ async fn remote_profile_list(
 ) -> Result<Vec<SftpEntry>, String> {
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => ftp::list(&profile, &path, false).map_err(app_error),
-        ConnectionProtocol::Ftps => ftp::list(&profile, &path, true).map_err(app_error),
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::list(&p, &path).map_err(app_error)
+        }
         ConnectionProtocol::Smb => smb::list(&profile, &path).await.map_err(app_error),
         _ => Err(format!(
             "Protocolo {} nao suportado para listagem remota.",
@@ -1347,8 +1468,10 @@ async fn remote_profile_read(
     let chunk_size = resolve_sftp_chunk_size_bytes(&state).await?;
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => ftp::read(&profile, &path, false).map_err(app_error),
-        ConnectionProtocol::Ftps => ftp::read(&profile, &path, true).map_err(app_error),
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::read(&p, &path).map_err(app_error)
+        }
         ConnectionProtocol::Smb => smb::read(&profile, &path, chunk_size)
             .await
             .map_err(app_error),
@@ -1370,11 +1493,9 @@ async fn remote_profile_read_chunk(
     let chunk_size = resolve_sftp_chunk_size_bytes(&state).await?;
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     let (chunk, total, eof) = match protocol {
-        ConnectionProtocol::Ftp => {
-            ftp::read_chunk(&profile, &path, offset, chunk_size, false).map_err(app_error)?
-        }
-        ConnectionProtocol::Ftps => {
-            ftp::read_chunk(&profile, &path, offset, chunk_size, true).map_err(app_error)?
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::read_chunk(&p, &path, offset, chunk_size).map_err(app_error)?
         }
         ConnectionProtocol::Smb => smb::read_chunk(&profile, &path, offset, chunk_size)
             .await
@@ -1406,11 +1527,9 @@ async fn remote_profile_write(
     let chunk_size = resolve_sftp_chunk_size_bytes(&state).await?;
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => {
-            ftp::write(&profile, &path, &content, chunk_size, false).map_err(app_error)
-        }
-        ConnectionProtocol::Ftps => {
-            ftp::write(&profile, &path, &content, chunk_size, true).map_err(app_error)
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::write(&p, &path, &content, chunk_size).map_err(app_error)
         }
         ConnectionProtocol::Smb => smb::write(&profile, &path, &content, chunk_size)
             .await
@@ -1432,11 +1551,9 @@ async fn remote_profile_rename(
 ) -> Result<(), String> {
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => {
-            ftp::rename(&profile, &from_path, &to_path, false).map_err(app_error)
-        }
-        ConnectionProtocol::Ftps => {
-            ftp::rename(&profile, &from_path, &to_path, true).map_err(app_error)
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::rename(&p, &from_path, &to_path).map_err(app_error)
         }
         ConnectionProtocol::Smb => smb::rename(&profile, &from_path, &to_path)
             .await
@@ -1458,8 +1575,10 @@ async fn remote_profile_delete(
 ) -> Result<(), String> {
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => ftp::delete(&profile, &path, is_dir, false).map_err(app_error),
-        ConnectionProtocol::Ftps => ftp::delete(&profile, &path, is_dir, true).map_err(app_error),
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::delete(&p, &path, is_dir).map_err(app_error)
+        }
         ConnectionProtocol::Smb => smb::delete(&profile, &path).await.map_err(app_error),
         _ => Err(format!(
             "Protocolo {} nao suportado para remocao remota.",
@@ -1477,8 +1596,10 @@ async fn remote_profile_mkdir(
 ) -> Result<(), String> {
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => ftp::mkdir(&profile, &path, false).map_err(app_error),
-        ConnectionProtocol::Ftps => ftp::mkdir(&profile, &path, true).map_err(app_error),
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::mkdir(&p, &path).map_err(app_error)
+        }
         ConnectionProtocol::Smb => smb::mkdir(&profile, &path).await.map_err(app_error),
         _ => Err(format!(
             "Protocolo {} nao suportado para criacao de pasta remota.",
@@ -1496,8 +1617,10 @@ async fn remote_profile_create_file(
 ) -> Result<(), String> {
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
     match protocol {
-        ConnectionProtocol::Ftp => ftp::create_file(&profile, &path, false).map_err(app_error),
-        ConnectionProtocol::Ftps => ftp::create_file(&profile, &path, true).map_err(app_error),
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            let p = ftp_profile_for_protocol(profile, &protocol);
+            ftp::create_file(&p, &path).map_err(app_error)
+        }
         ConnectionProtocol::Smb => smb::create_file(&profile, &path).await.map_err(app_error),
         _ => Err(format!(
             "Protocolo {} nao suportado para criacao de arquivo remoto.",
@@ -1518,9 +1641,11 @@ async fn remote_profile_read_binary_preview(
     let chunk_size = resolve_sftp_chunk_size_bytes(&state).await?;
     let profile = resolve_profile_for_file_protocol(&state, &profile_id, &protocol).await?;
 
+    let ftp_profile = ftp_profile_for_protocol(profile.clone(), &protocol);
     let remote_size = match protocol {
-        ConnectionProtocol::Ftp => ftp::file_size(&profile, &path, false).map_err(app_error)?,
-        ConnectionProtocol::Ftps => ftp::file_size(&profile, &path, true).map_err(app_error)?,
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            ftp::file_size(&ftp_profile, &path).map_err(app_error)?
+        }
         ConnectionProtocol::Smb => smb::file_size(&profile, &path).await.map_err(app_error)?,
         _ => {
             return Err(format!(
@@ -1535,11 +1660,8 @@ async fn remote_profile_read_binary_preview(
     }
 
     let content = match protocol {
-        ConnectionProtocol::Ftp => {
-            ftp::read_bytes_with_limit(&profile, &path, limit, false).map_err(app_error)?
-        }
-        ConnectionProtocol::Ftps => {
-            ftp::read_bytes_with_limit(&profile, &path, limit, true).map_err(app_error)?
+        ConnectionProtocol::Ftp | ConnectionProtocol::Ftps => {
+            ftp::read_bytes_with_limit(&ftp_profile, &path, limit).map_err(app_error)?
         }
         ConnectionProtocol::Smb => smb::read_bytes_with_limit(&profile, &path, chunk_size, limit)
             .await
@@ -2810,7 +2932,7 @@ fn is_supported_deep_link(payload: &str) -> bool {
     };
     matches!(
         scheme.to_ascii_lowercase().as_str(),
-        OPENPTL_SCHEME | "ssh" | "sftp" | "smb" | "rdp"
+        OPENPTL_SCHEME | "ssh" | "sftp" | "smb" | "rdp" | "vnc"
     )
 }
 
@@ -2868,6 +2990,7 @@ pub fn run() {
         vault: Mutex::new(vault),
         ssh: Mutex::new(SshManager::new()),
         rdp_sessions: Mutex::new(RdpSessionManager::default()),
+        vnc_sessions: Mutex::new(VncSessionManager::default()),
         key_actions: KeyActionsService::new(),
         sync: Mutex::new(SyncManager::new()),
         deeplink_queue: StdMutex::new(Vec::new()),
@@ -2977,6 +3100,13 @@ pub fn run() {
             rdp_session_focus,
             rdp_input_batch,
             rdp_session_stop,
+            vnc_session_start,
+            vnc_session_focus,
+            vnc_input_batch,
+            vnc_session_stop,
+            vnc_webrtc_offer,
+            vnc_webrtc_answer,
+            vnc_webrtc_ice,
             key_actions_set_active_workspace,
             ssh_write,
             ssh_resize,

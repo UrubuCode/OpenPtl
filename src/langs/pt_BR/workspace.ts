@@ -56,5 +56,22 @@ export const workspace: AppDictionary["workspace"] = {
     passwordPlaceholder: "Senha RDP",
     applyPassword: "Aplicar senha e reconectar",
   },
+  vnc: {
+    title: "Desktop Remoto VNC",
+    description: "Conecte um perfil VNC e visualize o frame remoto via protocolo RFB.",
+    noProfiles: "Nenhuma conexão com protocolo VNC foi encontrada.",
+    selectProfile: "Selecione um perfil VNC para continuar.",
+    profileLabel: "Perfil",
+    connecting: "Conectando via VNC...",
+    ready: "Conectado",
+    authRequired: "Autenticação necessária",
+    error: "Falha na conexão VNC",
+    retry: "Tentar novamente",
+    lastFrame: "Último frame",
+    resolution: "Resolução",
+    waitingFrame: "Aguardando primeiro frame remoto...",
+    passwordPlaceholder: "Senha VNC",
+    applyPassword: "Aplicar senha e reconectar",
+  },
 };
 

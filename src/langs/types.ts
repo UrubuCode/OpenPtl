@@ -549,6 +549,7 @@ export interface AppDictionary {
       ftpsDescription: string;
       smbDescription: string;
       rdpDescription: string;
+      vncDescription: string;
     };
     password: { label: string; description: string; placeholder: string };
     auth: {
@@ -621,6 +622,23 @@ export interface AppDictionary {
       lastFrame: string;
       resolution: string;
       autoRefresh: string;
+      waitingFrame: string;
+      passwordPlaceholder: string;
+      applyPassword: string;
+    };
+    vnc: {
+      title: string;
+      description: string;
+      noProfiles: string;
+      selectProfile: string;
+      profileLabel: string;
+      connecting: string;
+      ready: string;
+      authRequired: string;
+      error: string;
+      retry: string;
+      lastFrame: string;
+      resolution: string;
       waitingFrame: string;
       passwordPlaceholder: string;
       applyPassword: string;

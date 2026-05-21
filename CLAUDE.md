@@ -124,6 +124,23 @@ All sensitive data (profiles, keychains, settings) is stored in an AES-GCM encry
 | FTP/FTPS | suppaftp | SftpBlock |
 | SMB | pavao | SftpBlock |
 | RDP | IronRDP | RdpBlock (pixi.js stream) |
+| VNC | RFB (raw) | VncBlock (pixi.js) / VncWebrtcBlock (POC) |
+
+## WebRTC streaming (POC)
+
+New screen-streaming stack replacing the LZ4 binary protocol (`TVNV`/`TVNC`) for
+VNC/RDP. H.264 over a WebRTC `MediaStreamTrack` + DataChannels for input/cursor.
+Backend in `src-tauri/src/protocols/webrtc_stream.rs`. See `WEBRTC.MD` for the full
+design. Per-block toggle: `VncBlock.useWebrtc` (defaults true for new blocks);
+header buttons switch between `VncWebrtcBlockView` (WebRTC) and `VncBlockView`
+(legacy pixi). `webrtcEnabled` is passed through to `vncSessionStart`.
+
+`StreamPeer` cursor/resize are now wired in `vnc.rs`:
+- `cursor_channel` + `push_cursor_update()` — driven by the Cursor pseudo-encoding
+  (-239 / RichCursor) decode; cursor RGBA is base64'd and sent as JSON, rebuilt into
+  a data URL on the frontend (`vnc-webrtc.tsx`).
+- `resize()` — driven by the DesktopSize pseudo-encoding (-223); recreates the H.264
+  encoder and reallocates the framebuffer on resolution change.
 
 ## Deep links
 

@@ -29,6 +29,7 @@ type AuthMethod = "password" | "key" | "agent";
 const RDP_DEFAULT_PORT = 3389;
 const FTP_DEFAULT_PORT = 21;
 const SMB_DEFAULT_PORT = 445;
+const VNC_DEFAULT_PORT = 5900;
 
 const protocolMeta: Record<
   ConnectionProtocol,
@@ -68,6 +69,11 @@ const protocolMeta: Record<
     defaultPort: RDP_DEFAULT_PORT,
     colorClass: "bg-destructive/15 text-destructive border-destructive/30",
   },
+  vnc: {
+    icon: Monitor,
+    defaultPort: VNC_DEFAULT_PORT,
+    colorClass: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  },
 };
 
 interface ParsedHostUrl {
@@ -92,7 +98,7 @@ function tryParseHostUrl(raw: string): ParsedHostUrl | null {
   }
 
   const scheme = url.protocol.replace(":", "").toLowerCase() as ConnectionProtocol;
-  const validProtocols: ConnectionProtocol[] = ["ssh", "sftp", "ftp", "ftps", "smb", "rdp"];
+  const validProtocols: ConnectionProtocol[] = ["ssh", "sftp", "ftp", "ftps", "smb", "rdp", "vnc"];
   if (!validProtocols.includes(scheme)) {
     return null;
   }
@@ -125,6 +131,9 @@ function preferredPortForProtocols(protocols: ConnectionProtocol[]): number {
   if (primary === "rdp") {
     return RDP_DEFAULT_PORT;
   }
+  if (primary === "vnc") {
+    return VNC_DEFAULT_PORT;
+  }
   if (primary === "smb") {
     return SMB_DEFAULT_PORT;
   }
@@ -138,6 +147,9 @@ function primaryProtocolFromList(protocols: ConnectionProtocol[]): ConnectionPro
   const unique = Array.from(new Set(protocols));
   if (unique.includes("rdp")) {
     return "rdp";
+  }
+  if (unique.includes("vnc")) {
+    return "vnc";
   }
   if (unique.includes("ssh")) {
     return "ssh";
@@ -161,6 +173,9 @@ function buildProtocolList(primary: ConnectionProtocol, sshAlsoSftp: boolean): C
   if (primary === "rdp") {
     return ["rdp"];
   }
+  if (primary === "vnc") {
+    return ["vnc"];
+  }
   if (primary === "ssh") {
     return sshAlsoSftp ? ["ssh", "sftp"] : ["ssh"];
   }
@@ -173,9 +188,17 @@ function normalizeProtocolList(protocols: ConnectionProtocol[]): ConnectionProto
   return buildProtocolList(primary, sshAlsoSftp);
 }
 
+function normalizeFtpsToFtp(protocols: ConnectionProtocol[]): ConnectionProtocol[] {
+  return protocols.map((p) => (p === "ftps" ? "ftp" : p));
+}
+
+function hasFtps(protocols: ConnectionProtocol[]): boolean {
+  return protocols.includes("ftps");
+}
+
 function normalizeProtocols(profile: ConnectionProfile): ConnectionProtocol[] {
   if (profile.protocols?.length) {
-    return normalizeProtocolList(profile.protocols);
+    return normalizeFtpsToFtp(normalizeProtocolList(profile.protocols));
   }
   if (profile.kind === "host") {
     return ["ssh"];
@@ -186,7 +209,14 @@ function normalizeProtocols(profile: ConnectionProfile): ConnectionProtocol[] {
   if (profile.kind === "rdp") {
     return ["rdp"];
   }
+  if (profile.kind === "vnc") {
+    return ["vnc"];
+  }
   return ["ssh", "sftp"];
+}
+
+function profileFtpTls(profile: ConnectionProfile): boolean {
+  return profile.ftp_tls === true || hasFtps(profile.protocols ?? []);
 }
 
 function protocolLabel(protocol: ConnectionProtocol): string {
@@ -205,7 +235,10 @@ function protocolLabel(protocol: ConnectionProtocol): string {
   if (protocol === "smb") {
     return "SMB";
   }
-  return "RDP";
+  if (protocol === "rdp") {
+    return "RDP";
+  }
+  return "VNC";
 }
 
 function protocolDescription(protocol: ConnectionProtocol, t: ReturnType<typeof useT>): string {
@@ -224,7 +257,10 @@ function protocolDescription(protocol: ConnectionProtocol, t: ReturnType<typeof 
   if (protocol === "smb") {
     return t.hostDrawer.protocols.smbDescription;
   }
-  return t.hostDrawer.protocols.rdpDescription;
+  if (protocol === "rdp") {
+    return t.hostDrawer.protocols.rdpDescription;
+  }
+  return t.hostDrawer.protocols.vncDescription;
 }
 
 function describeKeychainEntry(entry: KeychainEntry, fallback: string): string {
@@ -268,6 +304,7 @@ export function HostFormDrawer() {
       id: initialProfile.id ?? "",
       name: initialProfile.name ?? "",
       protocols: normalizeProtocols(initialProfile),
+      ftp_tls: profileFtpTls(initialProfile),
       host: initialProfile.host ?? "",
       port: initialProfile.port ?? preferredPortForProtocols(normalizeProtocols(initialProfile)),
       username: initialProfile.username ?? "",
@@ -283,6 +320,7 @@ export function HostFormDrawer() {
   const watchedUser = watch("username");
   const watchedPort = watch("port");
   const watchedProtocols = watch("protocols");
+
   const watchedPrivateKey = watch("private_key");
   const watchedKeychainId = watch("keychain_id");
   const selectedProtocol = useMemo(() => primaryProtocolFromList(watchedProtocols), [watchedProtocols]);
@@ -321,6 +359,7 @@ export function HostFormDrawer() {
       id: initialProfile.id ?? "",
       name: initialProfile.name ?? "",
       protocols: nextProtocols,
+      ftp_tls: profileFtpTls(initialProfile),
       host: initialProfile.host ?? "",
       port: initialProfile.port ?? preferredPortForProtocols(nextProtocols),
       username: initialProfile.username ?? "",
@@ -406,12 +445,13 @@ export function HostFormDrawer() {
   }
 
   function submitConnection(values: HostFormSchemaValues) {
-    const protocols = normalizeProtocolList(values.protocols);
+    const protocols = normalizeProtocolList(normalizeFtpsToFtp(values.protocols));
     const profile: ConnectionProfile = {
       ...initialProfile,
       id: values.id,
       name: values.name.trim(),
       protocols,
+      ftp_tls: protocols.includes("ftp") ? (values.ftp_tls ?? false) : undefined,
       host: values.host.trim(),
       port: values.port || preferredPortForProtocols(protocols),
       username: values.username.trim(),
@@ -487,7 +527,7 @@ export function HostFormDrawer() {
               </DialogHeader>
 
               <div className="grid grid-cols-3 gap-2">
-                {(["ssh", "sftp", "smb", "ftp", "ftps", "rdp"] as ConnectionProtocol[]).map((protocol) => {
+                {(["ssh", "sftp", "smb", "ftp", "rdp", "vnc"] as ConnectionProtocol[]).map((protocol) => {
                   const meta = protocolMeta[protocol];
                   const Icon = meta.icon;
                   const active = selectedProtocol === protocol;
@@ -529,6 +569,25 @@ export function HostFormDrawer() {
                     <p className="mt-1 text-[11px] text-muted-foreground">{t.hostDrawer.protocols.sshAlsoSftpDescription}</p>
                   </div>
                   <Switch checked={sshAlsoSftp} onCheckedChange={(checked) => handleSshAlsoSftpToggle(Boolean(checked))} />
+                </div>
+              ) : null}
+
+              {selectedProtocol === "ftp" ? (
+                <div className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/20 p-3">
+                  <div className="pr-3">
+                    <p className="text-xs font-medium text-foreground">TLS (FTPS)</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Encrypt the FTP connection with TLS (FTPS).</p>
+                  </div>
+                  <Controller
+                    control={control}
+                    name="ftp_tls"
+                    render={({ field }) => (
+                      <Switch
+                        checked={Boolean(field.value)}
+                        onCheckedChange={(checked) => field.onChange(checked)}
+                      />
+                    )}
+                  />
                 </div>
               ) : null}
             </div>

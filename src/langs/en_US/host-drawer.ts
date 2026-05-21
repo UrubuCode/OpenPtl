@@ -57,6 +57,7 @@ export const hostDrawer: AppDictionary["hostDrawer"] = {
     ftpsDescription: "Opens FTP over TLS (FTPS) explorer and transfers.",
     smbDescription: "Opens SMB shares for remote file browsing and transfers.",
     rdpDescription: "Opens remote desktop access (RDP) in the workspace.",
+    vncDescription: "Opens VNC remote desktop via RFB protocol in the workspace.",
   },
   password: {
     label: "Password",

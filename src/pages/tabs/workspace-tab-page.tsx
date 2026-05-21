@@ -47,6 +47,7 @@ import type {
   KeyActionsStatusPayload,
   RemoteTransferEndpoint,
   RdpSessionControlEvent,
+  VncSessionControlEvent,
   SurfaceRect,
   SftpEntry,
 } from "@/types/openptl";
@@ -54,6 +55,8 @@ import editorWorkspace from "@/pages/tabs/workspace/editor";
 import rdpWorkspace from "@/pages/tabs/workspace/rdp";
 import sftpWorkspace from "@/pages/tabs/workspace/sftp";
 import terminalWorkspace from "@/pages/tabs/workspace/terminal";
+import vncWorkspace from "@/pages/tabs/workspace/vnc";
+import { VncWebrtcBlockView } from "@/pages/tabs/workspace/vnc-webrtc";
 import type {
   BlockTransferItem,
   DragPayload,
@@ -63,6 +66,7 @@ import type {
   SftpContextAction,
   TerminalBlock,
   TransferItem,
+  VncBlock,
   WorkspaceBlock,
   WorkspaceKind,
   WorkspaceLogEntry,
@@ -80,6 +84,12 @@ import {
   parseRdpCursorPacket,
   parseRdpVideoRectsPacket,
 } from "@/pages/tabs/workspace/natives/rdp-stream";
+import {
+  emitVncCursor,
+  emitVncVideoRects,
+  parseVncCursorPacket,
+  parseVncVideoRectsPacket,
+} from "@/pages/tabs/workspace/natives/vnc-stream";
 import { createSourceFile, createSourceFolder, decodeBase64Chunk, deleteSourceEntry, listSourceEntries, readSourceBinaryPreview, readSourceFile, readSourceTextChunk, renameSourceEntry, writeSourceFile } from "@/pages/tabs/workspace/natives/source-io";
 import {
   workspaceNameInputSchema,
@@ -99,6 +109,7 @@ const workspaceModules = {
   terminal: terminalWorkspace,
   sftp: sftpWorkspace,
   rdp: rdpWorkspace,
+  vnc: vncWorkspace,
   editor: editorWorkspace,
 } as const;
 const SFTP_DROP_TARGET_SELECTOR = "[data-openptl-drop-target='sftp']";
@@ -289,6 +300,7 @@ const connectionProtocolIcon: Record<ConnectionProtocol, typeof Monitor> = {
   ftps: Server,
   smb: HardDrive,
   rdp: Monitor,
+  vnc: Monitor,
 };
 
 const connectionProtocolColor: Record<ConnectionProtocol, string> = {
@@ -298,10 +310,11 @@ const connectionProtocolColor: Record<ConnectionProtocol, string> = {
   ftps: "bg-success/15 text-success",
   smb: "bg-warning/15 text-warning",
   rdp: "bg-destructive/15 text-destructive",
+  vnc: "bg-purple-500/15 text-purple-400",
 };
 
 function blockMinSize(kind: WorkspaceKind): { width: number; height: number } {
-  if (kind === "terminal" || kind === "rdp") {
+  if (kind === "terminal" || kind === "rdp" || kind === "vnc") {
     return { width: 420, height: 260 };
   }
   return { width: 360, height: 240 };
@@ -382,6 +395,10 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const rdpStreamTokenByBlockRef = useRef<Map<string, string>>(new Map());
   const rdpLastFrameAtByBlockRef = useRef<Map<string, number>>(new Map());
   const rdpSurfaceRectByBlockRef = useRef<Map<string, SurfaceRect>>(new Map());
+  const vncStreamSessionByBlockRef = useRef<Map<string, string>>(new Map());
+  const vncStreamTokenByBlockRef = useRef<Map<string, string>>(new Map());
+  const vncLastFrameAtByBlockRef = useRef<Map<string, number>>(new Map());
+  const vncSurfaceRectByBlockRef = useRef<Map<string, SurfaceRect>>(new Map());
   const terminalCaptureByBlockRef = useRef<Map<string, TerminalCaptureContext>>(new Map());
   const lastPublishedKeyActionsTargetRef = useRef<string | null>(null);
   const lastExternalFileDropSignatureRef = useRef<{ signature: string; at: number } | null>(null);
@@ -409,7 +426,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const scheduleBlockAutoRetry = useCallback(
     (params: {
       blockId: string;
-      kind: "terminal" | "sftp" | "rdp";
+      kind: "terminal" | "sftp" | "rdp" | "vnc";
       delaySeconds: number;
       attempt: number;
       onRetry: () => void;
@@ -656,6 +673,23 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           };
         }
       }
+    } else if (focused?.kind === "vnc" && focused.sessionId && focused.connectStage === "ready") {
+      const surface = vncSurfaceRectByBlockRef.current.get(focused.id);
+      if (surface && focused.imageWidth > 0 && focused.imageHeight > 0) {
+        const sessionId = vncStreamSessionByBlockRef.current.get(focused.id) ?? focused.sessionId;
+        if (sessionId) {
+          target = {
+            kind: "vnc",
+            session_id: sessionId,
+            tab_id: tabId,
+            block_id: focused.id,
+            surface_rect: surface,
+            dpi_scale: window.devicePixelRatio || 1,
+            remote_width: focused.imageWidth,
+            remote_height: focused.imageHeight,
+          };
+        }
+      }
     } else if (
       focused?.kind === "terminal" &&
       focused.sessionId &&
@@ -754,6 +788,10 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   );
   const rdpProfiles = useMemo(
     () => connections.filter((profile) => supportsProtocol(profile, "rdp")),
+    [connections],
+  );
+  const vncProfiles = useMemo(
+    () => connections.filter((profile) => supportsProtocol(profile, "vnc")),
     [connections],
   );
   const sftpProfileSourceOptions = useMemo(
@@ -973,6 +1011,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       rdpStreamTokenByBlockRef.current.delete(id);
       rdpLastFrameAtByBlockRef.current.delete(id);
       rdpSurfaceRectByBlockRef.current.delete(id);
+      vncStreamTokenByBlockRef.current.delete(id);
+      vncLastFrameAtByBlockRef.current.delete(id);
+      vncSurfaceRectByBlockRef.current.delete(id);
       terminalCaptureByBlockRef.current.delete(id);
       setCaptureContextVersion((value) => value + 1);
 
@@ -983,7 +1024,15 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         }
       }
 
+      if (targetBlock?.kind === "vnc") {
+        const sessionId = vncStreamSessionByBlockRef.current.get(id) ?? targetBlock.sessionId;
+        if (sessionId) {
+          void api.vncSessionStop(sessionId).catch(() => undefined);
+        }
+      }
+
       rdpStreamSessionByBlockRef.current.delete(id);
+      vncStreamSessionByBlockRef.current.delete(id);
 
       const resolveSessionInUse = (sessionId: string) =>
         remainingBlocks.some((block) => {
@@ -2766,17 +2815,470 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     [appendWorkspaceLog, connections, resolvePendingRdpConnection, t.workspace.rdp.connecting, workspaceSize.height, workspaceSize.width],
   );
 
+  const touchVncFrameForBlock = useCallback(
+    (blockId: string, width: number, height: number) => {
+      const currentBlock = blocksRef.current.find(
+        (item): item is VncBlock => item.id === blockId && item.kind === "vnc",
+      );
+      if (!currentBlock) {
+        return;
+      }
+
+      const nextWidth = width > 0 ? width : currentBlock.imageWidth;
+      const nextHeight = height > 0 ? height : currentBlock.imageHeight;
+      const dimensionsChanged = nextWidth !== currentBlock.imageWidth || nextHeight !== currentBlock.imageHeight;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const lastTouch = vncLastFrameAtByBlockRef.current.get(blockId) ?? 0;
+      const shouldUpdateTimestamp = nowSeconds > lastTouch;
+
+      if (!dimensionsChanged && !shouldUpdateTimestamp) {
+        return;
+      }
+
+      if (shouldUpdateTimestamp) {
+        vncLastFrameAtByBlockRef.current.set(blockId, nowSeconds);
+      }
+
+      setBlocks((current) =>
+        current.map((block) =>
+          block.id === blockId && block.kind === "vnc"
+            ? {
+                ...block,
+                imageWidth: nextWidth,
+                imageHeight: nextHeight,
+                capturedAt: shouldUpdateTimestamp ? nowSeconds : block.capturedAt,
+                connectStage: "ready",
+                connectMessage: t.workspace.vnc.ready,
+                connectError: null,
+                retryAttempt: 0,
+                retryInSeconds: null,
+              }
+            : block,
+        ),
+      );
+    },
+    [t.workspace.vnc.ready],
+  );
+
+  const resolvePendingVncConnection = useCallback(
+    async (
+      blockId: string,
+      options?: {
+        passwordOverride?: string | null;
+        retryAttempt?: number;
+      },
+    ) => {
+      const target = blocksRef.current.find((item): item is VncBlock => item.id === blockId && item.kind === "vnc");
+      if (!target) {
+        return;
+      }
+
+      const profile = connections.find((item) => item.id === target.profileId);
+      if (!profile) {
+        setBlocks((current) =>
+          current.map((block) =>
+            block.id === blockId && block.kind === "vnc"
+              ? {
+                  ...block,
+                  connectStage: "error",
+                  connectMessage: t.workspace.vnc.error,
+                  connectError: "Perfil VNC nao encontrado.",
+                  retryAttempt: 0,
+                  retryInSeconds: null,
+                  sessionId: null,
+                }
+              : block,
+          ),
+        );
+        return;
+      }
+
+      const passwordOverride = options?.passwordOverride ?? null;
+      const currentAttempt = Math.max(0, options?.retryAttempt ?? target.retryAttempt);
+      const connectingMessage = passwordOverride ? "Logando..." : t.workspace.vnc.connecting;
+      const previousSessionId = vncStreamSessionByBlockRef.current.get(blockId) ?? target.sessionId;
+      if (previousSessionId) {
+        vncStreamSessionByBlockRef.current.delete(blockId);
+        void api.vncSessionStop(previousSessionId).catch(() => undefined);
+      }
+      vncLastFrameAtByBlockRef.current.delete(blockId);
+      clearBlockRetryTimers(blockId);
+
+      setBlocks((current) =>
+        current.map((block) =>
+          block.id === blockId && block.kind === "vnc"
+            ? {
+                ...block,
+                connectStage: "connecting",
+                connectMessage: connectingMessage,
+                connectError: null,
+                retryAttempt: currentAttempt,
+                retryInSeconds: null,
+                sessionId: null,
+              }
+            : block,
+        ),
+      );
+      appendWorkspaceLog("info", "Conexao VNC em andamento", `${profile.host}:${profile.port}`);
+
+      const streamToken = createId("vncstream");
+      vncStreamTokenByBlockRef.current.set(blockId, streamToken);
+
+      const controlChannel = new Channel<VncSessionControlEvent>((event) => {
+        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
+          return;
+        }
+
+        if (event.event === "ready") {
+          clearBlockRetryTimers(blockId);
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? {
+                    ...block,
+                    sessionId: event.data.session_id,
+                    connectStage: "ready",
+                    connectMessage: t.workspace.vnc.ready,
+                    connectError: null,
+                    imageWidth: event.data.width,
+                    imageHeight: event.data.height,
+                    retryAttempt: 0,
+                    retryInSeconds: null,
+                  }
+                : block,
+            ),
+          );
+          appendWorkspaceLog("success", "Sessao VNC conectada", `${profile.host} ${event.data.width}x${event.data.height}`);
+          return;
+        }
+
+        if (event.event === "connecting") {
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? {
+                    ...block,
+                    connectStage: "connecting",
+                    connectMessage: event.data.message || t.workspace.vnc.connecting,
+                    connectError: null,
+                  }
+                : block,
+            ),
+          );
+          return;
+        }
+
+        if (event.event === "auth_required") {
+          clearBlockRetryTimers(blockId);
+          vncStreamSessionByBlockRef.current.delete(blockId);
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? {
+                    ...block,
+                    sessionId: null,
+                    connectStage: "awaiting_password",
+                    connectMessage: t.workspace.vnc.authRequired,
+                    connectError: event.data.message,
+                    retryAttempt: 0,
+                    retryInSeconds: null,
+                  }
+                : block,
+            ),
+          );
+          appendWorkspaceLog("warn", "Autenticacao VNC pendente", `${profile.host}:${profile.port}`);
+          return;
+        }
+
+        if (event.event === "error") {
+          vncStreamSessionByBlockRef.current.delete(blockId);
+          const timeoutDetected = isTimeoutErrorMessage(event.data.message);
+          const nextAttempt = currentAttempt + 1;
+          const delaySeconds = Math.max(1, settings.reconnect_delay_seconds);
+          const canRetry = settings.auto_reconnect_enabled && nextAttempt <= MAX_CONNECT_RETRY_ATTEMPTS && timeoutDetected;
+
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? {
+                    ...block,
+                    sessionId: null,
+                    connectStage: "error",
+                    connectMessage: timeoutDetected ? "Timeout na conexao VNC." : t.workspace.vnc.error,
+                    connectError: event.data.message,
+                    retryAttempt: timeoutDetected ? nextAttempt : 0,
+                    retryInSeconds: canRetry ? delaySeconds : null,
+                  }
+                : block,
+            ),
+          );
+          appendWorkspaceLog("error", "Falha no stream VNC", event.data.message);
+
+          if (canRetry) {
+            scheduleBlockAutoRetry({
+              blockId,
+              kind: "vnc",
+              delaySeconds,
+              attempt: nextAttempt,
+              onRetry: () => {
+                void resolvePendingVncConnection(blockId, {
+                  passwordOverride,
+                  retryAttempt: nextAttempt,
+                });
+              },
+            });
+          }
+          return;
+        }
+
+        if (event.event === "stopped") {
+          const current = vncStreamSessionByBlockRef.current.get(blockId);
+          if (current === event.data.session_id) {
+            vncStreamSessionByBlockRef.current.delete(blockId);
+          }
+        }
+      });
+
+      const videoRectsChannel = new Channel<ArrayBuffer>((message) => {
+        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
+          return;
+        }
+        if (!(message instanceof ArrayBuffer)) {
+          return;
+        }
+        const packet = parseVncVideoRectsPacket(message);
+        if (!packet) {
+          return;
+        }
+        touchVncFrameForBlock(blockId, packet.width, packet.height);
+        emitVncVideoRects({ blockId, packet });
+      });
+
+      const cursorChannel = new Channel<ArrayBuffer>((message) => {
+        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
+          return;
+        }
+        if (!(message instanceof ArrayBuffer)) {
+          return;
+        }
+        const packet = parseVncCursorPacket(message);
+        if (!packet) {
+          return;
+        }
+        emitVncCursor({ blockId, packet });
+      });
+
+      try {
+        const result = await api.vncSessionStart(profile.id, controlChannel, videoRectsChannel, cursorChannel, {
+          passwordOverride,
+          webrtcEnabled: target.useWebrtc,
+        });
+
+        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
+          return;
+        }
+
+        if (result.status === "started") {
+          vncStreamSessionByBlockRef.current.set(blockId, result.session_id);
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? { ...block, sessionId: result.session_id, connectMessage: connectingMessage }
+                : block,
+            ),
+          );
+          return;
+        }
+
+        if (result.status === "auth_required") {
+          setBlocks((current) =>
+            current.map((block) =>
+              block.id === blockId && block.kind === "vnc"
+                ? {
+                    ...block,
+                    sessionId: null,
+                    connectStage: "awaiting_password",
+                    connectMessage: t.workspace.vnc.authRequired,
+                    connectError: result.message,
+                    retryAttempt: 0,
+                    retryInSeconds: null,
+                  }
+                : block,
+            ),
+          );
+          return;
+        }
+
+        setBlocks((current) =>
+          current.map((block) =>
+            block.id === blockId && block.kind === "vnc"
+              ? {
+                  ...block,
+                  sessionId: null,
+                  connectStage: "error",
+                  connectMessage: t.workspace.vnc.error,
+                  connectError: result.message,
+                  retryAttempt: 0,
+                  retryInSeconds: null,
+                }
+              : block,
+          ),
+        );
+      } catch (error) {
+        const message = getError(error);
+        setBlocks((current) =>
+          current.map((block) =>
+            block.id === blockId && block.kind === "vnc"
+              ? {
+                  ...block,
+                  sessionId: null,
+                  connectStage: "error",
+                  connectMessage: t.workspace.vnc.error,
+                  connectError: message,
+                  retryAttempt: 0,
+                  retryInSeconds: null,
+                }
+              : block,
+          ),
+        );
+        appendWorkspaceLog("error", "Erro ao iniciar stream VNC", message);
+      }
+    },
+    [
+      appendWorkspaceLog,
+      clearBlockRetryTimers,
+      connections,
+      settings.auto_reconnect_enabled,
+      settings.reconnect_delay_seconds,
+      scheduleBlockAutoRetry,
+      touchVncFrameForBlock,
+      t.workspace.vnc.authRequired,
+      t.workspace.vnc.connecting,
+      t.workspace.vnc.error,
+      t.workspace.vnc.ready,
+    ],
+  );
+
+  const addPendingVncBlock = useCallback(
+    (profileId: string) => {
+      const profile = connections.find((item) => item.id === profileId);
+      if (!profile) {
+        toast.error("Perfil VNC nao encontrado.");
+        return;
+      }
+
+      const host = profile.host || profileId.slice(0, 8);
+      const baseTitle = `VNC - ${host}`;
+      const count = blocksRef.current.filter((item) => item.kind === "vnc" && item.title.startsWith(baseTitle)).length;
+      const blockId = createId("vnc");
+      const block: VncBlock = {
+        id: blockId,
+        kind: "vnc",
+        title: count > 0 ? `${baseTitle} (${count + 1})` : baseTitle,
+        profileId,
+        useWebrtc: true,
+        sessionId: null,
+        connectStage: "connecting",
+        connectMessage: t.workspace.vnc.connecting,
+        connectError: null,
+        passwordDraft: "",
+        retryAttempt: 0,
+        retryInSeconds: null,
+        imageWidth: 0,
+        imageHeight: 0,
+        capturedAt: null,
+        layout: workspaceDefaultLayout("vnc", blocksRef.current.length, workspaceSize.width, workspaceSize.height),
+        zIndex: blocksRef.current.reduce((acc, item) => Math.max(acc, item.zIndex), 1) + 1,
+        minimized: false,
+        maximized: false,
+      };
+      setBlocks((current) => [...current, block]);
+      appendWorkspaceLog("info", "Conexao VNC solicitada", `${profile.host}:${profile.port}`);
+      window.setTimeout(() => {
+        void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
+      }, 0);
+    },
+    [appendWorkspaceLog, connections, resolvePendingVncConnection, t.workspace.vnc.connecting, workspaceSize.height, workspaceSize.width],
+  );
+
+  const changeVncProfile = useCallback(
+    (blockId: string, profileId: string) => {
+      notifyModuleDropdownSelect("vnc", blockId, "profile_select", profileId);
+      clearBlockRetryTimers(blockId);
+      setBlocks((current) =>
+        current.map((item) =>
+          item.id === blockId && item.kind === "vnc"
+            ? {
+                ...item,
+                profileId,
+                sessionId: null,
+                connectStage: "connecting",
+                connectMessage: t.workspace.vnc.connecting,
+                connectError: null,
+                imageWidth: 0,
+                imageHeight: 0,
+                capturedAt: null,
+                retryAttempt: 0,
+                retryInSeconds: null,
+              }
+            : item,
+        ),
+      );
+      void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
+    },
+    [clearBlockRetryTimers, resolvePendingVncConnection, t.workspace.vnc.connecting],
+  );
+
+  const toggleVncWebrtc = useCallback(
+    (blockId: string) => {
+      const sessionId = vncStreamSessionByBlockRef.current.get(blockId);
+      if (sessionId) {
+        void api.vncSessionStop(sessionId).catch(() => undefined);
+        vncStreamSessionByBlockRef.current.delete(blockId);
+      }
+      clearBlockRetryTimers(blockId);
+      setBlocks((current) =>
+        current.map((item) =>
+          item.id === blockId && item.kind === "vnc"
+            ? {
+                ...item,
+                useWebrtc: !item.useWebrtc,
+                sessionId: null,
+                connectStage: "connecting",
+                connectMessage: t.workspace.vnc.connecting,
+                connectError: null,
+                imageWidth: 0,
+                imageHeight: 0,
+                capturedAt: null,
+                retryAttempt: 0,
+                retryInSeconds: null,
+              }
+            : item,
+        ),
+      );
+      void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
+    },
+    [clearBlockRetryTimers, resolvePendingVncConnection, t.workspace.vnc.connecting],
+  );
+
   useEffect(() => {
     return () => {
       rdpStreamTokenByBlockRef.current.clear();
       rdpLastFrameAtByBlockRef.current.clear();
       rdpSurfaceRectByBlockRef.current.clear();
+      vncStreamTokenByBlockRef.current.clear();
+      vncLastFrameAtByBlockRef.current.clear();
+      vncSurfaceRectByBlockRef.current.clear();
       terminalCaptureByBlockRef.current.clear();
       lastPublishedKeyActionsTargetRef.current = null;
       rdpStreamSessionByBlockRef.current.forEach((sessionId) => {
         void api.rdpSessionStop(sessionId).catch(() => undefined);
       });
       rdpStreamSessionByBlockRef.current.clear();
+      vncStreamSessionByBlockRef.current.forEach((sessionId) => {
+        void api.vncSessionStop(sessionId).catch(() => undefined);
+      });
+      vncStreamSessionByBlockRef.current.clear();
       void api.keyActionsSetActiveWorkspace(null).catch(() => undefined);
     };
   }, []);
@@ -3662,6 +4164,10 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const openConnectionInWorkspace = useCallback(
     (profile: ConnectionProfile, options?: { openSftpWithSsh?: boolean }) => {
       const protocols = profileProtocols(profile);
+      if (protocols.includes("vnc")) {
+        addPendingVncBlock(profile.id);
+        return;
+      }
       if (protocols.includes("rdp")) {
         addPendingRdpBlock(profile.id);
         return;
@@ -3689,7 +4195,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
 
       toast.error("Esta conexão não possui protocolo suportado para abrir no workspace.");
     },
-    [addPendingRdpBlock, addPendingSftpBlock, addPendingTerminalBlock, addSftpBlock],
+    [addPendingRdpBlock, addPendingVncBlock, addPendingSftpBlock, addPendingTerminalBlock, addSftpBlock],
   );
 
   useEffect(() => {
@@ -4742,6 +5248,83 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                     });
                   },
                 })
+              : null}
+
+            {block.kind === "vnc"
+              ? block.useWebrtc
+                ? (
+                    <VncWebrtcBlockView
+                      block={block}
+                      active={focusedBlockId === block.id}
+                      profiles={vncProfiles}
+                      onFocus={() => focusBlock(block.id)}
+                      onToggleWebrtc={() => toggleVncWebrtc(block.id)}
+                      onProfileChange={(profileId) => changeVncProfile(block.id, profileId)}
+                      onFocusChange={(focus) => {
+                        const sessionId =
+                          vncStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
+                        if (!sessionId) {
+                          return;
+                        }
+                        void api.vncSessionFocus(sessionId, focus).catch((error) => {
+                          appendWorkspaceLog("warn", "Falha ao atualizar foco VNC", getError(error));
+                        });
+                      }}
+                      onRetry={() => {
+                        clearBlockRetryTimers(block.id);
+                        void resolvePendingVncConnection(block.id, { retryAttempt: 0 });
+                      }}
+                    />
+                  )
+                : vncWorkspace.render({
+                    block,
+                    active: focusedBlockId === block.id,
+                    profiles: vncProfiles,
+                    captureUnavailableMessage:
+                      focusedBlockId === block.id ? captureUnavailableMessage : null,
+                    onFocus: () => focusBlock(block.id),
+                    onToggleWebrtc: () => toggleVncWebrtc(block.id),
+                    onProfileChange: (profileId) => changeVncProfile(block.id, profileId),
+                    onFocusChange: (focus) => {
+                      const currentRect = vncSurfaceRectByBlockRef.current.get(block.id) ?? null;
+                      const nextRect = focus.surface_rect ?? null;
+                      if (!areSurfaceRectsEqual(currentRect, nextRect)) {
+                        if (nextRect) {
+                          vncSurfaceRectByBlockRef.current.set(block.id, nextRect);
+                        } else {
+                          vncSurfaceRectByBlockRef.current.delete(block.id);
+                        }
+                        setCaptureContextVersion((value) => value + 1);
+                      }
+                      const sessionId =
+                        vncStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
+                      if (!sessionId) {
+                        return;
+                      }
+                      void api.vncSessionFocus(sessionId, focus).catch((error) => {
+                        appendWorkspaceLog("warn", "Falha ao atualizar foco VNC", getError(error));
+                      });
+                    },
+                    onRetry: () => {
+                      clearBlockRetryTimers(block.id);
+                      void resolvePendingVncConnection(block.id, { retryAttempt: 0 });
+                    },
+                    onPasswordDraftChange: (value) =>
+                      setBlocks((current) =>
+                        current.map((item) =>
+                          item.id === block.id && item.kind === "vnc"
+                            ? { ...item, passwordDraft: value }
+                            : item,
+                        ),
+                      ),
+                    onSubmitPassword: () => {
+                      clearBlockRetryTimers(block.id);
+                      void resolvePendingVncConnection(block.id, {
+                        passwordOverride: block.passwordDraft,
+                        retryAttempt: 0,
+                      });
+                    },
+                  })
               : null}
 
             {block.kind === "editor"

@@ -70,8 +70,14 @@ export function supportsProtocol(profile: ConnectionProfile, protocol: Connectio
         ? ["sftp"]
         : profile.kind === "rdp"
           ? ["rdp"]
+        : profile.kind === "vnc"
+          ? ["vnc"]
         : ["ssh", "sftp"];
-  const protocols = rawProtocols.includes("rdp") ? (["rdp"] as ConnectionProtocol[]) : rawProtocols;
+  const protocols = rawProtocols.includes("rdp")
+    ? (["rdp"] as ConnectionProtocol[])
+    : rawProtocols.includes("vnc")
+      ? (["vnc"] as ConnectionProtocol[])
+      : rawProtocols;
   if (protocol === "sftp") {
     return protocols.some(
       (item) => item === "sftp" || item === "ftp" || item === "ftps" || item === "smb",

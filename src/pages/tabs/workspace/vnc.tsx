@@ -15,15 +15,15 @@ import type {
   RdpSessionFocusInput,
 } from "@/types/openptl";
 import {
-  onRdpCursor,
-  onRdpVideoRects,
-} from "@/pages/tabs/workspace/natives/rdp-stream";
+  onVncCursor,
+  onVncVideoRects,
+} from "@/pages/tabs/workspace/natives/vnc-stream";
 
-import type { RdpBlock } from "./types";
+import type { VncBlock } from "./types";
 import type { WorkspaceBlockModule } from "./block-module";
 
-export interface RdpBlockViewProps {
-  block: RdpBlock;
+export interface VncBlockViewProps {
+  block: VncBlock;
   active: boolean;
   profiles: ConnectionProfile[];
   captureUnavailableMessage?: string | null;
@@ -32,8 +32,8 @@ export interface RdpBlockViewProps {
   onFocusChange: (focus: RdpSessionFocusInput) => void;
   onRetry: () => void;
   onPasswordDraftChange: (value: string) => void;
-  onSavePasswordChange: (checked: boolean) => void;
   onSubmitPassword: () => void;
+  onToggleWebrtc: () => void;
 }
 
 function formatCapturedAt(timestamp: number | null): string {
@@ -65,7 +65,7 @@ const EMPTY_CURSOR: CursorState = {
   bitmap: null,
 };
 
-export function RdpBlockView({
+export function VncBlockView({
   block,
   active,
   profiles,
@@ -75,9 +75,9 @@ export function RdpBlockView({
   onFocusChange,
   onRetry,
   onPasswordDraftChange,
-  onSavePasswordChange,
   onSubmitPassword,
-}: RdpBlockViewProps) {
+  onToggleWebrtc,
+}: VncBlockViewProps) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const surfaceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -169,7 +169,7 @@ export function RdpBlockView({
   }, [block.imageHeight, block.imageWidth]);
 
   useEffect(() => {
-    const detachVideo = onRdpVideoRects(({ blockId, packet }) => {
+    const detachVideo = onVncVideoRects(({ blockId, packet }) => {
       if (blockId !== block.id) {
         return;
       }
@@ -189,6 +189,7 @@ export function RdpBlockView({
           continue;
         }
         const rgbaPixels = new Uint8ClampedArray(rect.pixels);
+        // BGRA → RGBA swap
         for (let index = 0; index + 3 < rgbaPixels.length; index += 4) {
           const blue = rgbaPixels[index];
           rgbaPixels[index] = rgbaPixels[index + 2];
@@ -202,32 +203,21 @@ export function RdpBlockView({
       }
     });
 
-    const detachCursor = onRdpCursor(({ blockId, packet }) => {
+    const detachCursor = onVncCursor(({ blockId, packet }) => {
       if (blockId !== block.id) {
         return;
       }
 
       if (packet.kind === "default" || packet.kind === "hidden") {
-        cursorRef.current = {
-          ...EMPTY_CURSOR,
-          kind: packet.kind,
-        };
+        cursorRef.current = { ...EMPTY_CURSOR, kind: packet.kind };
       } else if (packet.kind === "position") {
-        cursorRef.current = {
-          ...cursorRef.current,
-          kind: "position",
-          x: packet.x,
-          y: packet.y,
-        };
+        cursorRef.current = { ...cursorRef.current, kind: "position", x: packet.x, y: packet.y };
       } else {
         const previous = cursorRef.current;
         const fallbackToPrevious =
-          packet.x === 0 &&
-          packet.y === 0 &&
-          (previous.x !== 0 || previous.y !== 0);
+          packet.x === 0 && packet.y === 0 && (previous.x !== 0 || previous.y !== 0);
         cursorRef.current = {
           kind: "bitmap",
-          // Some servers emit bitmap with stale/zero position; fallback keeps continuity.
           x: fallbackToPrevious ? previous.x : packet.x,
           y: fallbackToPrevious ? previous.y : packet.y,
           hotspotX: packet.hotspotX,
@@ -334,7 +324,7 @@ export function RdpBlockView({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="border-b border-border/50 px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 px-2 py-1.5">
         <select
           className="h-8 rounded border border-border/50 bg-background px-2 text-xs text-foreground"
           value={block.profileId}
@@ -346,6 +336,13 @@ export function RdpBlockView({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={onToggleWebrtc}
+          className="rounded border border-border/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+        >
+          WebRTC
+        </button>
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden p-2">
@@ -360,10 +357,7 @@ export function RdpBlockView({
           <canvas
             ref={canvasRef}
             tabIndex={isConnected ? 0 : -1}
-            className={cn(
-              "h-full w-full outline-none",
-              "cursor-default",
-            )}
+            className={cn("h-full w-full outline-none", "cursor-default")}
             onPointerDown={handleCanvasPointerDown}
             onPointerEnter={() => emitFocusedState(true)}
             onPointerLeave={() => emitFocusedState(false)}
@@ -391,11 +385,15 @@ export function RdpBlockView({
                   <span>{statusMessage}</span>
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  <p className={cn(block.connectStage === "connecting" ? "text-primary" : undefined)}>1. {t.workspace.rdp.connecting}</p>
-                  <p className={cn(block.connectStage === "awaiting_password" ? "text-primary" : undefined)}>
-                    2. {t.workspace.rdp.authRequired}
+                  <p className={cn(block.connectStage === "connecting" ? "text-primary" : undefined)}>
+                    1. {t.workspace.vnc.connecting}
                   </p>
-                  <p className={cn(block.connectStage === "error" ? "text-primary" : undefined)}>3. {t.workspace.rdp.error}</p>
+                  <p className={cn(block.connectStage === "awaiting_password" ? "text-primary" : undefined)}>
+                    2. {t.workspace.vnc.authRequired}
+                  </p>
+                  <p className={cn(block.connectStage === "error" ? "text-primary" : undefined)}>
+                    3. {t.workspace.vnc.error}
+                  </p>
                 </div>
 
                 {(block.connectStage === "awaiting_password" || block.connectStage === "error") ? (
@@ -404,7 +402,7 @@ export function RdpBlockView({
                       type="password"
                       value={block.passwordDraft}
                       className="h-9 w-full rounded border border-border/60 bg-secondary/70 px-2 text-sm text-foreground outline-none focus:border-primary/60"
-                      placeholder={t.workspace.rdp.passwordPlaceholder}
+                      placeholder={t.workspace.vnc.passwordPlaceholder}
                       onChange={(event) => onPasswordDraftChange(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
@@ -412,35 +410,29 @@ export function RdpBlockView({
                         }
                       }}
                     />
-                    <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={block.savePasswordChoice}
-                        onChange={(event) => onSavePasswordChange(event.target.checked)}
-                      />
-                      Salvar senha no perfil
-                    </label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         className="rounded border border-primary/50 bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
                         onClick={onSubmitPassword}
                       >
-                        {t.workspace.rdp.applyPassword}
+                        {t.workspace.vnc.applyPassword}
                       </button>
                       <button
                         type="button"
                         className="rounded border border-border/70 px-2 py-1 text-xs text-foreground/90 hover:bg-secondary"
                         onClick={onRetry}
                       >
-                        {t.workspace.rdp.retry}
+                        {t.workspace.vnc.retry}
                       </button>
                     </div>
                   </div>
                 ) : null}
 
                 {block.retryInSeconds !== null ? (
-                  <p className="mt-3 text-xs text-amber-300">Timeout detectado. Nova tentativa em {block.retryInSeconds}s...</p>
+                  <p className="mt-3 text-xs text-amber-300">
+                    {t.workspace.vnc.error}. {t.workspace.vnc.retry} em {block.retryInSeconds}s...
+                  </p>
                 ) : null}
 
                 {block.connectError ? (
@@ -454,25 +446,25 @@ export function RdpBlockView({
 
       <div className="flex h-8 items-center gap-4 border-t border-border/50 px-3 text-[11px] text-muted-foreground">
         <span>
-          {t.workspace.rdp.lastFrame}: {formatCapturedAt(block.capturedAt)}
+          {t.workspace.vnc.lastFrame}: {formatCapturedAt(block.capturedAt)}
         </span>
         <span>
-          {t.workspace.rdp.resolution}: {block.imageWidth > 0 && block.imageHeight > 0 ? `${block.imageWidth}x${block.imageHeight}` : "-"}
+          {t.workspace.vnc.resolution}: {block.imageWidth > 0 && block.imageHeight > 0 ? `${block.imageWidth}x${block.imageHeight}` : "-"}
         </span>
       </div>
     </div>
   );
 }
 
-const rdpWorkspaceModule: WorkspaceBlockModule<RdpBlockViewProps> = {
-  name: "rdp",
-  description: "Bloco de transmissao RDP por dirty rects e cursor dedicado.",
-  render: (props) => <RdpBlockView {...props} />,
-  onNotFound: ({ blockId, action }) => `RDP nao encontrado (${action}) [${blockId}]`,
-  onFailureLoad: ({ blockId, action }) => `Falha no RDP (${action}) [${blockId}]`,
-  onDropDownSelect: ({ blockId, action, value }) => `RDP dropdown (${action}) [${blockId}] => ${value}`,
+const vncWorkspaceModule: WorkspaceBlockModule<VncBlockViewProps> = {
+  name: "vnc",
+  description: "Bloco de transmissao VNC por raw rects via protocolo RFB.",
+  render: (props) => <VncBlockView {...props} />,
+  onNotFound: ({ blockId, action }) => `VNC nao encontrado (${action}) [${blockId}]`,
+  onFailureLoad: ({ blockId, action }) => `Falha no VNC (${action}) [${blockId}]`,
+  onDropDownSelect: ({ blockId, action, value }) => `VNC dropdown (${action}) [${blockId}] => ${value}`,
   onStatusChange: ({ blockId, action, status }) =>
-    `Estado do RDP atualizado (${action}) [${blockId}] => ${status}`,
+    `Estado do VNC atualizado (${action}) [${blockId}] => ${status}`,
 };
 
-export default rdpWorkspaceModule;
+export default vncWorkspaceModule;

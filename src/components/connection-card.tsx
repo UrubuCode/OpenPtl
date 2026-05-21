@@ -17,6 +17,7 @@ const protocolColors: Record<ConnectionProtocol, string> = {
   ftps: "bg-success/15 text-success",
   smb: "bg-warning/15 text-warning",
   rdp: "bg-destructive/15 text-destructive",
+  vnc: "bg-purple-500/15 text-purple-400",
 };
 
 const protocolIcons: Record<ConnectionProtocol, typeof Monitor> = {
@@ -26,6 +27,7 @@ const protocolIcons: Record<ConnectionProtocol, typeof Monitor> = {
   ftps: Server,
   smb: HardDrive,
   rdp: Monitor,
+  vnc: Monitor,
 };
 
 export function ConnectionCard({ name, host, protocol, user, lastUsed }: ConnectionCardProps) {

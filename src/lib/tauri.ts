@@ -20,6 +20,9 @@ import type {
   RdpSessionControlEvent,
   RdpSessionFocusInput,
   RdpSessionStartResult,
+  VncInputBatch,
+  VncSessionControlEvent,
+  VncSessionStartResult,
   SftpEntry,
   SshConnectPurpose,
   SyncLoggedUser,
@@ -131,6 +134,35 @@ export const api = {
   rdpInputBatch: (sessionId: string, batch: RdpInputBatch) =>
     invoke<void>("rdp_input_batch", { sessionId, batch }),
   rdpSessionStop: (sessionId: string) => invoke<void>("rdp_session_stop", { sessionId }),
+  vncSessionStart: (
+    profileId: string,
+    controlChannel: Channel<VncSessionControlEvent>,
+    videoRectsChannel: Channel<ArrayBuffer>,
+    cursorChannel: Channel<ArrayBuffer>,
+    options?: {
+      passwordOverride?: string | null;
+      webrtcEnabled?: boolean;
+    },
+  ) =>
+    invoke<VncSessionStartResult>("vnc_session_start", {
+      profileId,
+      passwordOverride: options?.passwordOverride,
+      controlChannel,
+      videoRectsChannel,
+      cursorChannel,
+      webrtcEnabled: options?.webrtcEnabled ?? false,
+    }),
+  vncWebrtcOffer: (sessionId: string) =>
+    invoke<RTCSessionDescriptionInit>("vnc_webrtc_offer", { sessionId }),
+  vncWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
+    invoke<void>("vnc_webrtc_answer", { sessionId, answer }),
+  vncWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
+    invoke<void>("vnc_webrtc_ice", { sessionId, candidate }),
+  vncSessionFocus: (sessionId: string, focus: RdpSessionFocusInput) =>
+    invoke<void>("vnc_session_focus", { sessionId, focus }),
+  vncInputBatch: (sessionId: string, batch: VncInputBatch) =>
+    invoke<void>("vnc_input_batch", { sessionId, batch }),
+  vncSessionStop: (sessionId: string) => invoke<void>("vnc_session_stop", { sessionId }),
   keyActionsSetActiveWorkspace: (target?: KeyActionsActiveTargetInput | null) =>
     invoke<void>("key_actions_set_active_workspace", { target }),
   sshWrite: (sessionId: string, data: string) => invoke<string>("ssh_write", { sessionId, data }),

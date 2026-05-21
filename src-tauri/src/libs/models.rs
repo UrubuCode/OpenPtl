@@ -67,6 +67,7 @@ pub enum ConnectionKind {
     Sftp,
     Rdp,
     Both,
+    Vnc,
 }
 
 impl Default for ConnectionKind {
@@ -84,6 +85,7 @@ pub enum ConnectionProtocol {
     Ftps,
     Smb,
     Rdp,
+    Vnc,
 }
 
 impl Default for ConnectionProtocol {
@@ -108,6 +110,8 @@ pub struct ConnectionProfile {
     pub protocols: Vec<ConnectionProtocol>,
     #[serde(default = "default_connection_kind")]
     pub kind: Option<ConnectionKind>,
+    #[serde(skip, default)]
+    pub ftp_tls: bool,
 }
 
 impl ConnectionProfile {
@@ -117,6 +121,7 @@ impl ConnectionProfile {
                 ConnectionKind::Host => vec![ConnectionProtocol::Ssh],
                 ConnectionKind::Sftp => vec![ConnectionProtocol::Sftp],
                 ConnectionKind::Rdp => vec![ConnectionProtocol::Rdp],
+                ConnectionKind::Vnc => vec![ConnectionProtocol::Vnc],
                 ConnectionKind::Both => vec![ConnectionProtocol::Ssh, ConnectionProtocol::Sftp],
             };
         }
@@ -132,6 +137,12 @@ impl ConnectionProfile {
             .any(|protocol| matches!(protocol, ConnectionProtocol::Rdp))
         {
             ordered = vec![ConnectionProtocol::Rdp];
+        }
+        if ordered
+            .iter()
+            .any(|protocol| matches!(protocol, ConnectionProtocol::Vnc))
+        {
+            ordered = vec![ConnectionProtocol::Vnc];
         }
         self.protocols = ordered;
 

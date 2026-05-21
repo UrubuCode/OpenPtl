@@ -74,7 +74,7 @@ fn build_ftps_connector() -> Result<RustlsConnector> {
     Ok(RustlsConnector::from(Arc::new(config)))
 }
 
-fn connect_ftp(profile: &ConnectionProfile, secure: bool) -> Result<RustlsFtpStream> {
+fn connect_ftp(profile: &ConnectionProfile) -> Result<RustlsFtpStream> {
     let host = require_profile_host(profile)?;
     let username = profile.username.trim().to_string();
     let password = require_profile_password(profile)?;
@@ -94,7 +94,7 @@ fn connect_ftp(profile: &ConnectionProfile, secure: bool) -> Result<RustlsFtpStr
         .set_write_timeout(Some(Duration::from_secs(30)))
         .ok();
 
-    if secure {
+    if profile.ftp_tls {
         let connector = build_ftps_connector().context("Falha ao inicializar TLS para FTPS.")?;
         ftp = ftp
             .into_secure(connector, host.as_str())
@@ -107,8 +107,8 @@ fn connect_ftp(profile: &ConnectionProfile, secure: bool) -> Result<RustlsFtpStr
     Ok(ftp)
 }
 
-pub fn list(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<Vec<SftpEntry>> {
-    let mut ftp = connect_ftp(profile, secure)?;
+pub fn list(profile: &ConnectionProfile, path: &str) -> Result<Vec<SftpEntry>> {
+    let mut ftp = connect_ftp(profile)?;
     let normalized_path = normalize_ftp_path(path);
 
     let raw_entries = ftp
@@ -152,14 +152,13 @@ pub fn download_to_writer<W, F>(
     path: &str,
     writer: &mut W,
     chunk_size: usize,
-    secure: bool,
     mut on_chunk: F,
 ) -> Result<u64>
 where
     W: Write,
     F: FnMut(u64),
 {
-    let mut ftp = connect_ftp(profile, secure)?;
+    let mut ftp = connect_ftp(profile)?;
     let normalized_path = normalize_ftp_path(path);
     let mut stream = ftp
         .retr_as_stream(normalized_path.as_str())
@@ -196,14 +195,13 @@ pub fn upload_from_reader<R, F>(
     path: &str,
     reader: &mut R,
     chunk_size: usize,
-    secure: bool,
     mut on_chunk: F,
 ) -> Result<u64>
 where
     R: Read,
     F: FnMut(u64),
 {
-    let mut ftp = connect_ftp(profile, secure)?;
+    let mut ftp = connect_ftp(profile)?;
     let normalized_path = normalize_ftp_path(path);
     let mut stream = ftp
         .put_with_stream(normalized_path.as_str())
@@ -233,14 +231,14 @@ where
     Ok(transferred)
 }
 
-pub fn read(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<String> {
-    let bytes = read_bytes(profile, path, secure)?;
+pub fn read(profile: &ConnectionProfile, path: &str) -> Result<String> {
+    let bytes = read_bytes(profile, path)?;
     String::from_utf8(bytes).map_err(|_| anyhow!("Arquivo remoto nao e UTF-8 valido."))
 }
 
-fn read_bytes(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<Vec<u8>> {
+fn read_bytes(profile: &ConnectionProfile, path: &str) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
-    download_to_writer(profile, path, &mut bytes, 64 * 1024, secure, |_| {})?;
+    download_to_writer(profile, path, &mut bytes, 64 * 1024, |_| {})?;
     Ok(bytes)
 }
 
@@ -248,14 +246,13 @@ pub fn read_bytes_with_limit(
     profile: &ConnectionProfile,
     path: &str,
     max_bytes: u64,
-    secure: bool,
 ) -> Result<Option<Vec<u8>>> {
-    if let Some(size) = file_size(profile, path, secure)? {
+    if let Some(size) = file_size(profile, path)? {
         if size > max_bytes {
             return Ok(None);
         }
     }
-    Ok(Some(read_bytes(profile, path, secure)?))
+    Ok(Some(read_bytes(profile, path)?))
 }
 
 pub fn read_chunk(
@@ -263,9 +260,8 @@ pub fn read_chunk(
     path: &str,
     offset: u64,
     chunk_size: usize,
-    secure: bool,
 ) -> Result<(Vec<u8>, u64, bool)> {
-    let mut bytes = read_bytes(profile, path, secure)?;
+    let mut bytes = read_bytes(profile, path)?;
     let total = bytes.len() as u64;
     if offset >= total {
         return Ok((Vec::new(), total, true));
@@ -283,9 +279,8 @@ pub fn write(
     path: &str,
     content: &str,
     chunk_size: usize,
-    secure: bool,
 ) -> Result<()> {
-    write_bytes(profile, path, content.as_bytes(), chunk_size, secure)
+    write_bytes(profile, path, content.as_bytes(), chunk_size)
 }
 
 fn write_bytes(
@@ -293,10 +288,9 @@ fn write_bytes(
     path: &str,
     content: &[u8],
     chunk_size: usize,
-    secure: bool,
 ) -> Result<()> {
     let mut reader = std::io::Cursor::new(content.to_vec());
-    upload_from_reader(profile, path, &mut reader, chunk_size, secure, |_| {})?;
+    upload_from_reader(profile, path, &mut reader, chunk_size, |_| {})?;
     Ok(())
 }
 
@@ -304,9 +298,8 @@ pub fn rename(
     profile: &ConnectionProfile,
     from_path: &str,
     to_path: &str,
-    secure: bool,
 ) -> Result<()> {
-    let mut ftp = connect_ftp(profile, secure)?;
+    let mut ftp = connect_ftp(profile)?;
     let from = normalize_ftp_path(from_path);
     let to = normalize_ftp_path(to_path);
     ftp.rename(from.as_str(), to.as_str())
@@ -315,8 +308,8 @@ pub fn rename(
     Ok(())
 }
 
-pub fn delete(profile: &ConnectionProfile, path: &str, is_dir: bool, secure: bool) -> Result<()> {
-    let mut ftp = connect_ftp(profile, secure)?;
+pub fn delete(profile: &ConnectionProfile, path: &str, is_dir: bool) -> Result<()> {
+    let mut ftp = connect_ftp(profile)?;
     let normalized = normalize_ftp_path(path);
     if is_dir {
         ftp.rmdir(normalized.as_str())
@@ -329,8 +322,8 @@ pub fn delete(profile: &ConnectionProfile, path: &str, is_dir: bool, secure: boo
     Ok(())
 }
 
-pub fn mkdir(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<()> {
-    let mut ftp = connect_ftp(profile, secure)?;
+pub fn mkdir(profile: &ConnectionProfile, path: &str) -> Result<()> {
+    let mut ftp = connect_ftp(profile)?;
     let normalized = normalize_ftp_path(path);
     ftp.mkdir(normalized.as_str())
         .with_context(|| format!("Falha ao criar pasta FTP {}", normalized))?;
@@ -338,13 +331,13 @@ pub fn mkdir(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<()
     Ok(())
 }
 
-pub fn create_file(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<()> {
-    write_bytes(profile, path, &[], 64 * 1024, secure)?;
+pub fn create_file(profile: &ConnectionProfile, path: &str) -> Result<()> {
+    write_bytes(profile, path, &[], 64 * 1024)?;
     Ok(())
 }
 
-pub fn file_size(profile: &ConnectionProfile, path: &str, secure: bool) -> Result<Option<u64>> {
-    let mut ftp = connect_ftp(profile, secure)?;
+pub fn file_size(profile: &ConnectionProfile, path: &str) -> Result<Option<u64>> {
+    let mut ftp = connect_ftp(profile)?;
     let normalized = normalize_ftp_path(path);
     let size = ftp.size(normalized.as_str()).ok().map(|value| value as u64);
     let _ = ftp.quit();

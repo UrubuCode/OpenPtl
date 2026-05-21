@@ -1,6 +1,6 @@
 export type KeyMode = "password" | "keychain";
-export type ConnectionKind = "host" | "sftp" | "rdp" | "both";
-export type ConnectionProtocol = "ssh" | "sftp" | "ftp" | "ftps" | "smb" | "rdp";
+export type ConnectionKind = "host" | "sftp" | "rdp" | "vnc" | "both";
+export type ConnectionProtocol = "ssh" | "sftp" | "ftp" | "ftps" | "smb" | "rdp" | "vnc";
 export type KeychainEntryType = "password" | "ssh_key" | "secret";
 export type EditorPreference = "internal" | "vscode" | "system";
 export type ModifiedUploadPolicy = "auto" | "ask" | "manual";
@@ -39,6 +39,7 @@ export interface ConnectionProfile {
   remote_path?: string | null;
   protocols: ConnectionProtocol[];
   kind?: ConnectionKind | null;
+  ftp_tls?: boolean;
 }
 
 export interface KeychainEntry {
@@ -193,6 +194,16 @@ export type KeyActionsActiveTargetInput =
       remote_height: number;
     }
   | {
+      kind: "vnc";
+      session_id: string;
+      tab_id: string;
+      block_id: string;
+      surface_rect: SurfaceRect;
+      dpi_scale?: number | null;
+      remote_width: number;
+      remote_height: number;
+    }
+  | {
       kind: "ssh";
       session_id: string;
       tab_id: string;
@@ -267,6 +278,14 @@ export type RdpSessionControlEvent =
         message: BackendMessage;
       };
     };
+
+export type VncSessionStartResult = RdpSessionStartResult;
+
+export type VncSessionControlEvent = RdpSessionControlEvent;
+
+export interface VncInputBatch {
+  events: RdpInputEvent[];
+}
 
 export interface SftpEntry {
   name: string;

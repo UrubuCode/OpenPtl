@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
 use crate::protocols::rdp::{RdpInputBatch, RdpInputEvent, RdpMouseButton};
+use crate::protocols::vnc::VncInputBatch;
 
 const STATUS_EVENT: &str = "key_actions:status";
 const MAX_MOVE_RATE: Duration = Duration::from_millis(16);
@@ -48,6 +49,16 @@ pub enum KeyActionsActiveTargetInput {
         remote_width: u16,
         remote_height: u16,
     },
+    Vnc {
+        session_id: String,
+        tab_id: String,
+        block_id: String,
+        surface_rect: SurfaceRectInput,
+        #[serde(default)]
+        dpi_scale: Option<f64>,
+        remote_width: u16,
+        remote_height: u16,
+    },
     Ssh {
         session_id: String,
         tab_id: String,
@@ -76,6 +87,11 @@ enum ActiveTarget {
         remote_width: u16,
         remote_height: u16,
     },
+    Vnc {
+        common: TargetCommon,
+        remote_width: u16,
+        remote_height: u16,
+    },
     Ssh {
         common: TargetCommon,
         cols: u16,
@@ -94,6 +110,10 @@ struct Modifiers {
 #[derive(Debug, Clone)]
 enum DispatchEvent {
     Rdp {
+        session_id: String,
+        event: RdpInputEvent,
+    },
+    Vnc {
         session_id: String,
         event: RdpInputEvent,
     },
@@ -304,6 +324,26 @@ fn parse_active_target(input: KeyActionsActiveTargetInput) -> Result<ActiveTarge
                 remote_height,
             })
         }
+        KeyActionsActiveTargetInput::Vnc {
+            session_id,
+            tab_id,
+            block_id,
+            surface_rect,
+            dpi_scale,
+            remote_width,
+            remote_height,
+        } => {
+            let common =
+                parse_target_common(session_id, tab_id, block_id, surface_rect, dpi_scale)?;
+            if remote_width == 0 || remote_height == 0 {
+                return Err("Resolucao remota VNC invalida para captura.".to_string());
+            }
+            Ok(ActiveTarget::Vnc {
+                common,
+                remote_width,
+                remote_height,
+            })
+        }
         KeyActionsActiveTargetInput::Ssh {
             session_id,
             tab_id,
@@ -440,20 +480,26 @@ fn build_key_dispatch(
     key_name: Option<&str>,
     modifiers: Modifiers,
 ) -> Option<DispatchEvent> {
+    let key_press = |session_id: String, kind: &str| -> Option<DispatchEvent> {
+        let event = RdpInputEvent::KeyPress {
+            code: rdev_key_to_web_code(key)?.to_string(),
+            text: key_name
+                .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
+                .map(|value| value.to_string()),
+            ctrl: modifiers.ctrl,
+            alt: modifiers.alt,
+            shift: modifiers.shift,
+            meta: modifiers.meta,
+        };
+        if kind == "vnc" {
+            Some(DispatchEvent::Vnc { session_id, event })
+        } else {
+            Some(DispatchEvent::Rdp { session_id, event })
+        }
+    };
     match target {
-        ActiveTarget::Rdp { common, .. } => Some(DispatchEvent::Rdp {
-            session_id: common.session_id.clone(),
-            event: RdpInputEvent::KeyPress {
-                code: rdev_key_to_web_code(key)?.to_string(),
-                text: key_name
-                    .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
-                    .map(|value| value.to_string()),
-                ctrl: modifiers.ctrl,
-                alt: modifiers.alt,
-                shift: modifiers.shift,
-                meta: modifiers.meta,
-            },
-        }),
+        ActiveTarget::Rdp { common, .. } => key_press(common.session_id.clone(), "rdp"),
+        ActiveTarget::Vnc { common, .. } => key_press(common.session_id.clone(), "vnc"),
         ActiveTarget::Ssh { common, .. } => Some(DispatchEvent::Ssh {
             session_id: common.session_id.clone(),
             bytes: ssh_bytes_from_key(key, key_name, modifiers)?,
@@ -478,6 +524,22 @@ fn build_move_dispatch(
             let (mapped_x, mapped_y) =
                 map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
             Some(DispatchEvent::Rdp {
+                session_id: common.session_id.clone(),
+                event: RdpInputEvent::MouseMove {
+                    x: mapped_x,
+                    y: mapped_y,
+                    t_ms: Some(now_millis()),
+                },
+            })
+        }
+        ActiveTarget::Vnc {
+            common,
+            remote_width,
+            remote_height,
+        } => {
+            let (mapped_x, mapped_y) =
+                map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
+            Some(DispatchEvent::Vnc {
                 session_id: common.session_id.clone(),
                 event: RdpInputEvent::MouseMove {
                     x: mapped_x,
@@ -515,37 +577,32 @@ fn build_button_dispatch(
     y: f64,
     window_origin: Option<(f64, f64)>,
 ) -> Option<DispatchEvent> {
+    let make_button_event = |common: &TargetCommon, rw: u16, rh: u16, is_vnc: bool| -> Option<DispatchEvent> {
+        let (mapped_x, mapped_y) =
+            map_rdp_pointer(rw, rh, common, x, y, window_origin?)?;
+        let mapped_button = match button {
+            Button::Left => RdpMouseButton::Left,
+            Button::Right => RdpMouseButton::Right,
+            Button::Middle => RdpMouseButton::Middle,
+            Button::Unknown(_) => return None,
+        };
+        let event = if pressed {
+            RdpInputEvent::MouseButtonDown { x: mapped_x, y: mapped_y, button: mapped_button }
+        } else {
+            RdpInputEvent::MouseButtonUp { x: mapped_x, y: mapped_y, button: mapped_button }
+        };
+        if is_vnc {
+            Some(DispatchEvent::Vnc { session_id: common.session_id.clone(), event })
+        } else {
+            Some(DispatchEvent::Rdp { session_id: common.session_id.clone(), event })
+        }
+    };
     match target {
-        ActiveTarget::Rdp {
-            common,
-            remote_width,
-            remote_height,
-        } => {
-            let (mapped_x, mapped_y) =
-                map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
-            let mapped_button = match button {
-                Button::Left => RdpMouseButton::Left,
-                Button::Right => RdpMouseButton::Right,
-                Button::Middle => RdpMouseButton::Middle,
-                Button::Unknown(_) => return None,
-            };
-            let event = if pressed {
-                RdpInputEvent::MouseButtonDown {
-                    x: mapped_x,
-                    y: mapped_y,
-                    button: mapped_button,
-                }
-            } else {
-                RdpInputEvent::MouseButtonUp {
-                    x: mapped_x,
-                    y: mapped_y,
-                    button: mapped_button,
-                }
-            };
-            Some(DispatchEvent::Rdp {
-                session_id: common.session_id.clone(),
-                event,
-            })
+        ActiveTarget::Rdp { common, remote_width, remote_height } => {
+            make_button_event(common, *remote_width, *remote_height, false)
+        }
+        ActiveTarget::Vnc { common, remote_width, remote_height } => {
+            make_button_event(common, *remote_width, *remote_height, true)
         }
         ActiveTarget::Ssh { common, cols, rows } => {
             let (col, row) = map_ssh_pointer(*cols, *rows, common, x, y, window_origin?)?;
@@ -567,28 +624,27 @@ fn build_wheel_dispatch(
     y: f64,
     window_origin: Option<(f64, f64)>,
 ) -> Option<DispatchEvent> {
+    let make_scroll_event = |common: &TargetCommon, rw: u16, rh: u16, is_vnc: bool| -> Option<DispatchEvent> {
+        let (mapped_x, mapped_y) =
+            map_rdp_pointer(rw, rh, common, x, y, window_origin?)?;
+        let dx = normalize_wheel(delta_x);
+        let dy = normalize_wheel(delta_y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let event = RdpInputEvent::MouseScroll { x: mapped_x, y: mapped_y, delta_x: dx, delta_y: dy };
+        if is_vnc {
+            Some(DispatchEvent::Vnc { session_id: common.session_id.clone(), event })
+        } else {
+            Some(DispatchEvent::Rdp { session_id: common.session_id.clone(), event })
+        }
+    };
     match target {
-        ActiveTarget::Rdp {
-            common,
-            remote_width,
-            remote_height,
-        } => {
-            let (mapped_x, mapped_y) =
-                map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
-            let dx = normalize_wheel(delta_x);
-            let dy = normalize_wheel(delta_y);
-            if dx == 0 && dy == 0 {
-                return None;
-            }
-            Some(DispatchEvent::Rdp {
-                session_id: common.session_id.clone(),
-                event: RdpInputEvent::MouseScroll {
-                    x: mapped_x,
-                    y: mapped_y,
-                    delta_x: dx,
-                    delta_y: dy,
-                },
-            })
+        ActiveTarget::Rdp { common, remote_width, remote_height } => {
+            make_scroll_event(common, *remote_width, *remote_height, false)
+        }
+        ActiveTarget::Vnc { common, remote_width, remote_height } => {
+            make_scroll_event(common, *remote_width, *remote_height, true)
         }
         ActiveTarget::Ssh { common, cols, rows } => {
             let (col, row) = map_ssh_pointer(*cols, *rows, common, x, y, window_origin?)?;
@@ -911,6 +967,16 @@ async fn handle_dispatch_event(app: &AppHandle, event: DispatchEvent) {
             let _ = manager.input_batch(
                 session_id.as_str(),
                 RdpInputBatch {
+                    events: vec![event],
+                },
+            );
+        }
+        DispatchEvent::Vnc { session_id, event } => {
+            let state = app.state::<crate::AppState>();
+            let mut manager = state.vnc_sessions.lock().await;
+            let _ = manager.input_batch(
+                session_id.as_str(),
+                VncInputBatch {
                     events: vec![event],
                 },
             );

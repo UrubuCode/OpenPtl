@@ -2,7 +2,7 @@ import type { WorkspaceBlockLayout } from "@/components/workspace/workspace-bloc
 import type { EditorViewMode } from "@/functions/editor-file-utils";
 import type { BackendMessage, SftpEntry } from "@/types/openptl";
 
-export type WorkspaceKind = "terminal" | "sftp" | "rdp" | "editor";
+export type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor";
 export type WorkspaceMode = "free";
 export type SortKey = "name" | "size" | "permissions" | "modified_at";
 export type SortDirection = "asc" | "desc";
@@ -11,7 +11,7 @@ export type WorkspaceMessage = string | BackendMessage;
 
 export interface WorkspaceTabPageProps {
   tabId: string;
-  initialBlock?: "terminal" | "sftp" | "rdp";
+  initialBlock?: "terminal" | "sftp" | "rdp" | "vnc";
   initialSourceId?: string;
   initialOpenFiles?: boolean;
 }
@@ -105,7 +105,23 @@ export interface RdpBlock extends BaseBlock {
   capturedAt: number | null;
 }
 
-export type WorkspaceBlock = TerminalBlock | SftpBlock | RdpBlock | EditorBlock;
+export interface VncBlock extends BaseBlock {
+  kind: "vnc";
+  profileId: string;
+  useWebrtc: boolean;
+  sessionId: string | null;
+  connectStage: ConnectStage;
+  connectMessage: WorkspaceMessage;
+  connectError: WorkspaceMessage | null;
+  passwordDraft: string;
+  retryAttempt: number;
+  retryInSeconds: number | null;
+  imageWidth: number;
+  imageHeight: number;
+  capturedAt: number | null;
+}
+
+export type WorkspaceBlock = TerminalBlock | SftpBlock | RdpBlock | VncBlock | EditorBlock;
 export type WorkspaceLogLevel = "info" | "success" | "warn" | "error";
 export type TransferStatus = "queued" | "running" | "completed" | "error";
 
