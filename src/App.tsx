@@ -18,6 +18,7 @@ import { logFrontendDebug, logFrontendError } from "@/lib/debug-logs";
 import { api } from "@/lib/tauri";
 import { AboutPage } from "@/pages/sections/about-page";
 import { DebugLogsPage } from "@/pages/sections/debug-logs-page";
+import { NotesPage } from "@/pages/sections/notes-page";
 import { HomePage } from "@/pages/sections/home-page";
 import { KeychainPage } from "@/pages/sections/keychain-page";
 import { KnownHostsPage } from "@/pages/sections/known-hosts-page";
@@ -52,6 +53,9 @@ function sectionFromPath(pathname: string): SidebarSection {
   if (pathname.startsWith("/keychain")) {
     return "keychain";
   }
+  if (pathname.startsWith("/notes")) {
+    return "notes";
+  }
   return "home";
 }
 
@@ -67,6 +71,9 @@ function pathFromSection(section: SidebarSection): string {
   }
   if (section === "known_hosts") {
     return "/known-hosts";
+  }
+  if (section === "notes") {
+    return "/notes";
   }
   if (section === "settings") {
     return "/settings";
@@ -271,6 +278,7 @@ function App() {
 
   const lastActivityRef = useRef<number>(Date.now());
   const deepLinkProcessingRef = useRef(false);
+  const loginCancelledRef = useRef(false);
   const [syncChoices, setSyncChoices] = useState<Record<string, SyncKeepSide>>({});
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? null, [tabs, activeTabId]);
   const pendingCloseTab = useMemo(
@@ -400,16 +408,26 @@ function App() {
       return;
     }
 
+    loginCancelledRef.current = false;
     setLoginServerBusy(true);
     setHeaderSyncBusy(true);
     try {
       await runSync("login", selected.address);
-      await refreshLoggedUser();
-      setLoginServerModalOpen(false);
+      if (!loginCancelledRef.current) {
+        await refreshLoggedUser();
+        setLoginServerModalOpen(false);
+      }
     } finally {
       setHeaderSyncBusy(false);
       setLoginServerBusy(false);
     }
+  }
+
+  function cancelLoginServer() {
+    loginCancelledRef.current = true;
+    setLoginServerBusy(false);
+    setHeaderSyncBusy(false);
+    setLoginServerModalOpen(false);
   }
 
   async function handleHeaderSync(action: "login" | "push") {
@@ -967,6 +985,7 @@ function App() {
               <Route path="/known-hosts" element={<KnownHostsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/debug-logs" element={<DebugLogsPage />} />
+              <Route path="/notes" element={<NotesPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
@@ -979,10 +998,7 @@ function App() {
         title={t.app.header.loginServerTitle}
         description={t.app.header.loginServerDescription}
         onClose={() => {
-          if (loginServerBusy) {
-            return;
-          }
-          setLoginServerModalOpen(false);
+          cancelLoginServer();
         }}
         footer={
           <div className="flex items-center justify-between gap-2">
@@ -998,8 +1014,7 @@ function App() {
               <button
                 type="button"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-60"
-                onClick={() => setLoginServerModalOpen(false)}
-                disabled={loginServerBusy}
+                onClick={() => cancelLoginServer()}
               >
                 {t.common.cancel}
               </button>

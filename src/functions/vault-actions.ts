@@ -41,6 +41,18 @@ export function createVaultActions(
 
   return {
     bootstrap: async () => {
+      // Clear workspace state persisted in sessionStorage — sessions don't survive a page refresh
+      set({
+        tabs: [],
+        activeTabId: null,
+        sessions: [],
+        sessionBuffers: {},
+        workspaceSessionsByTab: {},
+        workspaceBlockCountByTab: {},
+        workspaceSnapshotsByTab: {},
+      });
+      // Cancel any ongoing sync/auth operation from a previous session (e.g. F5 during OAuth login)
+      await api.syncCancel().catch(() => undefined);
       set({ busy: true });
       try {
         const status = await api.vaultStatus();

@@ -133,6 +133,7 @@ export interface SftpBlockViewProps {
   onContextAction: (action: SftpContextAction, entry: SftpEntry | null) => void;
   onTrustHost: () => void;
   onRetry: () => void;
+  onCancel: () => void;
   onPasswordDraftChange: (value: string) => void;
   onSavePasswordChange: (checked: boolean) => void;
   onSubmitPassword: () => void;
@@ -153,6 +154,7 @@ export function SftpBlockView({
   onContextAction,
   onTrustHost,
   onRetry,
+  onCancel,
   onPasswordDraftChange,
   onSavePasswordChange,
   onSubmitPassword,
@@ -714,6 +716,18 @@ export function SftpBlockView({
                 3. Logando...
               </p>
             </div>
+
+            {block.connectStage === "connecting" ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="rounded border border-border/70 px-2 py-1 text-xs text-foreground/90 hover:bg-secondary"
+                  onClick={onCancel}
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : null}
 
             {block.connectStage === "verifying_fingerprint" && block.hostChallenge ? (
               <div className="mt-3 rounded border border-border/50 bg-secondary/70 p-3 text-xs text-foreground/90">

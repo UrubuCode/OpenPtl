@@ -327,10 +327,22 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     workspaceSnapshot?.workspaceMode === "free" && Array.isArray(workspaceSnapshot.blocks)
       ? (workspaceSnapshot.blocks as WorkspaceBlock[])
           .filter((item) => (item as { kind?: string }).kind !== "logs")
-          .map((item) => ({
-            ...item,
-            minimized: Boolean((item as { minimized?: boolean }).minimized),
-          }))
+          .map((item) => {
+            const base = {
+              ...item,
+              minimized: Boolean((item as { minimized?: boolean }).minimized),
+            };
+            const stage = (base as { connectStage?: string }).connectStage;
+            if (stage === "connecting") {
+              return {
+                ...base,
+                connectStage: "error" as const,
+                connectMessage: "Conexão interrompida. Tente novamente.",
+                connectError: "A conexão foi interrompida por uma atualização da página.",
+              };
+            }
+            return base;
+          })
       : [];
   const initialLogs = Array.isArray(workspaceSnapshot?.logs)
     ? (workspaceSnapshot.logs as WorkspaceLogEntry[])
@@ -365,6 +377,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     defaultValues: { value: "" },
   });
   const connectRetryTimersRef = useRef<Record<string, { retryTimer: number; countdownTimer: number }>>({});
+  const connectCancelTokenRef = useRef<Map<string, number>>(new Map());
   const rdpStreamSessionByBlockRef = useRef<Map<string, string>>(new Map());
   const rdpStreamTokenByBlockRef = useRef<Map<string, string>>(new Map());
   const rdpLastFrameAtByBlockRef = useRef<Map<string, number>>(new Map());
@@ -2812,6 +2825,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           ? "Verificando fingerprint..."
           : "Conectando...";
       clearBlockRetryTimers(blockId);
+      const cancelToken = (connectCancelTokenRef.current.get(blockId) ?? 0) + 1;
+      connectCancelTokenRef.current.set(blockId, cancelToken);
+      const isCancelled = () => connectCancelTokenRef.current.get(blockId) !== cancelToken;
       appendWorkspaceLog(
         "info",
         "Conexao SSH em andamento",
@@ -2840,6 +2856,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           passwordOverride,
           saveAuthChoice,
         });
+        if (isCancelled()) {
+          return;
+        }
 
         if (result.status === "connected") {
           const session = result.session;
@@ -3176,6 +3195,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           : "Conectando...";
 
       clearBlockRetryTimers(blockId);
+      const cancelToken = (connectCancelTokenRef.current.get(blockId) ?? 0) + 1;
+      connectCancelTokenRef.current.set(blockId, cancelToken);
+      const isCancelled = () => connectCancelTokenRef.current.get(blockId) !== cancelToken;
       appendWorkspaceLog(
         "info",
         "Conexao SFTP em andamento",
@@ -3206,6 +3228,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           saveAuthChoice,
           connectPurpose: "sftp",
         });
+        if (isCancelled()) {
+          return;
+        }
 
         if (result.status === "connected") {
           const session = result.session;
@@ -4430,6 +4455,24 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                       retryAttempt: 0,
                     });
                   },
+                  onCancel: () => {
+                    connectCancelTokenRef.current.set(block.id, (connectCancelTokenRef.current.get(block.id) ?? 0) + 1);
+                    clearBlockRetryTimers(block.id);
+                    setBlocks((current) =>
+                      current.map((item) =>
+                        item.id === block.id && item.kind === "terminal"
+                          ? {
+                              ...item,
+                              connectStage: "error",
+                              connectMessage: "Conexão cancelada.",
+                              connectError: null,
+                              retryAttempt: 0,
+                              retryInSeconds: null,
+                            }
+                          : item,
+                      ),
+                    );
+                  },
                 })
               : null}
 
@@ -4574,6 +4617,25 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                       saveAuthChoice: block.savePasswordChoice,
                       retryAttempt: 0,
                     });
+                  },
+                  onCancel: () => {
+                    connectCancelTokenRef.current.set(block.id, (connectCancelTokenRef.current.get(block.id) ?? 0) + 1);
+                    clearBlockRetryTimers(block.id);
+                    setBlocks((current) =>
+                      current.map((item) =>
+                        item.id === block.id && item.kind === "sftp"
+                          ? {
+                              ...item,
+                              connectStage: "error",
+                              connectMessage: "Conexão cancelada.",
+                              connectError: null,
+                              loading: false,
+                              retryAttempt: 0,
+                              retryInSeconds: null,
+                            }
+                          : item,
+                      ),
+                    );
                   },
                 })
               : null}
