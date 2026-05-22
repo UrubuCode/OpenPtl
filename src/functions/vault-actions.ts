@@ -16,11 +16,12 @@ export function createVaultActions(
   "bootstrap" | "loadWorkspace" | "vaultInit" | "vaultUnlock" | "vaultLock" | "resolveStartupConflicts"
 > {
   async function hydrateWorkspace() {
-    const [profiles, keychain, appSettings, connectedSessions] = await Promise.all([
+    const [profiles, keychain, appSettings, connectedSessions, dbProfiles] = await Promise.all([
       api.connectionsList(),
       api.keychainList(),
       api.settingsGet(),
       api.sshSessions(),
+      api.dbProfileList(),
     ]);
     const knownHosts = await api.knownHostsList(appSettings.known_hosts_path || null).catch(() => []);
 
@@ -30,6 +31,7 @@ export function createVaultActions(
       settings: appSettings,
       knownHosts,
       sessions: connectedSessions,
+      databaseProfiles: dbProfiles,
     });
 
     for (const session of connectedSessions) {

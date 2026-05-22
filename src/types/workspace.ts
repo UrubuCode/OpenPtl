@@ -1,6 +1,6 @@
-export type SidebarSection = "home" | "keychain" | "known_hosts" | "notes" | "settings" | "debug_logs" | "about";
+export type SidebarSection = "home" | "keychain" | "known_hosts" | "notes" | "settings" | "debug_logs" | "about" | "database";
 
-export type WorkTabType = "workspace" | "editor";
+export type WorkTabType = "workspace" | "editor" | "database";
 
 export interface WorkTab {
   id: string;

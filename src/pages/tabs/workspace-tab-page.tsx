@@ -51,6 +51,7 @@ import type {
   SurfaceRect,
   SftpEntry,
 } from "@/types/openptl";
+import databaseWorkspace from "@/pages/tabs/workspace/database";
 import editorWorkspace from "@/pages/tabs/workspace/editor";
 import rdpWorkspace from "@/pages/tabs/workspace/rdp";
 import sftpWorkspace from "@/pages/tabs/workspace/sftp";
@@ -59,6 +60,7 @@ import vncWorkspace from "@/pages/tabs/workspace/vnc";
 import { VncWebrtcBlockView } from "@/pages/tabs/workspace/vnc-webrtc";
 import type {
   BlockTransferItem,
+  DatabaseBlock,
   DragPayload,
   EditorBlock,
   RdpBlock,
@@ -111,6 +113,7 @@ const workspaceModules = {
   rdp: rdpWorkspace,
   vnc: vncWorkspace,
   editor: editorWorkspace,
+  database: databaseWorkspace,
 } as const;
 const SFTP_DROP_TARGET_SELECTOR = "[data-openptl-drop-target='sftp']";
 
@@ -324,6 +327,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const t = useT();
   const sessions = useAppStore((state) => state.sessions);
   const connections = useAppStore((state) => state.connections);
+  const databaseProfiles = useAppStore((state) => state.databaseProfiles);
   const settings = useAppStore((state) => state.settings);
   const activeTabId = useAppStore((state) => state.activeTabId);
   const sshWrite = useAppStore((state) => state.sshWrite);
@@ -2815,6 +2819,65 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     [appendWorkspaceLog, connections, resolvePendingRdpConnection, t.workspace.rdp.connecting, workspaceSize.height, workspaceSize.width],
   );
 
+  const addPendingDatabaseBlock = useCallback(
+    (profileId: string) => {
+      const profile = databaseProfiles.find((item) => item.id === profileId);
+      if (!profile) {
+        toast.error("Perfil de banco nao encontrado.");
+        return;
+      }
+      const blockId = createId("database");
+      const block: DatabaseBlock = {
+        id: blockId,
+        kind: "database",
+        title: `DB - ${profile.name}`,
+        profileId,
+        sessionId: null,
+        connectStage: "connecting",
+        connectMessage: "Conectando...",
+        connectError: null,
+        viewMode: (profile.view_mode as DatabaseBlock["viewMode"]) ?? "tabular",
+        selectedDatabase: null,
+        selectedSchema: null,
+        selectedTable: null,
+        expandedNodes: [],
+        queryText: "",
+        queryResult: null,
+        queryRunning: false,
+        queryError: null,
+        layout: workspaceDefaultLayout("database", blocksRef.current.length, workspaceSize.width, workspaceSize.height),
+        zIndex: blocksRef.current.reduce((acc, item) => Math.max(acc, item.zIndex), 1) + 1,
+        minimized: false,
+        maximized: false,
+      };
+      setBlocks((current) => [...current, block]);
+      window.setTimeout(() => {
+        api.dbConnect(profileId).then((sessionId) => {
+          setBlocks((current) =>
+            current.map((item) =>
+              item.id === blockId && item.kind === "database"
+                ? { ...item, sessionId, connectStage: "ready", connectMessage: null }
+                : item,
+            ),
+          );
+        }).catch((err: unknown) => {
+          setBlocks((current) =>
+            current.map((item) =>
+              item.id === blockId && item.kind === "database"
+                ? {
+                    ...item,
+                    connectStage: "error",
+                    connectError: err instanceof Error ? err.message : String(err),
+                  }
+                : item,
+            ),
+          );
+        });
+      }, 0);
+    },
+    [databaseProfiles, workspaceSize.height, workspaceSize.width],
+  );
+
   const touchVncFrameForBlock = useCallback(
     (blockId: string, width: number, height: number) => {
       const currentBlock = blocksRef.current.find(
@@ -4237,7 +4300,14 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         addPendingRdpBlock(profileId);
       }
     }
+    if (initialBlock === "database") {
+      const profileId = initialSourceId?.replace("db:", "") ?? null;
+      if (profileId) {
+        addPendingDatabaseBlock(profileId);
+      }
+    }
   }, [
+    addPendingDatabaseBlock,
     addPendingRdpBlock,
     addPendingSftpBlock,
     addPendingTerminalBlock,
@@ -5340,6 +5410,67 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                     ),
                   onSave: () => void saveEditorBlock(block.id),
                   onOpenExternal: () => void openEditorBlockExternal(block.id),
+                })
+              : null}
+
+            {block.kind === "database"
+              ? databaseWorkspace.render({
+                  block,
+                  profile: databaseProfiles.find((p) => p.id === block.profileId) ?? null,
+                  onFocus: () => focusBlock(block.id),
+                  onConnectStageChange: (stage, message, error) => {
+                    setBlocks((current) =>
+                      current.map((item) =>
+                        item.id === block.id && item.kind === "database"
+                          ? { ...item, connectStage: stage, connectMessage: message, connectError: error }
+                          : item,
+                      ),
+                    );
+                    if (stage === "connecting" && block.profileId) {
+                      api.dbConnect(block.profileId).then((sessionId) => {
+                        setBlocks((current) =>
+                          current.map((item) =>
+                            item.id === block.id && item.kind === "database"
+                              ? { ...item, sessionId, connectStage: "ready", connectMessage: null }
+                              : item,
+                          ),
+                        );
+                      }).catch((err: unknown) => {
+                        setBlocks((current) =>
+                          current.map((item) =>
+                            item.id === block.id && item.kind === "database"
+                              ? {
+                                  ...item,
+                                  connectStage: "error",
+                                  connectError: err instanceof Error ? err.message : String(err),
+                                }
+                              : item,
+                          ),
+                        );
+                      });
+                    }
+                  },
+                  onBlockUpdate: (patch) => {
+                    setBlocks((current) =>
+                      current.map((item) =>
+                        item.id === block.id && item.kind === "database"
+                          ? { ...item, ...patch }
+                          : item,
+                      ),
+                    );
+                  },
+                  onViewModeChange: (mode) => {
+                    setBlocks((current) =>
+                      current.map((item) =>
+                        item.id === block.id && item.kind === "database"
+                          ? { ...item, viewMode: mode }
+                          : item,
+                      ),
+                    );
+                    if (block.profileId) {
+                      void api.dbSaveViewMode(block.profileId, mode);
+                    }
+                  },
                 })
               : null}
           </WorkspaceBlockController>

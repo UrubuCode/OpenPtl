@@ -536,13 +536,18 @@ export function HostFormDrawer() {
                       key={protocol}
                       type="button"
                       className={cn(
-                        "flex flex-col items-center gap-2 rounded-xl border p-4 transition-all cursor-pointer",
+                        "relative flex flex-col items-center gap-2 rounded-xl border p-4 transition-all cursor-pointer",
                         active
                           ? `${meta.colorClass} border-current`
                           : "border-border/40 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                       )}
                       onClick={() => handleProtocolSelect(protocol)}
                     >
+                      {(protocol === "rdp" || protocol === "vnc") && (
+                        <span className="absolute top-1.5 right-1.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 leading-none">
+                          BETA
+                        </span>
+                      )}
                       <Icon className="h-6 w-6" />
                       <span className="text-xs font-medium">{protocolLabel(protocol)}</span>
                       <span className="text-[10px] opacity-70">{meta.defaultPort}</span>

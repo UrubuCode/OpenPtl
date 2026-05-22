@@ -313,6 +313,19 @@ export function NotesPage() {
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, []);
+
+  const stats = useMemo(() => [
+    { label: tn.statsTotal, value: String(notes.length), color: "text-foreground" },
+    { label: tn.statsPinned, value: String(notes.filter((n) => n.pinned).length), color: "text-yellow-400" },
+    { label: tn.statsColored, value: String(notes.filter((n) => n.color !== "default").length), color: "text-primary" },
+    { label: tn.statsUpdatedToday, value: String(notes.filter((n) => new Date(n.updated_at).setHours(0,0,0,0) >= today).length), color: "text-green-400" },
+  ], [notes, tn.statsColored, tn.statsPinned, tn.statsTotal, tn.statsUpdatedToday, today]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return notes.filter(
@@ -339,121 +352,126 @@ export function NotesPage() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* header */}
-      <div className="border-b border-border/40 bg-background/80 px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
+    <div className="flex-1 p-6 space-y-6 h-full overflow-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">{tn.title}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{tn.subtitle}</p>
+        </div>
+        <Button
+          size="sm"
+          className="gap-2"
+          onClick={() => { setEditingNote(undefined); setFormOpen(true); }}
+        >
+          <Plus className="h-4 w-4" />
+          {tn.newNote}
+        </Button>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={tn.searchPlaceholder}
+          className="h-9 w-full rounded-lg border border-border bg-secondary/50 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="rounded-lg border border-border/40 bg-card p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+            <p className={`text-2xl font-semibold mt-1 ${stat.color}`}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Notes */}
+      {notes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/40 bg-card/60">
+            <StickyNote className="h-7 w-7 text-muted-foreground/40" />
+          </div>
           <div>
-            <h1 className="text-base font-semibold text-foreground">{tn.title}</h1>
-            <p className="text-xs text-muted-foreground">{tn.subtitle}</p>
+            <p className="text-sm font-medium text-foreground">{tn.emptyTitle}</p>
+            <p className="mt-1 max-w-xs text-xs text-muted-foreground">{tn.emptyDescription}</p>
           </div>
           <Button
             size="sm"
-            className="h-8 gap-1.5 text-xs"
+            variant="outline"
+            className="gap-1.5"
             onClick={() => { setEditingNote(undefined); setFormOpen(true); }}
           >
             <Plus className="h-3.5 w-3.5" />
-            {tn.newNote}
+            {tn.addFirst}
           </Button>
         </div>
+      ) : (
+        <div className="space-y-6">
+          {pinned.length > 0 && (
+            <section>
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                {tn.pinned}
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {pinned.map((n) => (
+                  <div
+                    key={n.id}
+                    id={`note-card-${n.id}`}
+                    className={`transition-all duration-500 ${highlightId === n.id ? "ring-2 ring-cyan-400/60 rounded-xl" : ""}`}
+                  >
+                    <NoteCard
+                      note={n}
+                      allNotes={notes}
+                      onEdit={handleEdit}
+                      onDelete={setDeletingNote}
+                      onMentionClick={handleMentionClick}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-        <div className="relative mt-3">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={tn.searchPlaceholder}
-            className="h-8 pl-8 text-xs"
-          />
-        </div>
-      </div>
-
-      {/* body */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {notes.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/40 bg-card/60">
-              <StickyNote className="h-7 w-7 text-muted-foreground/40" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">{tn.emptyTitle}</p>
-              <p className="mt-1 max-w-xs text-xs text-muted-foreground">{tn.emptyDescription}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 text-xs"
-              onClick={() => { setEditingNote(undefined); setFormOpen(true); }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {tn.addFirst}
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {pinned.length > 0 && (
-              <section>
+          {unpinned.length > 0 && (
+            <section>
+              {pinned.length > 0 && (
                 <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  {tn.pinned}
+                  {tn.all}
                 </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {pinned.map((n) => (
-                    <div
-                      key={n.id}
-                      id={`note-card-${n.id}`}
-                      className={`transition-all duration-500 ${highlightId === n.id ? "ring-2 ring-cyan-400/60 rounded-xl" : ""}`}
-                    >
-                      <NoteCard
-                        note={n}
-                        allNotes={notes}
-                        onEdit={handleEdit}
-                        onDelete={setDeletingNote}
-                        onMentionClick={handleMentionClick}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {unpinned.map((n) => (
+                  <div
+                    key={n.id}
+                    id={`note-card-${n.id}`}
+                    className={`transition-all duration-500 ${highlightId === n.id ? "ring-2 ring-cyan-400/60 rounded-xl" : ""}`}
+                  >
+                    <NoteCard
+                      note={n}
+                      allNotes={notes}
+                      onEdit={handleEdit}
+                      onDelete={setDeletingNote}
+                      onMentionClick={handleMentionClick}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
-            {unpinned.length > 0 && (
-              <section>
-                {pinned.length > 0 && (
-                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                    {tn.all}
-                  </p>
-                )}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {unpinned.map((n) => (
-                    <div
-                      key={n.id}
-                      id={`note-card-${n.id}`}
-                      className={`transition-all duration-500 ${highlightId === n.id ? "ring-2 ring-cyan-400/60 rounded-xl" : ""}`}
-                    >
-                      <NoteCard
-                        note={n}
-                        allNotes={notes}
-                        onEdit={handleEdit}
-                        onDelete={setDeletingNote}
-                        onMentionClick={handleMentionClick}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* form modal */}
       <NoteFormModal
         open={formOpen}
         initial={editingNote}
         onClose={() => { setFormOpen(false); setEditingNote(undefined); }}
       />
 
-      {/* delete confirm */}
       <AppConfirmDialog
         open={deletingNote !== null}
         title={tn.deleteConfirmTitle}

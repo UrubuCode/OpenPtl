@@ -15,6 +15,7 @@ import { toasts } from "./toasts";
 import { common } from "./common";
 import { backendMessages } from "./backend-messages";
 import { notes } from "./notes";
+import { database } from "./database";
 
 export const ptBR: AppDictionary = {
   app,
@@ -26,6 +27,7 @@ export const ptBR: AppDictionary = {
     settings: "Configurações",
     debugLogs: "Logs",
     about: "Sobre",
+    database: "Bancos de Dados",
     newConnection: "Nova conexão",
     groupMain: "Principal",
     groupSystem: "Sistema",
@@ -45,4 +47,5 @@ export const ptBR: AppDictionary = {
   backendMessages,
   common,
   notes,
+  database,
 };

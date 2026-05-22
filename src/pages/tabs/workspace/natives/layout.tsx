@@ -1,6 +1,6 @@
 import type { WorkspaceBlockLayout } from "@/components/workspace/workspace-block-controller";
 
-type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor";
+type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor" | "database";
 
 type EdgeFlags = {
   left: boolean;

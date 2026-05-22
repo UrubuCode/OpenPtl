@@ -4,6 +4,7 @@ import type {
   AppSettings,
   ConnectionProtocol,
   ConnectionProfile,
+  DatabaseProfile,
   KnownHostEntry,
   KeychainEntry,
   SyncLoggedUser,
@@ -64,6 +65,9 @@ export interface AppState {
   loginServers: AuthServer[];
   loginServerPings: Record<string, number | null>;
   selectedLoginServerId: string | null;
+  databaseProfiles: DatabaseProfile[];
+  databaseDrawerOpen: boolean;
+  databaseDraft: DatabaseProfile;
 }
 
 export interface AppActions {
@@ -141,6 +145,12 @@ export interface AppActions {
 
   saveEditor: (tabId: string) => Promise<void>;
   openEditorExternal: (tabId: string) => Promise<void>;
+
+  openDatabaseDrawer: (profile?: DatabaseProfile) => void;
+  closeDatabaseDrawer: () => void;
+  saveDatabaseProfile: (profile: DatabaseProfile) => Promise<void>;
+  deleteDatabaseProfile: (id: string) => Promise<void>;
+  openDatabase: (profile: DatabaseProfile) => Promise<void>;
 }
 
 export type AppStore = AppState & AppActions;

@@ -404,6 +404,89 @@ export interface KnownHostEntry {
   path: string;
 }
 
+export type DatabaseDriver = "postgres" | "mysql" | "mariadb" | "sqlite";
+
+export interface DatabaseProfile {
+  id: string;
+  name: string;
+  driver: DatabaseDriver;
+  host?: string | null;
+  port?: number | null;
+  username?: string | null;
+  password?: string | null;
+  database?: string | null;
+  file_path?: string | null;
+  ssl: boolean;
+  view_mode: "tabular" | "object_explorer";
+}
+
+export interface DbColumnMeta {
+  name: string;
+  type_name: string;
+  nullable: boolean;
+}
+
+export interface DbQueryResult {
+  columns: DbColumnMeta[];
+  rows: unknown[][];
+  affected_rows: number;
+  duration_ms: number;
+}
+
+export interface DbTableInfo {
+  name: string;
+  schema: string;
+  kind: "table" | "view";
+  rows: number | null;
+  size_bytes: number | null;
+  engine: string | null;
+  comment: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  collation: string | null;
+  auto_increment: number | null;
+  data_free: number | null;
+  index_length: number | null;
+  avg_row_length: number | null;
+  max_data_length: number | null;
+  check_time: string | null;
+  checksum: number | null;
+  create_options: string | null;
+  row_format: string | null;
+  version: number | null;
+}
+
+export interface DbColumnDef {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+  default_value?: string | null;
+  is_primary_key: boolean;
+  extra?: string | null;
+  comment?: string | null;
+}
+
+export interface DbIndex {
+  name: string;
+  columns: string[];
+  unique: boolean;
+}
+
+export interface DbForeignKey {
+  name: string;
+  columns: string[];
+  ref_table: string;
+  ref_columns: string[];
+}
+
+export interface DbTableDefinition {
+  columns: DbColumnDef[];
+  indexes: DbIndex[];
+  foreign_keys: DbForeignKey[];
+  primary_key: string[];
+  ddl?: string | null;
+}
+
 export type SshConnectPurpose = "terminal" | "sftp";
 
 export type SshConnectResult =

@@ -87,6 +87,8 @@ pub const OPENPTL_FILE_NAME: &str = "openptl.bin";
 pub const PROFILE_FILE_NAME: &str = "profile.bin";
 /// Encrypted manifest payload file.
 pub const MANIFEST_FILE_NAME: &str = "manifest.bin";
+/// Encrypted database profiles payload file.
+pub const DB_PROFILES_FILE_NAME: &str = "db_profiles.bin";
 /// File extension expected for encrypted payload files.
 pub const STORAGE_FILE_EXTENSION: &str = "bin";
 

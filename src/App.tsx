@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
+import { DatabaseFormDrawer } from "@/components/drawers/database-form-drawer";
 import { HostFormDrawer } from "@/components/drawers/host-form-drawer";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -17,12 +18,14 @@ import { useT } from "@/langs";
 import { logFrontendDebug, logFrontendError } from "@/lib/debug-logs";
 import { api } from "@/lib/tauri";
 import { AboutPage } from "@/pages/sections/about-page";
+import { DatabaseSectionPage } from "@/pages/sections/database-section-page";
 import { DebugLogsPage } from "@/pages/sections/debug-logs-page";
 import { NotesPage } from "@/pages/sections/notes-page";
 import { HomePage } from "@/pages/sections/home-page";
 import { KeychainPage } from "@/pages/sections/keychain-page";
 import { KnownHostsPage } from "@/pages/sections/known-hosts-page";
 import { SettingsPage } from "@/pages/sections/settings-page";
+import { DatabaseTabPage } from "@/pages/tabs/database-tab-page";
 import { EditorTabPage } from "@/pages/tabs/editor-tab-page";
 import { WorkspaceTabPage } from "@/pages/tabs/workspace-tab-page";
 import { VaultGatePage } from "@/pages/vault-gate-page";
@@ -56,6 +59,9 @@ function sectionFromPath(pathname: string): SidebarSection {
   if (pathname.startsWith("/notes")) {
     return "notes";
   }
+  if (pathname.startsWith("/database")) {
+    return "database";
+  }
   return "home";
 }
 
@@ -77,6 +83,9 @@ function pathFromSection(section: SidebarSection): string {
   }
   if (section === "settings") {
     return "/settings";
+  }
+  if (section === "database") {
+    return "/database";
   }
   return "/home";
 }
@@ -972,6 +981,13 @@ function App() {
                   initialOpenFiles={tab.initialOpenFiles}
                 />
               ) : null}
+              {tab.type === "database" && tab.profileId ? (
+                <DatabaseTabPage
+                  key={`database:${tab.id}`}
+                  tabId={tab.id}
+                  profileId={tab.profileId}
+                />
+              ) : null}
             </div>
           ))}
 
@@ -986,6 +1002,7 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/debug-logs" element={<DebugLogsPage />} />
               <Route path="/notes" element={<NotesPage />} />
+              <Route path="/database" element={<DatabaseSectionPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
@@ -993,6 +1010,7 @@ function App() {
         </section>
 
         <HostFormDrawer />
+        <DatabaseFormDrawer />
         <AppDialog
         open={loginServerModalOpen}
         title={t.app.header.loginServerTitle}

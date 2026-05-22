@@ -1,8 +1,8 @@
 import type { WorkspaceBlockLayout } from "@/components/workspace/workspace-block-controller";
 import type { EditorViewMode } from "@/functions/editor-file-utils";
-import type { BackendMessage, SftpEntry } from "@/types/openptl";
+import type { BackendMessage, DbQueryResult, SftpEntry } from "@/types/openptl";
 
-export type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor";
+export type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor" | "database";
 export type WorkspaceMode = "free";
 export type SortKey = "name" | "size" | "permissions" | "modified_at";
 export type SortDirection = "asc" | "desc";
@@ -11,7 +11,7 @@ export type WorkspaceMessage = string | BackendMessage;
 
 export interface WorkspaceTabPageProps {
   tabId: string;
-  initialBlock?: "terminal" | "sftp" | "rdp" | "vnc";
+  initialBlock?: "terminal" | "sftp" | "rdp" | "vnc" | "database";
   initialSourceId?: string;
   initialOpenFiles?: boolean;
 }
@@ -121,7 +121,25 @@ export interface VncBlock extends BaseBlock {
   capturedAt: number | null;
 }
 
-export type WorkspaceBlock = TerminalBlock | SftpBlock | RdpBlock | VncBlock | EditorBlock;
+export interface DatabaseBlock extends BaseBlock {
+  kind: "database";
+  profileId: string | null;
+  sessionId: string | null;
+  connectStage: ConnectStage;
+  connectMessage: string | null;
+  connectError: string | null;
+  viewMode: "tabular" | "object_explorer";
+  selectedDatabase: string | null;
+  selectedSchema: string | null;
+  selectedTable: string | null;
+  expandedNodes: string[];
+  queryText: string;
+  queryResult: DbQueryResult | null;
+  queryRunning: boolean;
+  queryError: string | null;
+}
+
+export type WorkspaceBlock = TerminalBlock | SftpBlock | RdpBlock | VncBlock | EditorBlock | DatabaseBlock;
 export type WorkspaceLogLevel = "info" | "success" | "warn" | "error";
 export type TransferStatus = "queued" | "running" | "completed" | "error";
 

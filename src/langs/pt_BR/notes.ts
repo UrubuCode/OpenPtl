@@ -41,4 +41,8 @@ export const notes: AppDictionary["notes"] = {
   deleteConfirmTitle: "Excluir nota",
   deleteConfirmMessage: 'Tem certeza que deseja excluir "{title}"?',
   deleteConfirmAction: "Excluir",
+  statsTotal: "Total",
+  statsPinned: "Fixadas",
+  statsColored: "Coloridas",
+  statsUpdatedToday: "Atualizadas hoje",
 };

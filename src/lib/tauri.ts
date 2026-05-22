@@ -4,6 +4,10 @@ import type {
   AppSettings,
   AuthServer,
   BinaryPreviewResult,
+  DatabaseProfile,
+  DbQueryResult,
+  DbTableInfo,
+  DbTableDefinition,
   KeyActionsActiveTargetInput,
   ClipboardLocalItem,
   ConnectionProfile,
@@ -307,4 +311,45 @@ export const api = {
   windowClose: () => invoke<void>("window_close"),
   windowStateSave: () => invoke<void>("window_state_save"),
   windowStateRestore: () => invoke<void>("window_state_restore"),
+
+  dbProfileList: () => invoke<DatabaseProfile[]>("db_profile_list"),
+  dbProfileSave: (profile: DatabaseProfile) =>
+    invoke<DatabaseProfile>("db_profile_save", { profile }),
+  dbProfileDelete: (id: string) => invoke<void>("db_profile_delete", { id }),
+  dbConnect: (profileId: string) => invoke<string>("db_connect", { profileId }),
+  dbDisconnect: (sessionId: string) => invoke<void>("db_disconnect", { sessionId }),
+  dbSetDatabase: (sessionId: string, database: string) =>
+    invoke<void>("db_set_database", { sessionId, database }),
+  dbQuery: (sessionId: string, sql: string) =>
+    invoke<DbQueryResult>("db_query", { sessionId, sql }),
+  dbListDatabases: (sessionId: string) =>
+    invoke<string[]>("db_list_databases", { sessionId }),
+  dbListSchemas: (sessionId: string, database: string) =>
+    invoke<string[]>("db_list_schemas", { sessionId, database }),
+  dbListTables: (sessionId: string, database: string, schema: string) =>
+    invoke<DbTableInfo[]>("db_list_tables", { sessionId, database, schema }),
+  dbDescribeTable: (
+    sessionId: string,
+    database: string,
+    schema: string,
+    table: string,
+  ) => invoke<DbTableDefinition>("db_describe_table", { sessionId, database, schema, table }),
+  dbGetTableData: (
+    sessionId: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit: number,
+    offset: number,
+  ) =>
+    invoke<DbQueryResult>("db_get_table_data", {
+      sessionId,
+      database,
+      schema,
+      table,
+      limit,
+      offset,
+    }),
+  dbSaveViewMode: (profileId: string, viewMode: string) =>
+    invoke<void>("db_save_view_mode", { profileId, viewMode }),
 };

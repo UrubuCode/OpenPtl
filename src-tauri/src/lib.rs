@@ -19,12 +19,14 @@ use constants::{
     MAX_SFTP_CHUNK_SIZE_KB, MIN_RDP_DIMENSION, MIN_SFTP_CHUNK_SIZE_KB, MIN_WORKSPACE_HEIGHT,
     MIN_WORKSPACE_WIDTH, OPENPTL_SCHEME, RELEASES_LATEST_URL, RELEASE_CHECK_USER_AGENT,
 };
+use libs::database::DbSessionManager;
 use libs::key_actions::{KeyActionsActiveTargetInput, KeyActionsService};
 use libs::models::{
     AppSettings, BackendMessage, BinaryPreviewResult, ConnectionProfile, ConnectionProtocol,
-    KeychainEntry, KnownHostEntry, RecoveryProbeResult, ReleaseCheckResult, SftpEntry,
-    SshConnectPurpose, SshConnectResult, SshSessionInfo, SyncConflictDecision, SyncConflictPreview,
-    SyncLoggedUser, SyncState, VaultStatus, WindowState,
+    DatabaseProfile, DbQueryResult, DbTableDefinition, DbTableInfo, KeychainEntry, KnownHostEntry,
+    RecoveryProbeResult, ReleaseCheckResult, SftpEntry, SshConnectPurpose, SshConnectResult,
+    SshSessionInfo, SyncConflictDecision, SyncConflictPreview, SyncLoggedUser, SyncState,
+    VaultStatus, WindowState,
 };
 use libs::shared_fs::{SharedFsBridge, SharedFsJob, SharedFsProtocol, TransferEndpoint};
 use libs::sync::{handle_auth_callback_deeplink, request_sync_cancel, SyncManager};
@@ -66,6 +68,7 @@ struct AppState {
     ssh: Mutex<SshManager>,
     rdp_sessions: Mutex<RdpSessionManager>,
     vnc_sessions: Mutex<VncSessionManager>,
+    db_sessions: Mutex<DbSessionManager>,
     key_actions: KeyActionsService,
     sync: Mutex<SyncManager>,
     deeplink_queue: StdMutex<Vec<String>>,
@@ -190,11 +193,11 @@ fn normalize_debug_level(level: &str) -> &'static str {
 fn app_error(error: impl std::fmt::Display) -> String {
     let concise = error.to_string();
     let message = format!("{:#}", error);
-    push_debug_log("error", "backend", "backend_error", Some(message.clone()));
+    push_debug_log("error", "backend", &concise, Some(message));
     if is_backend_message_key(&concise) {
         concise
     } else {
-        "backend_error".to_string()
+        concise
     }
 }
 
@@ -2983,6 +2986,137 @@ fn deeplink_take_pending(state: State<'_, AppState>) -> Result<Vec<String>, Stri
     Ok(queue.drain(..).collect())
 }
 
+#[tauri::command]
+async fn db_profile_list(state: State<'_, AppState>) -> Result<Vec<DatabaseProfile>, String> {
+    let vault = state.vault.lock().await;
+    vault.db_profile_list().map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_profile_save(
+    state: State<'_, AppState>,
+    profile: DatabaseProfile,
+) -> Result<DatabaseProfile, String> {
+    let mut vault = state.vault.lock().await;
+    vault.db_profile_save(profile).map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_profile_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let mut vault = state.vault.lock().await;
+    vault.db_profile_delete(&id).map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_connect(state: State<'_, AppState>, profile_id: String) -> Result<String, String> {
+    let profile = {
+        let vault = state.vault.lock().await;
+        vault.db_profile_by_id(&profile_id).map_err(app_error)?
+    };
+    let mut sessions = state.db_sessions.lock().await;
+    sessions.connect(&profile).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_disconnect(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    let mut sessions = state.db_sessions.lock().await;
+    sessions.disconnect(&session_id);
+    Ok(())
+}
+
+#[tauri::command]
+async fn db_query(
+    state: State<'_, AppState>,
+    session_id: String,
+    sql: String,
+) -> Result<DbQueryResult, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    let active_db = sessions.get_active_database(&session_id).map(|s| s.to_string());
+    libs::database::db_query_exec(pool, &sql, active_db.as_deref()).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_set_database(
+    state: State<'_, AppState>,
+    session_id: String,
+    database: String,
+) -> Result<(), String> {
+    let mut sessions = state.db_sessions.lock().await;
+    sessions.set_database(&session_id, database).map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_list_databases(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<String>, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    libs::database::db_list_databases(pool).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_list_schemas(
+    state: State<'_, AppState>,
+    session_id: String,
+    database: String,
+) -> Result<Vec<String>, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    libs::database::db_list_schemas(pool, &database).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_list_tables(
+    state: State<'_, AppState>,
+    session_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<DbTableInfo>, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    libs::database::db_list_tables(pool, &database, &schema).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_describe_table(
+    state: State<'_, AppState>,
+    session_id: String,
+    database: String,
+    schema: String,
+    table: String,
+) -> Result<DbTableDefinition, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    libs::database::db_describe_table(pool, &database, &schema, &table).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_get_table_data(
+    state: State<'_, AppState>,
+    session_id: String,
+    database: String,
+    schema: String,
+    table: String,
+    limit: u32,
+    offset: u32,
+) -> Result<DbQueryResult, String> {
+    let sessions = state.db_sessions.lock().await;
+    let pool = sessions.get(&session_id).map_err(app_error)?;
+    libs::database::db_get_table_data(pool, &database, &schema, &table, limit, offset).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn db_save_view_mode(
+    state: State<'_, AppState>,
+    profile_id: String,
+    view_mode: String,
+) -> Result<(), String> {
+    let mut vault = state.vault.lock().await;
+    vault.db_profile_save_view_mode(&profile_id, &view_mode).map_err(app_error)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let vault = VaultManager::new().expect("failed to initialize vault manager");
@@ -2991,6 +3125,7 @@ pub fn run() {
         ssh: Mutex::new(SshManager::new()),
         rdp_sessions: Mutex::new(RdpSessionManager::default()),
         vnc_sessions: Mutex::new(VncSessionManager::default()),
+        db_sessions: Mutex::new(DbSessionManager::new()),
         key_actions: KeyActionsService::new(),
         sync: Mutex::new(SyncManager::new()),
         deeplink_queue: StdMutex::new(Vec::new()),
@@ -3170,6 +3305,19 @@ pub fn run() {
             window_toggle_maximize,
             window_is_maximized,
             window_close,
+            db_profile_list,
+            db_profile_save,
+            db_profile_delete,
+            db_connect,
+            db_disconnect,
+            db_query,
+            db_set_database,
+            db_list_databases,
+            db_list_schemas,
+            db_list_tables,
+            db_describe_table,
+            db_get_table_data,
+            db_save_view_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
