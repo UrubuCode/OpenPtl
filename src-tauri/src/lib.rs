@@ -194,21 +194,31 @@ fn is_window_below_minimum(width: u32, height: u32) -> bool {
 }
 
 fn restore_window_to_default_size(window: &tauri::Window) {
-    let _ = window.unmaximize();
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-        DEFAULT_WORKSPACE_WIDTH,
-        DEFAULT_WORKSPACE_HEIGHT,
-    )));
-    let _ = window.center();
+    #[cfg(desktop)]
+    {
+        let _ = window.unmaximize();
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+            DEFAULT_WORKSPACE_WIDTH,
+            DEFAULT_WORKSPACE_HEIGHT,
+        )));
+        let _ = window.center();
+    }
+    #[cfg(mobile)]
+    let _ = window;
 }
 
 fn restore_webview_window_to_default_size(window: &tauri::WebviewWindow) {
-    let _ = window.unmaximize();
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-        DEFAULT_WORKSPACE_WIDTH,
-        DEFAULT_WORKSPACE_HEIGHT,
-    )));
-    let _ = window.center();
+    #[cfg(desktop)]
+    {
+        let _ = window.unmaximize();
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+            DEFAULT_WORKSPACE_WIDTH,
+            DEFAULT_WORKSPACE_HEIGHT,
+        )));
+        let _ = window.center();
+    }
+    #[cfg(mobile)]
+    let _ = window;
 }
 
 fn chunk_size_from_kb(kb: u32) -> usize {
@@ -1677,6 +1687,7 @@ async fn window_state_restore(
         return Ok(());
     }
 
+    #[cfg(desktop)]
     if !snapshot.maximized {
         let _ = window.unmaximize();
         let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
@@ -1690,6 +1701,8 @@ async fn window_state_restore(
     } else {
         let _ = window.maximize();
     }
+    #[cfg(mobile)]
+    let _ = &snapshot;
 
     Ok(())
 }
@@ -1771,18 +1784,34 @@ async fn release_check_latest() -> Result<ReleaseCheckResult, String> {
 
 #[tauri::command]
 fn window_minimize(window: tauri::Window) -> Result<(), String> {
-    window.minimize().map_err(app_error)
+    #[cfg(desktop)]
+    {
+        window.minimize().map_err(app_error)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        Ok(())
+    }
 }
 
 #[tauri::command]
 fn window_toggle_maximize(window: tauri::Window) -> Result<bool, String> {
-    let maximized = window.is_maximized().map_err(app_error)?;
-    if maximized {
-        window.unmaximize().map_err(app_error)?;
+    #[cfg(desktop)]
+    {
+        let maximized = window.is_maximized().map_err(app_error)?;
+        if maximized {
+            window.unmaximize().map_err(app_error)?;
+            Ok(false)
+        } else {
+            window.maximize().map_err(app_error)?;
+            Ok(true)
+        }
+    }
+    #[cfg(mobile)]
+    {
+        let _ = window;
         Ok(false)
-    } else {
-        window.maximize().map_err(app_error)?;
-        Ok(true)
     }
 }
 
@@ -1793,7 +1822,15 @@ fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
 
 #[tauri::command]
 fn window_close(window: tauri::Window) -> Result<(), String> {
-    window.close().map_err(app_error)
+    #[cfg(desktop)]
+    {
+        window.close().map_err(app_error)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        Ok(())
+    }
 }
 
 fn sanitize_filename(filename: &str) -> String {
@@ -1868,11 +1905,14 @@ fn is_remote_version_newer(current: &str, latest: &str) -> bool {
 }
 
 fn focus_main_window(app: &tauri::AppHandle) {
+    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+    #[cfg(mobile)]
+    let _ = app;
 }
 
 fn sanitize_deep_link_input(input: &str) -> String {
@@ -2013,6 +2053,9 @@ pub fn run() {
                 });
             }
 
+            // Desktop registers custom schemes at runtime; mobile registers them
+            // via the platform manifest (AndroidManifest.xml / Info.plist).
+            #[cfg(desktop)]
             app.deep_link().register_all().ok();
 
             if let Ok(Some(urls)) = app.deep_link().get_current() {
