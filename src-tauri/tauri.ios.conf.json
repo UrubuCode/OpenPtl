@@ -1,0 +1,12 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenPtl",
+        "transparent": false,
+        "decorations": true
+      }
+    ]
+  }
+}
