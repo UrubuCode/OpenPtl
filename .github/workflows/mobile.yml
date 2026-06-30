@@ -1,4 +1,4 @@
-name: Android
+name: Mobile
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,3 +67,46 @@ jobs:
           name: openptl-android-debug
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ios
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Init iOS project
+        run: bun run tauri ios init
+
+      # CI has no Apple signing identity, so build for the simulator target,
+      # which Xcode builds without code signing. Producing a signed .ipa for
+      # device/TestFlight needs an Apple Developer account + secrets (follow-up).
+      - name: Build iOS app (simulator, unsigned)
+        run: bun run tauri ios build --target aarch64-sim
+
+      - name: Upload iOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: openptl-ios-sim
+          path: src-tauri/gen/apple/build/**/*.app
+          if-no-files-found: warn
