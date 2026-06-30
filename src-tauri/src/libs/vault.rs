@@ -12,7 +12,7 @@ use chacha20poly1305::{
 };
 use chrono::Utc;
 use directories::ProjectDirs;
-use keyring::Entry;
+use super::secret_store;
 use rand::{rngs::OsRng, RngCore};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -1264,18 +1264,11 @@ fn is_bin_file_name(name: &str) -> bool {
 }
 
 fn persist_keychain_key(key: &[u8; 32]) -> Result<()> {
-    let entry =
-        Entry::new(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY).context("Falha ao preparar keychain")?;
-    entry
-        .set_password(&to_hex(key))
-        .context("Falha ao salvar chave no keychain")
+    secret_store::set(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY, &to_hex(key))
 }
 
 fn load_keychain_key() -> Result<[u8; 32]> {
-    let entry =
-        Entry::new(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY).context("Falha ao preparar keychain")?;
-    let value = entry
-        .get_password()
+    let value = secret_store::get(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY)
         .context("Nao foi possivel ler chave do keychain")?;
 
     let bytes = hex_to_bytes(&value)?;
@@ -1289,9 +1282,7 @@ fn load_keychain_key() -> Result<[u8; 32]> {
 }
 
 fn clear_keychain_key() {
-    if let Ok(entry) = Entry::new(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY) {
-        let _ = entry.delete_password();
-    }
+    secret_store::delete(APP_KEYRING_SERVICE, KEYRING_VAULT_KEY);
 }
 
 fn hex_to_bytes(input: &str) -> Result<Vec<u8>> {

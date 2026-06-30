@@ -5,7 +5,7 @@ use aes_gcm::{
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
-use keyring::Entry;
+use super::secret_store;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -1230,37 +1230,26 @@ async fn delete_drive_file(client: &Client, access_token: &str, file_id: &str) -
 }
 
 fn store_refresh_token(token: &str) -> Result<()> {
-    let entry = Entry::new(APP_KEYRING_SERVICE, KEYRING_REFRESH_TOKEN)
-        .context("Falha ao preparar keychain")?;
-    entry
-        .set_password(token)
+    secret_store::set(APP_KEYRING_SERVICE, KEYRING_REFRESH_TOKEN, token)
         .context("Falha ao salvar refresh token no keychain")
 }
 
 fn load_refresh_token() -> Result<String> {
-    let entry = Entry::new(APP_KEYRING_SERVICE, KEYRING_REFRESH_TOKEN)
-        .context("Falha ao preparar keychain")?;
-    entry
-        .get_password()
+    secret_store::get(APP_KEYRING_SERVICE, KEYRING_REFRESH_TOKEN)
         .context("Refresh token ausente. Faca login primeiro.")
 }
 
 fn store_user_field(key: &str, value: &str) -> Result<()> {
-    let entry = Entry::new(APP_KEYRING_SERVICE, key).context("Falha ao preparar keychain")?;
-    entry
-        .set_password(value)
+    secret_store::set(APP_KEYRING_SERVICE, key, value)
         .context("Falha ao salvar dado no keychain")
 }
 
 fn load_user_field(key: &str) -> Result<String> {
-    let entry = Entry::new(APP_KEYRING_SERVICE, key).context("Falha ao preparar keychain")?;
-    entry.get_password().context("Campo ausente no keychain")
+    secret_store::get(APP_KEYRING_SERVICE, key).context("Campo ausente no keychain")
 }
 
 fn delete_keyring_field(key: &str) {
-    if let Ok(entry) = Entry::new(APP_KEYRING_SERVICE, key) {
-        let _ = entry.delete_password();
-    }
+    secret_store::delete(APP_KEYRING_SERVICE, key);
 }
 
 #[derive(Debug, Deserialize)]
