@@ -1988,14 +1988,11 @@ fn deeplink_take_pending(state: State<'_, AppState>) -> Result<Vec<String>, Stri
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let vault = VaultManager::new().expect("failed to initialize vault manager");
-    let mut builder = tauri::Builder::default().manage(AppState {
-        vault: Mutex::new(vault),
-        ssh: Mutex::new(SshManager::new()),
-        key_actions: KeyActionsService::new(),
-        sync: Mutex::new(SyncManager::new()),
-        deeplink_queue: StdMutex::new(Vec::new()),
-    });
+    // AppState (and the vault) is created in `setup` so the data directory can be
+    // resolved per-platform: desktop keeps its ProjectDirs path, mobile uses the
+    // OS app-data dir from Tauri's path resolver (ProjectDirs is None on Android).
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
     {
@@ -2011,6 +2008,22 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            let vault = VaultManager::new().map_err(|e| e.to_string())?;
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            let vault = {
+                let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+                VaultManager::new_in(dir).map_err(|e| e.to_string())?
+            };
+
+            app.manage(AppState {
+                vault: Mutex::new(vault),
+                ssh: Mutex::new(SshManager::new()),
+                key_actions: KeyActionsService::new(),
+                sync: Mutex::new(SyncManager::new()),
+                deeplink_queue: StdMutex::new(Vec::new()),
+            });
+
             let app_handle = app.handle().clone();
             let state = app.state::<AppState>();
             state.key_actions.start(app_handle.clone());

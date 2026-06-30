@@ -11,6 +11,7 @@ use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
 };
 use chrono::Utc;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use directories::ProjectDirs;
 use super::secret_store;
 use rand::{rngs::OsRng, RngCore};
@@ -78,11 +79,18 @@ struct EncryptedBin {
 }
 
 impl VaultManager {
+    // Desktop resolves the data directory itself via ProjectDirs. On Android/iOS
+    // ProjectDirs returns None (no XDG/standard dirs), so the caller must supply
+    // the OS-provided app data dir from Tauri's path resolver via `new_in`.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn new() -> Result<Self> {
         let dirs = ProjectDirs::from("com", "urubucode", "openptl")
             .ok_or_else(|| anyhow!("Nao foi possivel resolver diretorio de dados do aplicativo"))?;
-        let data_dir = dirs.data_dir();
-        fs::create_dir_all(data_dir).with_context(|| {
+        Self::new_in(dirs.data_dir().to_path_buf())
+    }
+
+    pub fn new_in(data_dir: std::path::PathBuf) -> Result<Self> {
+        fs::create_dir_all(&data_dir).with_context(|| {
             format!("Falha ao criar diretorio de dados: {}", data_dir.display())
         })?;
 
@@ -90,7 +98,7 @@ impl VaultManager {
         fs::create_dir_all(&storage_root)
             .with_context(|| format!("Falha ao criar diretorio {}", storage_root.display()))?;
 
-        cleanup_legacy_layout(data_dir, &storage_root)?;
+        cleanup_legacy_layout(&data_dir, &storage_root)?;
 
         Ok(Self {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),
