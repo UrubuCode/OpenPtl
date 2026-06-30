@@ -70,7 +70,6 @@ enum ActiveTarget {
 struct Modifiers {
     ctrl: bool,
     alt: bool,
-    shift: bool,
     meta: bool,
 }
 
@@ -126,10 +125,6 @@ impl InnerState {
                 .pressed_keys
                 .iter()
                 .any(|key| matches!(key, Key::Alt | Key::AltGr)),
-            shift: self
-                .pressed_keys
-                .iter()
-                .any(|key| matches!(key, Key::ShiftLeft | Key::ShiftRight)),
             meta: self
                 .pressed_keys
                 .iter()
@@ -631,84 +626,6 @@ fn ssh_ctrl_byte(key: Key, ctrl: bool) -> Option<u8> {
     }
 }
 
-fn rdev_key_to_web_code(key: Key) -> Option<&'static str> {
-    match key {
-        Key::KeyA => Some("KeyA"),
-        Key::KeyB => Some("KeyB"),
-        Key::KeyC => Some("KeyC"),
-        Key::KeyD => Some("KeyD"),
-        Key::KeyE => Some("KeyE"),
-        Key::KeyF => Some("KeyF"),
-        Key::KeyG => Some("KeyG"),
-        Key::KeyH => Some("KeyH"),
-        Key::KeyI => Some("KeyI"),
-        Key::KeyJ => Some("KeyJ"),
-        Key::KeyK => Some("KeyK"),
-        Key::KeyL => Some("KeyL"),
-        Key::KeyM => Some("KeyM"),
-        Key::KeyN => Some("KeyN"),
-        Key::KeyO => Some("KeyO"),
-        Key::KeyP => Some("KeyP"),
-        Key::KeyQ => Some("KeyQ"),
-        Key::KeyR => Some("KeyR"),
-        Key::KeyS => Some("KeyS"),
-        Key::KeyT => Some("KeyT"),
-        Key::KeyU => Some("KeyU"),
-        Key::KeyV => Some("KeyV"),
-        Key::KeyW => Some("KeyW"),
-        Key::KeyX => Some("KeyX"),
-        Key::KeyY => Some("KeyY"),
-        Key::KeyZ => Some("KeyZ"),
-        Key::Num0 => Some("Digit0"),
-        Key::Num1 => Some("Digit1"),
-        Key::Num2 => Some("Digit2"),
-        Key::Num3 => Some("Digit3"),
-        Key::Num4 => Some("Digit4"),
-        Key::Num5 => Some("Digit5"),
-        Key::Num6 => Some("Digit6"),
-        Key::Num7 => Some("Digit7"),
-        Key::Num8 => Some("Digit8"),
-        Key::Num9 => Some("Digit9"),
-        Key::Return => Some("Enter"),
-        Key::KpReturn => Some("NumpadEnter"),
-        Key::Tab => Some("Tab"),
-        Key::Backspace => Some("Backspace"),
-        Key::Escape => Some("Escape"),
-        Key::Space => Some("Space"),
-        Key::ControlLeft => Some("ControlLeft"),
-        Key::ControlRight => Some("ControlRight"),
-        Key::ShiftLeft => Some("ShiftLeft"),
-        Key::ShiftRight => Some("ShiftRight"),
-        Key::Alt => Some("AltLeft"),
-        Key::AltGr => Some("AltRight"),
-        Key::MetaLeft => Some("MetaLeft"),
-        Key::MetaRight => Some("MetaRight"),
-        Key::LeftArrow => Some("ArrowLeft"),
-        Key::RightArrow => Some("ArrowRight"),
-        Key::UpArrow => Some("ArrowUp"),
-        Key::DownArrow => Some("ArrowDown"),
-        Key::Insert => Some("Insert"),
-        Key::Delete => Some("Delete"),
-        Key::Home => Some("Home"),
-        Key::End => Some("End"),
-        Key::PageUp => Some("PageUp"),
-        Key::PageDown => Some("PageDown"),
-        Key::F1 => Some("F1"),
-        Key::F2 => Some("F2"),
-        Key::F3 => Some("F3"),
-        Key::F4 => Some("F4"),
-        Key::F5 => Some("F5"),
-        Key::F6 => Some("F6"),
-        Key::F7 => Some("F7"),
-        Key::F8 => Some("F8"),
-        Key::F9 => Some("F9"),
-        Key::F10 => Some("F10"),
-        Key::F11 => Some("F11"),
-        Key::F12 => Some("F12"),
-        _ => None,
-    }
-}
-
 fn platform_name() -> String {
     #[cfg(target_os = "windows")]
     {
@@ -845,7 +762,6 @@ mod tests {
         let modifiers = Modifiers {
             ctrl: false,
             alt: false,
-            shift: false,
             meta: false,
         };
         assert_eq!(
