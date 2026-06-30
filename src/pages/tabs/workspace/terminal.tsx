@@ -2,9 +2,14 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { RefreshCw, TerminalSquare } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveBackendMessage } from "@/functions/backend-message";
+import {
+  connectSshWebrtc,
+  disconnectSshWebrtc,
+  sendSshWebrtc,
+} from "@/lib/ssh-webrtc";
 import { api } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -111,6 +116,8 @@ export function TerminalBlockView({
   const inputDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const hasLiveSession = !!sessionId && sessionOptions.some((option) => option.id === sessionId);
   const isConnected = block.connectStage === "ready" && hasLiveSession;
+  const wantsWebrtc = block.useWebrtc ?? true;
+  const [webrtcActive, setWebrtcActive] = useState(false);
 
   useEffect(() => {
     onCaptureContextChangeRef.current = onCaptureContextChange;
@@ -178,6 +185,33 @@ export function TerminalBlockView({
     }
     void ensureSessionListeners(sessionId);
   }, [ensureSessionListeners, isConnected, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !isConnected || !wantsWebrtc) {
+      setWebrtcActive(false);
+      return;
+    }
+    let alive = true;
+    const append = useAppStore.getState().appendSessionBuffer;
+    void connectSshWebrtc(sessionId, {
+      onData: (text) => {
+        if (alive) append(sessionId, text);
+      },
+      onOpen: () => {
+        if (alive) setWebrtcActive(true);
+      },
+      onClose: () => {
+        if (alive) setWebrtcActive(false);
+      },
+    }).catch(() => {
+      if (alive) setWebrtcActive(false);
+    });
+    return () => {
+      alive = false;
+      setWebrtcActive(false);
+      disconnectSshWebrtc(sessionId);
+    };
+  }, [isConnected, sessionId, wantsWebrtc]);
 
   useEffect(() => {
     if (!sessionId || !isConnected) {
@@ -264,13 +298,16 @@ export function TerminalBlockView({
       return;
     }
     inputDisposableRef.current = terminal.onData((value) => {
+      if (webrtcActive && sendSshWebrtc(sessionId, value)) {
+        return;
+      }
       void sshWrite(sessionId, value);
     });
     return () => {
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
     };
-  }, [isConnected, sessionId, sshWrite, useBackendCaptureInput]);
+  }, [isConnected, sessionId, sshWrite, useBackendCaptureInput, webrtcActive]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -291,14 +328,14 @@ export function TerminalBlockView({
   }, [buffer]);
 
   useEffect(() => {
-    if (!sessionId || !isConnected) {
+    if (!sessionId || !isConnected || webrtcActive) {
       return;
     }
     const timer = window.setInterval(() => {
       void sshWrite(sessionId, "");
     }, 180);
     return () => window.clearInterval(timer);
-  }, [isConnected, sessionId, sshWrite]);
+  }, [isConnected, sessionId, sshWrite, webrtcActive]);
 
   useEffect(() => {
     if (!sessionId || !isConnected) {

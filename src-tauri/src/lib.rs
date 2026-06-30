@@ -917,6 +917,7 @@ async fn ssh_connect(
 
 #[tauri::command]
 async fn ssh_connect_ex(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     profile_id: String,
     accept_unknown_host: Option<bool>,
@@ -924,6 +925,7 @@ async fn ssh_connect_ex(
     keychain_id_override: Option<String>,
     save_auth_choice: Option<bool>,
     connect_purpose: Option<SshConnectPurpose>,
+    webrtc_enabled: Option<bool>,
 ) -> Result<SshConnectResult, String> {
     let (profile, known_hosts_path) = {
         let mut vault = state.vault.lock().await;
@@ -981,6 +983,8 @@ async fn ssh_connect_ex(
         Some(Path::new(&known_hosts_path)),
         accept_unknown_host.unwrap_or(false),
         connect_purpose.unwrap_or(SshConnectPurpose::Terminal),
+        webrtc_enabled.unwrap_or(false),
+        Some(app),
     )
     .await
     .map_err(app_error)
@@ -988,6 +992,7 @@ async fn ssh_connect_ex(
 
 #[tauri::command]
 async fn rdp_session_start(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     profile_id: String,
     width: Option<u16>,
@@ -999,6 +1004,7 @@ async fn rdp_session_start(
     video_rects_channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
     cursor_channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
     audio_pcm_channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
+    webrtc_enabled: Option<bool>,
 ) -> Result<RdpSessionStartResult, String> {
     let resolved = match resolve_rdp_profile(
         &state,
@@ -1029,6 +1035,7 @@ async fn rdp_session_start(
         width: target_width,
         height: target_height,
         timeout_seconds: 20,
+        webrtc_enabled: webrtc_enabled.unwrap_or(false),
     };
 
     let mut manager = state.rdp_sessions.lock().await;
@@ -1038,6 +1045,7 @@ async fn rdp_session_start(
         video_rects_channel,
         cursor_channel,
         audio_pcm_channel,
+        app,
     ))
 }
 
@@ -1180,6 +1188,94 @@ async fn vnc_webrtc_ice(
         guard.get(&session_id).cloned()
     };
     let peer = peer.ok_or_else(|| "vnc_webrtc_peer_not_found".to_string())?;
+    let cand: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
+        serde_json::from_value(candidate).map_err(|e| e.to_string())?;
+    peer.add_remote_ice(cand).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn rdp_webrtc_offer(session_id: String) -> Result<serde_json::Value, String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "rdp_webrtc_peer_not_found".to_string())?;
+    let offer = peer.create_offer().await.map_err(app_error)?;
+    serde_json::to_value(offer).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn rdp_webrtc_answer(
+    session_id: String,
+    answer: serde_json::Value,
+) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "rdp_webrtc_peer_not_found".to_string())?;
+    let answer: webrtc::peer_connection::sdp::session_description::RTCSessionDescription =
+        serde_json::from_value(answer).map_err(|e| e.to_string())?;
+    peer.accept_answer(answer).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn rdp_webrtc_ice(
+    session_id: String,
+    candidate: serde_json::Value,
+) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::registry;
+    let peer = {
+        let reg = registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "rdp_webrtc_peer_not_found".to_string())?;
+    let cand: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
+        serde_json::from_value(candidate).map_err(|e| e.to_string())?;
+    peer.add_remote_ice(cand).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn ssh_webrtc_offer(session_id: String) -> Result<serde_json::Value, String> {
+    use crate::protocols::webrtc_stream::data_registry;
+    let peer = {
+        let reg = data_registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "ssh_webrtc_peer_not_found".to_string())?;
+    let offer = peer.create_offer().await.map_err(app_error)?;
+    serde_json::to_value(offer).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn ssh_webrtc_answer(session_id: String, answer: serde_json::Value) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::data_registry;
+    let peer = {
+        let reg = data_registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "ssh_webrtc_peer_not_found".to_string())?;
+    let answer: webrtc::peer_connection::sdp::session_description::RTCSessionDescription =
+        serde_json::from_value(answer).map_err(|e| e.to_string())?;
+    peer.accept_answer(answer).await.map_err(app_error)
+}
+
+#[tauri::command]
+async fn ssh_webrtc_ice(session_id: String, candidate: serde_json::Value) -> Result<(), String> {
+    use crate::protocols::webrtc_stream::data_registry;
+    let peer = {
+        let reg = data_registry();
+        let guard = reg.lock().await;
+        guard.get(&session_id).cloned()
+    };
+    let peer = peer.ok_or_else(|| "ssh_webrtc_peer_not_found".to_string())?;
     let cand: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
         serde_json::from_value(candidate).map_err(|e| e.to_string())?;
     peer.add_remote_ice(cand).await.map_err(app_error)
@@ -3242,6 +3338,12 @@ pub fn run() {
             vnc_webrtc_offer,
             vnc_webrtc_answer,
             vnc_webrtc_ice,
+            rdp_webrtc_offer,
+            rdp_webrtc_answer,
+            rdp_webrtc_ice,
+            ssh_webrtc_offer,
+            ssh_webrtc_answer,
+            ssh_webrtc_ice,
             key_actions_set_active_workspace,
             ssh_write,
             ssh_resize,

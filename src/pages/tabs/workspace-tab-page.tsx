@@ -2689,6 +2689,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           height: 720,
           passwordOverride,
           saveAuthChoice,
+          webrtcEnabled: false,
           },
         );
 
@@ -2794,6 +2795,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         kind: "rdp",
         title: count > 0 ? `${baseTitle} (${count + 1})` : baseTitle,
         profileId,
+        useWebrtc: true,
         sessionId: null,
         connectStage: "connecting",
         connectMessage: t.workspace.rdp.connecting,
@@ -3324,6 +3326,34 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     [clearBlockRetryTimers, resolvePendingVncConnection, t.workspace.vnc.connecting],
   );
 
+  const changeRdpProfile = useCallback(
+    (blockId: string, profileId: string) => {
+      notifyModuleDropdownSelect("rdp", blockId, "profile_select", profileId);
+      clearBlockRetryTimers(blockId);
+      setBlocks((current) =>
+        current.map((item) =>
+          item.id === blockId && item.kind === "rdp"
+            ? {
+                ...item,
+                profileId,
+                sessionId: null,
+                connectStage: "connecting",
+                connectMessage: t.workspace.rdp.connecting,
+                connectError: null,
+                imageWidth: 0,
+                imageHeight: 0,
+                capturedAt: null,
+                retryAttempt: 0,
+                retryInSeconds: null,
+              }
+            : item,
+        ),
+      );
+      void resolvePendingRdpConnection(blockId, { retryAttempt: 0 });
+    },
+    [clearBlockRetryTimers, resolvePendingRdpConnection, t.workspace.rdp.connecting],
+  );
+
   useEffect(() => {
     return () => {
       rdpStreamTokenByBlockRef.current.clear();
@@ -3420,6 +3450,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           acceptUnknownHost,
           passwordOverride,
           saveAuthChoice,
+          webrtcEnabled: target.useWebrtc ?? true,
         });
         if (isCancelled()) {
           return;
@@ -5221,32 +5252,26 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                   block,
                   active: focusedBlockId === block.id,
                   profiles: rdpProfiles,
-                  captureUnavailableMessage:
-                    focusedBlockId === block.id ? captureUnavailableMessage : null,
+                  captureUnavailableMessage: null,
                   onFocus: () => focusBlock(block.id),
-                  onProfileChange: (profileId) => {
-                    notifyModuleDropdownSelect("rdp", block.id, "profile_select", profileId);
-                    clearBlockRetryTimers(block.id);
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "rdp"
-                          ? {
-                              ...item,
-                              profileId,
-                              sessionId: null,
-                              connectStage: "connecting",
-                              connectMessage: t.workspace.rdp.connecting,
-                              connectError: null,
-                              imageWidth: 0,
-                              imageHeight: 0,
-                              capturedAt: null,
-                              retryAttempt: 0,
-                              retryInSeconds: null,
-                            }
-                          : item,
-                      ),
-                    );
-                    void resolvePendingRdpConnection(block.id, { retryAttempt: 0 });
+                  onProfileChange: (profileId) => changeRdpProfile(block.id, profileId),
+                  onInputBatch: (events) => {
+                    const sessionId =
+                      rdpStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
+                    if (!sessionId || events.length === 0) {
+                      return;
+                    }
+                    void api.rdpInputBatch(sessionId, { events }).catch(() => undefined);
+                  },
+                  onFocusChange: (focus) => {
+                    const sessionId =
+                      rdpStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
+                    if (!sessionId) {
+                      return;
+                    }
+                    void api.rdpSessionFocus(sessionId, focus).catch((error) => {
+                      appendWorkspaceLog("warn", "Falha ao atualizar foco RDP", getError(error));
+                    });
                   },
                   onRetry: () => {
                     clearBlockRetryTimers(block.id);
@@ -5258,25 +5283,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                       ),
                     );
                     void resolvePendingRdpConnection(block.id, { retryAttempt: 0 });
-                  },
-                  onFocusChange: (focus) => {
-                    const currentRect = rdpSurfaceRectByBlockRef.current.get(block.id) ?? null;
-                    const nextRect = focus.surface_rect ?? null;
-                    if (!areSurfaceRectsEqual(currentRect, nextRect)) {
-                      if (nextRect) {
-                        rdpSurfaceRectByBlockRef.current.set(block.id, nextRect);
-                      } else {
-                        rdpSurfaceRectByBlockRef.current.delete(block.id);
-                      }
-                      setCaptureContextVersion((value) => value + 1);
-                    }
-                    const sessionId = rdpStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
-                    if (!sessionId) {
-                      return;
-                    }
-                    void api.rdpSessionFocus(sessionId, focus).catch((error) => {
-                      appendWorkspaceLog("warn", "Falha ao atualizar foco RDP", getError(error));
-                    });
                   },
                   onPasswordDraftChange: (value) =>
                     setBlocks((current) =>
@@ -5309,10 +5315,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                       );
                       return;
                     }
-                    const password = parsed.data.password;
                     clearBlockRetryTimers(block.id);
                     void resolvePendingRdpConnection(block.id, {
-                      passwordOverride: password,
+                      passwordOverride: parsed.data.password,
                       saveAuthChoice: block.savePasswordChoice,
                       retryAttempt: 0,
                     });

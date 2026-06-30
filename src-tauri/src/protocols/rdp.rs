@@ -29,10 +29,12 @@ use ironrdp_pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use lz4_flex::frame::FrameEncoder;
 use sspi::network_client::reqwest_network_client::ReqwestNetworkClient;
 use tauri::ipc::{Channel, InvokeResponseBody};
+use tauri::{AppHandle, Emitter};
 use tokio_rustls::rustls;
 use uuid::Uuid;
 
 use crate::libs::models::BackendMessage;
+use crate::protocols::webrtc_stream;
 use crate::utils::keyboard::{pressed_modifier_scan_codes, web_code_to_scan_code};
 use crate::utils::mouse::{interpolate_pointer_route, WheelAccumulator};
 
@@ -46,6 +48,7 @@ pub struct RdpSessionOptions {
     pub width: u16,
     pub height: u16,
     pub timeout_seconds: u64,
+    pub webrtc_enabled: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -214,6 +217,7 @@ impl RdpSessionManager {
         video_rects_channel: Channel<InvokeResponseBody>,
         cursor_channel: Channel<InvokeResponseBody>,
         audio_channel: Channel<InvokeResponseBody>,
+        app_handle: AppHandle,
     ) -> RdpSessionStartResult {
         let session_id = Uuid::new_v4().to_string();
         let (tx, rx) = mpsc::channel::<RdpSessionWorkerMessage>();
@@ -226,6 +230,7 @@ impl RdpSessionManager {
         let worker_video_rects_channel = video_rects_channel.clone();
         let worker_cursor_channel = cursor_channel.clone();
         let worker_audio_channel = audio_channel.clone();
+        let worker_tx_for_input = tx.clone();
 
         let join = std::thread::Builder::new()
             .name(format!("rdp-session-{}", &session_id[..8]))
@@ -238,6 +243,8 @@ impl RdpSessionManager {
                     worker_cursor_channel,
                     worker_audio_channel,
                     rx,
+                    worker_tx_for_input,
+                    app_handle,
                 );
             });
 
@@ -254,13 +261,14 @@ impl RdpSessionManager {
     }
 
     pub fn focus(&mut self, session_id: &str, focus: RdpSessionFocusInput) -> Result<()> {
+        // Focus/resize events are fire-and-forget from the UI; a missing session
+        // (not yet ready or already torn down) is a no-op, not an error.
         let Some(session) = self.sessions.get(session_id) else {
-            anyhow::bail!("rdp_session_not_found");
+            return Ok(());
         };
 
-        if let Err(error) = session.tx.send(RdpSessionWorkerMessage::Focus(focus)) {
+        if session.tx.send(RdpSessionWorkerMessage::Focus(focus)).is_err() {
             self.sessions.remove(session_id);
-            return Err(anyhow::Error::new(error).context("rdp focus send"));
         }
 
         Ok(())
@@ -268,12 +276,11 @@ impl RdpSessionManager {
 
     pub fn input_batch(&mut self, session_id: &str, batch: RdpInputBatch) -> Result<()> {
         let Some(session) = self.sessions.get(session_id) else {
-            anyhow::bail!("rdp_session_not_found");
+            return Ok(());
         };
 
-        if let Err(error) = session.tx.send(RdpSessionWorkerMessage::InputBatch(batch)) {
+        if session.tx.send(RdpSessionWorkerMessage::InputBatch(batch)).is_err() {
             self.sessions.remove(session_id);
-            return Err(anyhow::Error::new(error).context("rdp input batch send"));
         }
 
         Ok(())
@@ -281,7 +288,7 @@ impl RdpSessionManager {
 
     pub fn stop(&mut self, session_id: &str) -> Result<()> {
         let Some(session) = self.sessions.remove(session_id) else {
-            anyhow::bail!("rdp_session_not_found");
+            return Ok(());
         };
 
         let _ = session.tx.send(RdpSessionWorkerMessage::Stop);
@@ -413,6 +420,8 @@ fn run_rdp_session_worker(
     cursor_channel: Arc<Channel<InvokeResponseBody>>,
     audio_channel: Arc<Channel<InvokeResponseBody>>,
     rx: mpsc::Receiver<RdpSessionWorkerMessage>,
+    worker_tx_for_input: mpsc::Sender<RdpSessionWorkerMessage>,
+    app_handle: AppHandle,
 ) {
     if !emit_control_event(
         &control_channel,
@@ -432,7 +441,17 @@ fn run_rdp_session_worker(
         &cursor_channel,
         &audio_channel,
         rx,
+        worker_tx_for_input,
+        app_handle,
     );
+
+    let registry = webrtc_stream::registry();
+    let rt = webrtc_stream::runtime();
+    rt.block_on(async {
+        if let Some(peer) = registry.lock().await.remove(&session_id) {
+            peer.close().await;
+        }
+    });
 
     if let Err(error) = worker_result {
         let reason = format!("{error:#}");
@@ -473,6 +492,8 @@ fn run_rdp_session_worker_inner(
     cursor_channel: &Arc<Channel<InvokeResponseBody>>,
     _audio_channel: &Arc<Channel<InvokeResponseBody>>,
     rx: mpsc::Receiver<RdpSessionWorkerMessage>,
+    worker_tx_for_input: mpsc::Sender<RdpSessionWorkerMessage>,
+    app_handle: AppHandle,
 ) -> Result<()> {
     ensure_rustls_crypto_provider();
 
@@ -510,6 +531,57 @@ fn run_rdp_session_worker_inner(
     let mut last_pointer_position: Option<(u16, u16)> = None;
     let mut last_cursor_position = (0u16, 0u16);
     let mut wheel_accumulator = WheelAccumulator::default();
+
+    let webrtc_peer: Option<Arc<webrtc_stream::StreamPeer>> = if options.webrtc_enabled {
+        let rt = webrtc_stream::runtime();
+        let ice_app_handle = app_handle.clone();
+        let ice_event_name = format!("rdp-ice-{}", session_id);
+        let result = rt.block_on(async {
+            webrtc_stream::StreamPeer::new(
+                u32::from(image.width()),
+                u32::from(image.height()),
+                move |candidate| {
+                    let _ = ice_app_handle.emit(&ice_event_name, candidate);
+                },
+            )
+            .await
+        });
+        match result {
+            Ok((peer, mut input_rx)) => {
+                let peer = Arc::new(peer);
+                let registry = webrtc_stream::registry();
+                let session_key = session_id.to_string();
+                rt.block_on(async {
+                    registry
+                        .lock()
+                        .await
+                        .insert(session_key, Arc::clone(&peer));
+                });
+                let worker_tx = worker_tx_for_input.clone();
+                rt.spawn(async move {
+                    while let Some(bytes) = input_rx.recv().await {
+                        if let Ok(batch) = serde_json::from_slice::<RdpInputBatch>(&bytes) {
+                            let _ = worker_tx.send(RdpSessionWorkerMessage::InputBatch(batch));
+                        }
+                    }
+                });
+                Some(peer)
+            }
+            Err(error) => {
+                let _ = emit_control_event(
+                    control_channel,
+                    RdpSessionControlEvent::Error {
+                        session_id: session_id.to_string(),
+                        message: BackendMessage::key(format!("rdp_webrtc_init_failed: {error:#}")),
+                    },
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let mut last_stream_dims = (image.width(), image.height());
 
     if !emit_control_event(
         control_channel,
@@ -582,7 +654,12 @@ fn run_rdp_session_worker_inner(
             .context("process input batch")?;
 
             for cursor_event in drain.cursor_events {
-                if !emit_cursor_event(cursor_channel, cursor_event, &mut last_cursor_position) {
+                if !dispatch_cursor_event(
+                    webrtc_peer.as_ref(),
+                    cursor_channel,
+                    cursor_event,
+                    &mut last_cursor_position,
+                ) {
                     break 'worker;
                 }
             }
@@ -598,7 +675,12 @@ fn run_rdp_session_worker_inner(
             TickOutcome::Idle => {}
             TickOutcome::Updated(drain) => {
                 for cursor_event in drain.cursor_events {
-                    if !emit_cursor_event(cursor_channel, cursor_event, &mut last_cursor_position) {
+                    if !dispatch_cursor_event(
+                    webrtc_peer.as_ref(),
+                    cursor_channel,
+                    cursor_event,
+                    &mut last_cursor_position,
+                ) {
                         break 'worker;
                     }
                 }
@@ -611,13 +693,43 @@ fn run_rdp_session_worker_inner(
             }
         }
 
+        // Encoder runs at 30fps; pushing faster just burns CPU on the software
+        // H.264 path and adds latency, so cap focused output to ~30fps.
         let emit_interval = if focus_state.focused {
-            Duration::from_millis(16)
+            Duration::from_millis(33)
         } else {
             Duration::from_millis(110)
         };
 
-        if pending_dirty_rects.is_empty() || last_emit.elapsed() < emit_interval {
+        // A viewer that joins/loses sync requests a keyframe; push the current
+        // image even when the desktop is static (no dirty rects).
+        let wants_keyframe = webrtc_peer
+            .as_ref()
+            .is_some_and(|peer| peer.keyframe_requested());
+
+        if last_emit.elapsed() < emit_interval
+            || (pending_dirty_rects.is_empty() && !wants_keyframe)
+        {
+            continue;
+        }
+
+        if let Some(peer) = webrtc_peer.as_ref() {
+            pending_dirty_rects.clear();
+            let rt = webrtc_stream::runtime();
+            let (cw, ch) = (image.width(), image.height());
+            if (cw, ch) != last_stream_dims {
+                last_stream_dims = (cw, ch);
+                let resize_peer = Arc::clone(peer);
+                rt.block_on(async move {
+                    let _ = resize_peer.resize(u32::from(cw), u32::from(ch)).await;
+                });
+            }
+            let frame = full_rgba_frame(&image);
+            let frame_peer = Arc::clone(peer);
+            rt.spawn(async move {
+                let _ = frame_peer.push_rgba_frame(&frame).await;
+            });
+            last_emit = Instant::now();
             continue;
         }
 
@@ -804,6 +916,58 @@ fn emit_cursor_event(
     }
 }
 
+fn dispatch_cursor_event(
+    webrtc_peer: Option<&Arc<webrtc_stream::StreamPeer>>,
+    cursor_channel: &Arc<Channel<InvokeResponseBody>>,
+    event: SessionCursorEvent,
+    last_position: &mut (u16, u16),
+) -> bool {
+    let Some(peer) = webrtc_peer else {
+        return emit_cursor_event(cursor_channel, event, last_position);
+    };
+    let json = build_cursor_json_webrtc(&event, last_position);
+    if let SessionCursorEvent::Position { x, y } = event {
+        *last_position = (x, y);
+    }
+    if let Some(json) = json {
+        let rt = webrtc_stream::runtime();
+        let peer = Arc::clone(peer);
+        rt.spawn(async move {
+            let _ = peer.push_cursor_update(&json).await;
+        });
+    }
+    true
+}
+
+fn build_cursor_json_webrtc(
+    event: &SessionCursorEvent,
+    last_position: &(u16, u16),
+) -> Option<String> {
+    match event {
+        SessionCursorEvent::Default | SessionCursorEvent::Hidden => {
+            Some(r#"{"visible":false}"#.to_string())
+        }
+        SessionCursorEvent::Position { x, y } => Some(format!(r#"{{"x":{x},"y":{y}}}"#)),
+        SessionCursorEvent::Bitmap(pointer) => {
+            if pointer.width == 0 || pointer.height == 0 {
+                return Some(r#"{"visible":false}"#.to_string());
+            }
+            let encoded = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                pointer.bitmap_data.as_slice(),
+            );
+            let (x, y) = last_position;
+            Some(format!(
+                r#"{{"visible":true,"x":{x},"y":{y},"hotspotX":{hx},"hotspotY":{hy},"width":{w},"height":{h},"rgbaBase64":"{encoded}"}}"#,
+                hx = pointer.hotspot_x,
+                hy = pointer.hotspot_y,
+                w = pointer.width,
+                h = pointer.height,
+            ))
+        }
+    }
+}
+
 fn queue_dirty_rect(target: &mut Vec<InclusiveRectangle>, rect: InclusiveRectangle) {
     if rect.width() == 0 || rect.height() == 0 {
         return;
@@ -965,6 +1129,24 @@ fn build_audio_pcm_packet(
     packet.extend_from_slice(payload);
 
     Ok(packet)
+}
+
+fn full_rgba_frame(image: &DecodedImage) -> Vec<u8> {
+    let width = usize::from(image.width());
+    let height = usize::from(image.height());
+    let row_bytes = width * 4;
+    let stride = image.stride();
+    let data = image.data();
+    if stride == row_bytes {
+        return data[..row_bytes * height].to_vec();
+    }
+    let mut out = vec![0u8; row_bytes * height];
+    for row in 0..height {
+        let src = row * stride;
+        let dst = row * row_bytes;
+        out[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
+    }
+    out
 }
 
 fn copy_rect_bgra(image: &DecodedImage, rect: &InclusiveRectangle) -> Result<Vec<u8>> {

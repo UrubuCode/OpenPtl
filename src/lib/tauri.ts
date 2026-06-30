@@ -97,6 +97,7 @@ export const api = {
       keychainIdOverride?: string | null;
       saveAuthChoice?: boolean;
       connectPurpose?: SshConnectPurpose;
+      webrtcEnabled?: boolean;
     },
   ) =>
     invoke<SshConnectResult>("ssh_connect_ex", {
@@ -106,7 +107,14 @@ export const api = {
       keychainIdOverride: options?.keychainIdOverride,
       saveAuthChoice: options?.saveAuthChoice,
       connectPurpose: options?.connectPurpose,
+      webrtcEnabled: options?.webrtcEnabled ?? false,
     }),
+  sshWebrtcOffer: (sessionId: string) =>
+    invoke<RTCSessionDescriptionInit>("ssh_webrtc_offer", { sessionId }),
+  sshWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
+    invoke<void>("ssh_webrtc_answer", { sessionId, answer }),
+  sshWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
+    invoke<void>("ssh_webrtc_ice", { sessionId, candidate }),
   rdpSessionStart: (
     profileId: string,
     controlChannel: Channel<RdpSessionControlEvent>,
@@ -119,6 +127,7 @@ export const api = {
       passwordOverride?: string | null;
       keychainIdOverride?: string | null;
       saveAuthChoice?: boolean;
+      webrtcEnabled?: boolean;
     },
   ) =>
     invoke<RdpSessionStartResult>("rdp_session_start", {
@@ -132,12 +141,19 @@ export const api = {
       videoRectsChannel,
       cursorChannel,
       audioPcmChannel,
+      webrtcEnabled: options?.webrtcEnabled ?? false,
     }),
   rdpSessionFocus: (sessionId: string, focus: RdpSessionFocusInput) =>
     invoke<void>("rdp_session_focus", { sessionId, focus }),
   rdpInputBatch: (sessionId: string, batch: RdpInputBatch) =>
     invoke<void>("rdp_input_batch", { sessionId, batch }),
   rdpSessionStop: (sessionId: string) => invoke<void>("rdp_session_stop", { sessionId }),
+  rdpWebrtcOffer: (sessionId: string) =>
+    invoke<RTCSessionDescriptionInit>("rdp_webrtc_offer", { sessionId }),
+  rdpWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
+    invoke<void>("rdp_webrtc_answer", { sessionId, answer }),
+  rdpWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
+    invoke<void>("rdp_webrtc_ice", { sessionId, candidate }),
   vncSessionStart: (
     profileId: string,
     controlChannel: Channel<VncSessionControlEvent>,

@@ -22,8 +22,9 @@ keyframe forçado em pacote perdido — tudo que vem de graça com WebRTC), redu
 banda em conexões remotas e simplificar drasticamente o frontend (some pixi.js,
 some parsing manual de protocolo binário, some decodificação de retângulos).
 
-A fase atual é **POC apenas no VNC**, com pipeline antigo preservado atrás de uma
-flag `webrtc_enabled`. RDP será portado depois da validação.
+VNC e RDP já estão portados, com pipeline antigo preservado atrás de uma flag
+`webrtc_enabled` (toggle por bloco `useWebrtc`, default true). SSH/terminal ainda
+não usa WebRTC.
 
 ---
 
@@ -40,17 +41,38 @@ flag `webrtc_enabled`. RDP será portado depois da validação.
 | Bindings TS | `src/lib/tauri.ts` | `vncWebrtcOffer/Answer/Ice`, opção `webrtcEnabled` |
 | Componente React | `src/pages/tabs/workspace/vnc-webrtc.tsx` | 288 linhas — `VncWebrtcBlockView` standalone |
 
+### ✅ Pronto (continuação)
+
+| Camada | Arquivo | Estado |
+|---|---|---|
+| Encoder RGBA | `webrtc_stream.rs` | `push_rgba_frame` + `rgba_to_i420` (RDP usa RgbA32) |
+| Integração RDP | `protocols/rdp.rs` | flag `webrtc_enabled`; peer criado antes do `Ready`; `push_rgba_frame` no emit; cursor (Default/Hidden/Position/Bitmap) → JSON no DataChannel; `resize()` na troca de resolução; input reinjetado |
+| Comandos Tauri RDP | `lib.rs` | `rdp_webrtc_offer/answer/ice` + `webrtc_enabled` em `rdp_session_start` |
+| Bindings TS RDP | `lib/tauri.ts` | `rdpWebrtcOffer/Answer/Ice`, opção `webrtcEnabled` |
+| Componente React RDP | `workspace/rdp-webrtc.tsx` | `RdpWebrtcBlockView` — `<video>`, cursor overlay (merge), surface_rect p/ captura global |
+| Integração workspace | `workspace-tab-page.tsx` | branch `block.useWebrtc`, `toggleRdpWebrtc`, `changeRdpProfile`, default `useWebrtc: true` |
+| Peer data-only | `webrtc_stream.rs` | `DataPeer` (sem vídeo/encoder) + `data_registry()`; DataChannel "terminal" bidirecional; buffer de pendentes flushado no `on_open` (não perde 1º prompt) |
+| Integração SSH | `protocols/ssh.rs` | flag `webrtc_enabled` em `connect_ex`; `open_terminal_session` cria `DataPeer` antes de registrar a sessão; reader empurra bytes pro DataChannel (em vez do buffer); input do canal → `write_to_remote_channel`; writer agora `Arc<ChannelWriteHalf>` compartilhado; cleanup no `disconnect` |
+| Comandos Tauri SSH | `lib.rs` | `ssh_webrtc_offer/answer/ice` + `webrtc_enabled` em `ssh_connect_ex` |
+| Bindings TS SSH | `lib/tauri.ts` | `sshWebrtcOffer/Answer/Ice`, opção `webrtcEnabled` |
+| Manager SSH front | `lib/ssh-webrtc.ts` | `connectSshWebrtc/sendSshWebrtc/disconnectSshWebrtc`; `TextDecoder` streaming; falha → fallback p/ poll legado |
+| Integração terminal | `workspace/terminal.tsx` | `block.useWebrtc` (default true via `?? true`); onData → DataChannel quando ativo (senão `sshWrite`); poll de 180ms desligado quando WebRTC ativo |
+
 ### ⏳ Pendente
 
-1. **Integrar `VncWebrtcBlockView` em `workspace-tab-page.tsx`** — escolher entre
-   `VncBlockView` (legacy pixi) e `VncWebrtcBlockView` (novo) com base num
-   toggle/setting, e passar `webrtcEnabled: true` em `api.vncSessionStart`.
-2. **Testar end-to-end no Windows** — primeira build vai demorar 3-5 min compilando
-   openh264 do source.
-3. **Portar a mesma estrutura pro RDP** — depois de validar VNC.
-4. **Parsear cursor pseudo-encoding -239 no `vnc.rs`** — pra cursor remoto custom
-   funcionar de fato (gancho do DataChannel já está pronto, mas o VNC atual não
-   decodifica cursor).
+1. **Testar end-to-end no Windows** (VNC + RDP) — primeira build compila openh264.
+2. **Validar formato do cursor RDP** — assumido RGBA (`DecodedPointer.bitmap_data`);
+   se vier BGRA, trocar canais em `build_cursor_json_webrtc`.
+3. **Input RDP via DataChannel (opcional)** — hoje RDP em WebRTC continua usando
+   captura global (rdev) → `rdp_input_batch`. O `input` DataChannel do `StreamPeer`
+   fica ocioso. Migrar pra DataChannel removeria a dependência de captura global.
+4. **Race de negociação** — frontend chama `offer` ao ver `Ready`. RDP e SSH criam
+   o peer ANTES de expor a sessão (sem race). VNC ainda cria depois (revisar).
+5. **Reconexão SSH** — `scheduleReconnect` (session-actions) e `connect()` legado
+   passam `webrtc_enabled=false`. Sessão reconectada cai no poll legado. Propagar
+   a flag se quiser WebRTC pós-reconexão.
+6. **Terminal local** — `connect_local` não tem canal russh/`DataPeer`; o offer
+   falha e o terminal cai no poll legado automaticamente (fallback OK).
 
 ---
 

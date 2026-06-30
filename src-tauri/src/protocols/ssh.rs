@@ -26,6 +26,7 @@ use russh::{
 };
 use russh_sftp::client::SftpSession;
 use sha2::{Digest, Sha256};
+use tauri::{AppHandle, Emitter};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     task::JoinHandle,
@@ -36,6 +37,7 @@ use crate::libs::models::{
     BackendMessage, ConnectionProfile, KnownHostEntry, SftpEntry, SshConnectPurpose,
     SshConnectResult, SshSessionInfo,
 };
+use crate::protocols::webrtc_stream::{self, DataPeer};
 
 pub struct SshManager {
     sessions: HashMap<String, ManagedSession>,
@@ -67,6 +69,7 @@ async fn ensure_sftp_session(managed: &mut ManagedSession) -> Result<&mut SftpSe
 
 async fn open_terminal_session(
     handle: &client::Handle<SshClientHandler>,
+    webrtc: Option<(AppHandle, String)>,
 ) -> Result<TerminalSession> {
     let channel = handle
         .channel_open_session()
@@ -82,11 +85,41 @@ async fn open_terminal_session(
         .context("Falha ao iniciar shell SSH")?;
 
     let (read_half, write_half) = channel.split();
+    let writer = Arc::new(write_half);
     let output = Arc::new(Mutex::new(Vec::new()));
-    let reader_task = spawn_terminal_reader(read_half, Arc::clone(&output));
+
+    let data_peer = if let Some((app, session_id)) = webrtc {
+        let ice_event = format!("ssh-ice-{session_id}");
+        let (peer, mut input_rx) = DataPeer::new(move |candidate| {
+            let _ = app.emit(&ice_event, candidate);
+        })
+        .await
+        .context("Falha ao criar peer WebRTC SSH")?;
+        let peer = Arc::new(peer);
+        webrtc_stream::data_registry()
+            .lock()
+            .await
+            .insert(session_id, Arc::clone(&peer));
+        let input_writer = Arc::clone(&writer);
+        tokio::spawn(async move {
+            while let Some(bytes) = input_rx.recv().await {
+                if write_to_remote_channel(input_writer.as_ref(), &bytes)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Some(peer)
+    } else {
+        None
+    };
+
+    let reader_task = spawn_terminal_reader(read_half, Arc::clone(&output), data_peer);
 
     Ok(TerminalSession {
-        writer: write_half,
+        writer,
         output,
         reader_task,
     })
@@ -95,12 +128,15 @@ async fn open_terminal_session(
 fn spawn_terminal_reader(
     mut read_half: ChannelReadHalf,
     output: Arc<Mutex<Vec<u8>>>,
+    data_peer: Option<Arc<DataPeer>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(message) = read_half.wait().await {
             match message {
                 ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
-                    if let Ok(mut guard) = output.lock() {
+                    if let Some(peer) = &data_peer {
+                        let _ = peer.send_terminal(data.as_ref()).await;
+                    } else if let Ok(mut guard) = output.lock() {
                         guard.extend_from_slice(data.as_ref());
                     } else {
                         break;
@@ -723,7 +759,7 @@ struct ManagedSession {
 }
 
 struct TerminalSession {
-    writer: ChannelWriteHalf<client::Msg>,
+    writer: Arc<ChannelWriteHalf<client::Msg>>,
     output: Arc<Mutex<Vec<u8>>>,
     reader_task: JoinHandle<()>,
 }
@@ -797,7 +833,14 @@ impl SshManager {
         known_hosts_path: Option<&Path>,
     ) -> Result<SshSessionInfo> {
         match self
-            .connect_ex(profile, known_hosts_path, true, SshConnectPurpose::Terminal)
+            .connect_ex(
+                profile,
+                known_hosts_path,
+                true,
+                SshConnectPurpose::Terminal,
+                false,
+                None,
+            )
             .await?
         {
             SshConnectResult::Connected { session } => Ok(session),
@@ -815,6 +858,8 @@ impl SshManager {
         known_hosts_path: Option<&Path>,
         accept_unknown_host: bool,
         connect_purpose: SshConnectPurpose,
+        webrtc_enabled: bool,
+        app_handle: Option<AppHandle>,
     ) -> Result<SshConnectResult> {
         let known_hosts_file = resolve_known_hosts_path(
             known_hosts_path
@@ -867,13 +912,18 @@ impl SshManager {
             }
         }
 
+        let session_id = uuid::Uuid::new_v4().to_string();
+
         let terminal = if connect_purpose == SshConnectPurpose::Terminal {
-            Some(open_terminal_session(&handle).await?)
+            let webrtc = match (webrtc_enabled, app_handle) {
+                (true, Some(app)) => Some((app, session_id.clone())),
+                _ => None,
+            };
+            Some(open_terminal_session(&handle, webrtc).await?)
         } else {
             None
         };
 
-        let session_id = uuid::Uuid::new_v4().to_string();
         let info = SshSessionInfo {
             session_id: session_id.clone(),
             profile_id: profile.id.clone(),
@@ -921,6 +971,14 @@ impl SshManager {
     }
 
     pub async fn disconnect(&mut self, session_id: &str) {
+        if let Some(peer) = webrtc_stream::data_registry()
+            .lock()
+            .await
+            .remove(session_id)
+        {
+            peer.close().await;
+        }
+
         if let Some(mut managed) = self.sessions.remove(session_id) {
             if let Some(terminal) = managed.terminal.take() {
                 let _ = terminal.writer.eof().await;
@@ -955,7 +1013,7 @@ impl SshManager {
 
             let payload = command.replace('\r', "\n");
             if !payload.is_empty() {
-                write_to_remote_channel(&terminal.writer, payload.as_bytes())
+                write_to_remote_channel(terminal.writer.as_ref(), payload.as_bytes())
                     .await
                     .context("Falha ao enviar entrada para shell SSH")?;
             }
@@ -997,7 +1055,7 @@ impl SshManager {
                 .terminal
                 .as_mut()
                 .ok_or_else(|| anyhow!("Sessao {} nao suporta shell interativo", session_id))?;
-            write_to_remote_channel(&terminal.writer, bytes)
+            write_to_remote_channel(terminal.writer.as_ref(), bytes)
                 .await
                 .context("Falha ao enviar input bruto para shell SSH")?;
             return Ok(());

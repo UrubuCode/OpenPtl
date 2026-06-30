@@ -36,6 +36,7 @@ export interface PendingHostChallenge {
 
 export interface TerminalBlock extends BaseBlock {
   kind: "terminal";
+  useWebrtc?: boolean;
   sessionId: string | null;
   pendingProfileId: string | null;
   connectStage: ConnectStage;
@@ -92,6 +93,7 @@ export interface EditorBlock extends BaseBlock {
 export interface RdpBlock extends BaseBlock {
   kind: "rdp";
   profileId: string;
+  useWebrtc: boolean;
   sessionId: string | null;
   connectStage: ConnectStage;
   connectMessage: WorkspaceMessage;

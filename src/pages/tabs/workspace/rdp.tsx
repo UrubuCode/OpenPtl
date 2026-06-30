@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
@@ -12,6 +13,7 @@ import { useT } from "@/langs";
 import { cn } from "@/lib/utils";
 import type {
   ConnectionProfile,
+  RdpInputEvent,
   RdpSessionFocusInput,
 } from "@/types/openptl";
 import {
@@ -30,10 +32,15 @@ export interface RdpBlockViewProps {
   onFocus: () => void;
   onProfileChange: (profileId: string) => void;
   onFocusChange: (focus: RdpSessionFocusInput) => void;
+  onInputBatch: (events: RdpInputEvent[]) => void;
   onRetry: () => void;
   onPasswordDraftChange: (value: string) => void;
   onSavePasswordChange: (checked: boolean) => void;
   onSubmitPassword: () => void;
+}
+
+function rdpButtonOf(n: number): "left" | "right" | "middle" {
+  return n === 2 ? "right" : n === 1 ? "middle" : "left";
 }
 
 function formatCapturedAt(timestamp: number | null): string {
@@ -73,6 +80,7 @@ export function RdpBlockView({
   onFocus,
   onProfileChange,
   onFocusChange,
+  onInputBatch,
   onRetry,
   onPasswordDraftChange,
   onSavePasswordChange,
@@ -310,6 +318,29 @@ export function RdpBlockView({
     });
   }, [onFocusChange]);
 
+  const surfaceToServer = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const canvas = canvasRef.current;
+      const dr = drawRectRef.current;
+      if (!canvas || dr.width <= 0 || dr.height <= 0) return null;
+      if (block.imageWidth <= 0 || block.imageHeight <= 0) return null;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return null;
+      // drawRect is in canvas device pixels; map client (css) -> device -> server.
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const xDev = (clientX - rect.left) * scaleX;
+      const yDev = (clientY - rect.top) * scaleY;
+      const sx = ((xDev - dr.x) / dr.width) * block.imageWidth;
+      const sy = ((yDev - dr.y) / dr.height) * block.imageHeight;
+      return {
+        x: Math.max(0, Math.min(block.imageWidth - 1, Math.round(sx))),
+        y: Math.max(0, Math.min(block.imageHeight - 1, Math.round(sy))),
+      };
+    },
+    [block.imageHeight, block.imageWidth],
+  );
+
   const handleCanvasPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       onFocus();
@@ -317,17 +348,81 @@ export function RdpBlockView({
       event.stopPropagation();
       event.currentTarget.focus();
       emitFocusedState(true);
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {}
+      const p = surfaceToServer(event.clientX, event.clientY);
+      if (p) {
+        onInputBatch([
+          { kind: "mouse_button_down", x: p.x, y: p.y, button: rdpButtonOf(event.button) },
+        ]);
+      }
     },
-    [emitFocusedState, onFocus],
+    [emitFocusedState, onFocus, onInputBatch, surfaceToServer],
+  );
+
+  const handleCanvasPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (!isConnected) return;
+      const p = surfaceToServer(event.clientX, event.clientY);
+      if (p) onInputBatch([{ kind: "mouse_move", x: p.x, y: p.y }]);
+    },
+    [isConnected, onInputBatch, surfaceToServer],
+  );
+
+  const handleCanvasPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {}
+      const p = surfaceToServer(event.clientX, event.clientY);
+      if (p) {
+        onInputBatch([
+          { kind: "mouse_button_up", x: p.x, y: p.y, button: rdpButtonOf(event.button) },
+        ]);
+      }
+    },
+    [onInputBatch, surfaceToServer],
   );
 
   const handleCanvasWheel = useCallback(
     (event: ReactWheelEvent<HTMLCanvasElement>) => {
-      if (isConnected) {
-        event.preventDefault();
+      if (!isConnected) return;
+      event.preventDefault();
+      const p = surfaceToServer(event.clientX, event.clientY);
+      if (p) {
+        onInputBatch([
+          {
+            kind: "mouse_scroll",
+            x: p.x,
+            y: p.y,
+            delta_x: Math.round(-event.deltaX),
+            delta_y: Math.round(-event.deltaY),
+          },
+        ]);
       }
     },
-    [isConnected],
+    [isConnected, onInputBatch, surfaceToServer],
+  );
+
+  const handleCanvasKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLCanvasElement>) => {
+      if (!isConnected) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onInputBatch([
+        {
+          kind: "key_press",
+          code: event.code,
+          text: event.key.length === 1 ? event.key : null,
+          ctrl: event.ctrlKey,
+          alt: event.altKey,
+          shift: event.shiftKey,
+          meta: event.metaKey,
+        },
+      ]);
+    },
+    [isConnected, onInputBatch],
   );
 
   const statusMessage = resolveBackendMessage(block.connectMessage);
@@ -365,11 +460,14 @@ export function RdpBlockView({
               "cursor-default",
             )}
             onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
             onPointerEnter={() => emitFocusedState(true)}
             onPointerLeave={() => emitFocusedState(false)}
             onFocus={() => emitFocusedState(true)}
             onBlur={() => emitFocusedState(false)}
             onWheel={handleCanvasWheel}
+            onKeyDown={handleCanvasKeyDown}
             onContextMenu={(event) => event.preventDefault()}
           />
 

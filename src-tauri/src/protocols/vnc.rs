@@ -463,6 +463,18 @@ fn run_vnc_session_worker_inner(
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) =>
             {
+                // Viewer requested a keyframe (RTCP PLI) while the screen is idle:
+                // re-encode the current framebuffer so it isn't stuck black.
+                if let Some(peer) = webrtc_peer.as_ref() {
+                    if peer.keyframe_requested() {
+                        let rt = webrtc_stream::runtime();
+                        let peer = Arc::clone(peer);
+                        let snapshot = image.clone();
+                        rt.spawn(async move {
+                            let _ = peer.push_bgra_frame(&snapshot).await;
+                        });
+                    }
+                }
                 send_fb_update_request(&mut writer, 1, 0, 0, server_width, server_height)?;
                 continue;
             }
