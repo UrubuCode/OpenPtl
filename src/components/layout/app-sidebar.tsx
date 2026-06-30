@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import pkg from "../../../package.json";
-import { Bug, CircleHelp, Database, Globe, Home, KeyRound, NotebookTabs, Plus, Settings2, StickyNote } from "lucide-react";
+import { Bug, CircleHelp, Globe, Home, KeyRound, NotebookTabs, Plus, Settings2, StickyNote } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +30,6 @@ const iconBySection: Record<SidebarSection, typeof Home> = {
   keychain: KeyRound,
   known_hosts: NotebookTabs,
   notes: StickyNote,
-  database: Database,
   settings: Settings2,
   debug_logs: Bug,
   about: CircleHelp,
@@ -51,9 +50,8 @@ export function AppSidebar({ current, onSelect }: AppSidebarProps) {
         { id: "keychain" as const, label: t.sidebar.keychain },
         { id: "known_hosts" as const, label: t.sidebar.knownHosts },
         { id: "notes" as const, label: t.sidebar.notes },
-        { id: "database" as const, label: t.sidebar.database },
       ] satisfies Array<{ id: SidebarSection; label: string }>,
-    [t.sidebar.home, t.sidebar.keychain, t.sidebar.knownHosts, t.sidebar.notes, t.sidebar.database],
+    [t.sidebar.home, t.sidebar.keychain, t.sidebar.knownHosts, t.sidebar.notes],
   );
 
   const systemItems = useMemo(
@@ -112,11 +110,6 @@ export function AppSidebar({ current, onSelect }: AppSidebarProps) {
                       {!collapsed ? (
                         <span className="flex items-center gap-1.5 flex-1 min-w-0">
                           <span className="truncate">{item.label}</span>
-                          {item.id === "database" && (
-                            <span className="ml-auto shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 leading-none">
-                              BETA
-                            </span>
-                          )}
                         </span>
                       ) : null}
                     </SidebarMenuButton>

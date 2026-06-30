@@ -65,9 +65,7 @@ fn default_connection_kind() -> Option<ConnectionKind> {
 pub enum ConnectionKind {
     Host,
     Sftp,
-    Rdp,
     Both,
-    Vnc,
 }
 
 impl Default for ConnectionKind {
@@ -81,11 +79,6 @@ impl Default for ConnectionKind {
 pub enum ConnectionProtocol {
     Ssh,
     Sftp,
-    Ftp,
-    Ftps,
-    Smb,
-    Rdp,
-    Vnc,
 }
 
 impl Default for ConnectionProtocol {
@@ -110,8 +103,6 @@ pub struct ConnectionProfile {
     pub protocols: Vec<ConnectionProtocol>,
     #[serde(default = "default_connection_kind")]
     pub kind: Option<ConnectionKind>,
-    #[serde(skip, default)]
-    pub ftp_tls: bool,
 }
 
 impl ConnectionProfile {
@@ -120,8 +111,6 @@ impl ConnectionProfile {
             self.protocols = match self.kind.clone().unwrap_or(ConnectionKind::Both) {
                 ConnectionKind::Host => vec![ConnectionProtocol::Ssh],
                 ConnectionKind::Sftp => vec![ConnectionProtocol::Sftp],
-                ConnectionKind::Rdp => vec![ConnectionProtocol::Rdp],
-                ConnectionKind::Vnc => vec![ConnectionProtocol::Vnc],
                 ConnectionKind::Both => vec![ConnectionProtocol::Ssh, ConnectionProtocol::Sftp],
             };
         }
@@ -131,18 +120,6 @@ impl ConnectionProfile {
             if !ordered.contains(protocol) {
                 ordered.push(protocol.clone());
             }
-        }
-        if ordered
-            .iter()
-            .any(|protocol| matches!(protocol, ConnectionProtocol::Rdp))
-        {
-            ordered = vec![ConnectionProtocol::Rdp];
-        }
-        if ordered
-            .iter()
-            .any(|protocol| matches!(protocol, ConnectionProtocol::Vnc))
-        {
-            ordered = vec![ConnectionProtocol::Vnc];
         }
         self.protocols = ordered;
 
@@ -382,117 +359,6 @@ impl Default for SyncMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum DatabaseDriver {
-    Postgres,
-    Mysql,
-    Mariadb,
-    Sqlite,
-}
-
-impl Default for DatabaseDriver {
-    fn default() -> Self {
-        Self::Postgres
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DatabaseProfile {
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub driver: DatabaseDriver,
-    pub host: Option<String>,
-    pub port: Option<u16>,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub database: Option<String>,
-    pub file_path: Option<String>,
-    #[serde(default)]
-    pub ssl: bool,
-    #[serde(default = "default_db_view_mode")]
-    pub view_mode: String,
-}
-
-fn default_db_view_mode() -> String {
-    "tabular".to_string()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbColumnMeta {
-    pub name: String,
-    pub type_name: String,
-    pub nullable: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbQueryResult {
-    pub columns: Vec<DbColumnMeta>,
-    pub rows: Vec<Vec<serde_json::Value>>,
-    pub affected_rows: u64,
-    pub duration_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbTableInfo {
-    pub name: String,
-    pub schema: String,
-    pub kind: String,
-    pub rows: Option<i64>,
-    pub size_bytes: Option<i64>,
-    pub engine: Option<String>,
-    pub comment: Option<String>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-    pub collation: Option<String>,
-    pub auto_increment: Option<i64>,
-    pub data_free: Option<i64>,
-    pub index_length: Option<i64>,
-    pub avg_row_length: Option<i64>,
-    pub max_data_length: Option<i64>,
-    pub check_time: Option<String>,
-    pub checksum: Option<i64>,
-    pub create_options: Option<String>,
-    pub row_format: Option<String>,
-    pub version: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbColumnDef {
-    pub name: String,
-    pub data_type: String,
-    pub nullable: bool,
-    pub default_value: Option<String>,
-    pub is_primary_key: bool,
-    pub extra: Option<String>,
-    pub comment: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbIndex {
-    pub name: String,
-    pub columns: Vec<String>,
-    pub unique: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbForeignKey {
-    pub name: String,
-    pub columns: Vec<String>,
-    pub ref_table: String,
-    pub ref_columns: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbTableDefinition {
-    pub columns: Vec<DbColumnDef>,
-    pub indexes: Vec<DbIndex>,
-    pub foreign_keys: Vec<DbForeignKey>,
-    pub primary_key: Vec<String>,
-    pub ddl: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VaultPayload {
     pub version: u32,
@@ -508,8 +374,6 @@ pub struct VaultPayload {
     pub auth_servers: Vec<AuthServer>,
     #[serde(default)]
     pub window_state: Option<WindowState>,
-    #[serde(default)]
-    pub database_profiles: Vec<DatabaseProfile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -724,13 +588,6 @@ pub struct ProfileBinPayload {
     pub auth_servers: Vec<AuthServer>,
     #[serde(default)]
     pub window_state: Option<WindowState>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DbProfilesBinPayload {
-    pub version: u32,
-    #[serde(default)]
-    pub database_profiles: Vec<DatabaseProfile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

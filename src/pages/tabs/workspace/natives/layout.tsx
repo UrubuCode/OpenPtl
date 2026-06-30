@@ -1,6 +1,6 @@
 import type { WorkspaceBlockLayout } from "@/components/workspace/workspace-block-controller";
 
-type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor" | "database";
+type WorkspaceKind = "terminal" | "sftp" | "editor";
 
 type EdgeFlags = {
   left: boolean;
@@ -213,14 +213,6 @@ export function workspaceDefaultLayout(
       x: leftWidth + 4,
       y: 8,
       width: safeWidth - leftWidth - 12,
-      height: safeHeight - 16,
-    };
-  }
-  if (kind === "rdp" && index === 0) {
-    return {
-      x: 8,
-      y: 8,
-      width: safeWidth - 16,
       height: safeHeight - 16,
     };
   }

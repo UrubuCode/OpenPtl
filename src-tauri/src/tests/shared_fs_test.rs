@@ -17,7 +17,7 @@ fn shared_fs_bridge_stages_and_copies_between_endpoints() {
     let job = SharedFsJob {
         task_id: "shared-fs-test".to_string(),
         source: TransferEndpoint::new(SharedFsProtocol::Sftp, "sftp"),
-        target: TransferEndpoint::new(SharedFsProtocol::Smb, "smb"),
+        target: TransferEndpoint::new(SharedFsProtocol::Local, "local"),
         source_path: source_path.to_string_lossy().to_string(),
         target_path: target_path.to_string_lossy().to_string(),
     };

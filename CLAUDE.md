@@ -2,7 +2,7 @@
 
 ## Overview
 
-Desktop application for managing remote connections (SSH, SFTP, FTP/FTPS, SMB, RDP). Built with **Tauri 2 + React 19 + TypeScript** on the frontend and **Rust** on the backend.
+Desktop application for managing remote connections (SSH, SFTP). Built with **Tauri 2 + React 19 + TypeScript** on the frontend and **Rust** on the backend.
 
 ## Project structure
 
@@ -14,17 +14,16 @@ src/                        # Frontend React/TypeScript
     app-store.types.ts      # Store types
   functions/
     vault-actions.ts        # bootstrap, vaultInit/Unlock/Lock, loadWorkspace, runSync
-    connection-actions.ts   # openSsh, openSftpWorkspace, openRdp
+    connection-actions.ts   # openSsh, openSftpWorkspace
     session-actions.ts      # ensureSessionListeners, disconnectSession, sshWrite
     sftp-editor-actions.ts  # openTab (editor), saveEditor
   pages/
     sections/               # Sidebar pages (home, keychain, known-hosts, notes, settings, etc.)
     tabs/
-      workspace-tab-page.tsx  # Full workspace: SSH/SFTP/RDP/editor blocks, drag, transfers
+      workspace-tab-page.tsx  # Full workspace: SSH/SFTP/editor blocks, drag, transfers
       workspace/
         terminal.tsx          # TerminalBlockView (xterm.js)
         sftp.tsx              # SftpBlockView (file browser)
-        rdp.tsx               # RdpBlockView (pixi.js + IronRDP stream)
         editor.tsx            # EditorBlockView (Monaco)
         types.ts              # WorkspaceBlock, ConnectStage, etc.
   components/
@@ -41,10 +40,10 @@ src-tauri/src/              # Rust backend
   libs/
     vault.rs                # Encrypted vault (Argon2 + AES-GCM), profiles, keychains
     sync.rs                 # Server sync (Google OAuth, push/pull)
-    remote_fs.rs            # SFTP/FTP/FTPS/SMB — remote file operations
+    remote_fs.rs            # SFTP — remote file operations
     shared_fs.rs            # Unified local + remote file operations
     transfer.rs             # File transfers between endpoints
-    key_actions.rs          # Global input capture (rdev) for RDP/SSH
+    key_actions.rs          # Global input capture (rdev) for SSH terminal
     task.rs                 # Internal async task runner
     models.rs               # Structs shared across libs
 
@@ -90,7 +89,6 @@ The workspace uses floating blocks (react-rnd). Each block has:
 Key functions in `workspace-tab-page.tsx`:
 - `resolvePendingTerminalConnection` — connects SSH, manages stages, retry
 - `resolvePendingSftpConnection` — connects SFTP over SSH
-- `resolvePendingRdpConnection` — connects RDP via IronRDP
 
 ## Vault
 
@@ -121,26 +119,10 @@ All sensitive data (profiles, keychains, settings) is stored in an AES-GCM encry
 |----------|---------|-----|
 | SSH | russh | TerminalBlock (xterm.js) |
 | SFTP | russh-sftp | SftpBlock |
-| FTP/FTPS | suppaftp | SftpBlock |
-| SMB | pavao | SftpBlock |
-| RDP | IronRDP | RdpBlock (pixi.js stream) |
-| VNC | RFB (raw) | VncBlock (pixi.js) / VncWebrtcBlock (POC) |
 
-## WebRTC streaming (POC)
-
-New screen-streaming stack replacing the LZ4 binary protocol (`TVNV`/`TVNC`) for
-VNC/RDP. H.264 over a WebRTC `MediaStreamTrack` + DataChannels for input/cursor.
-Backend in `src-tauri/src/protocols/webrtc_stream.rs`. See `WEBRTC.MD` for the full
-design. Per-block toggle: `VncBlock.useWebrtc` (defaults true for new blocks);
-header buttons switch between `VncWebrtcBlockView` (WebRTC) and `VncBlockView`
-(legacy pixi). `webrtcEnabled` is passed through to `vncSessionStart`.
-
-`StreamPeer` cursor/resize are now wired in `vnc.rs`:
-- `cursor_channel` + `push_cursor_update()` — driven by the Cursor pseudo-encoding
-  (-239 / RichCursor) decode; cursor RGBA is base64'd and sent as JSON, rebuilt into
-  a data URL on the frontend (`vnc-webrtc.tsx`).
-- `resize()` — driven by the DesktopSize pseudo-encoding (-223); recreates the H.264
-  encoder and reallocates the framebuffer on resolution change.
+> RDP, VNC, FTP/FTPS, SMB, the SQL database feature, and the WebRTC streaming POC
+> were removed from `main` to focus the base product on SSH/SFTP. The full
+> multi-protocol + WebRTC work is preserved on the `features-plan` branch.
 
 ## Deep links
 

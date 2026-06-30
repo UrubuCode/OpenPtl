@@ -11,10 +11,10 @@ import type { ConnectionProfile, ConnectionProtocol, SftpEntry } from "@/types/o
 
 const PREVIEW_LIMIT_BYTES = 25 * 1024 * 1024;
 
-function resolveWorkspaceFileProtocol(profile: ConnectionProfile): "sftp" | "ftp" | "ftps" | "smb" {
+function resolveWorkspaceFileProtocol(profile: ConnectionProfile): "sftp" {
   const ordered = profile.protocols?.length ? profile.protocols : (["sftp"] as ConnectionProtocol[]);
   for (const protocol of ordered) {
-    if (protocol === "sftp" || protocol === "ftp" || protocol === "ftps" || protocol === "smb") {
+    if (protocol === "sftp") {
       return protocol;
     }
   }

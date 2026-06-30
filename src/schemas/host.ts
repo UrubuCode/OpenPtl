@@ -3,8 +3,7 @@ import { z } from "zod";
 export const hostFormSchema = z.object({
   id: z.string().optional().default(""),
   name: z.string().trim().min(1, "invalid_input"),
-  protocols: z.array(z.enum(["ssh", "sftp", "ftp", "ftps", "smb", "rdp", "vnc"])).min(1, "invalid_input"),
-  ftp_tls: z.boolean().optional().default(false),
+  protocols: z.array(z.enum(["ssh", "sftp"])).min(1, "invalid_input"),
   host: z.string().trim().min(1, "invalid_input"),
   port: z.number().int().min(1, "invalid_input").max(65535, "invalid_input"),
   username: z.string().trim().min(1, "invalid_input"),

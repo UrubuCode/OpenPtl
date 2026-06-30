@@ -11,10 +11,6 @@ use crate::libs::transfer::{TransferJobConfig, TransferMetrics};
 pub enum SharedFsProtocol {
     Local,
     Sftp,
-    Ftp,
-    Ftps,
-    Smb,
-    RdpUpload,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -40,16 +36,6 @@ impl TransferEndpoint {
         }
     }
 
-    pub fn for_rdp_upload(label: impl Into<String>) -> Self {
-        Self {
-            protocol: SharedFsProtocol::RdpUpload,
-            label: label.into(),
-            can_read: false,
-            can_write: true,
-            can_list: false,
-            can_stat: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -67,10 +53,6 @@ impl SharedFsJob {
         match self.source.protocol {
             SharedFsProtocol::Local => TaskProtocol::Local,
             SharedFsProtocol::Sftp => TaskProtocol::Sftp,
-            SharedFsProtocol::Ftp => TaskProtocol::Ftp,
-            SharedFsProtocol::Ftps => TaskProtocol::Ftps,
-            SharedFsProtocol::Smb => TaskProtocol::Smb,
-            SharedFsProtocol::RdpUpload => TaskProtocol::Rdp,
         }
     }
 }

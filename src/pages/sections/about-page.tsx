@@ -108,7 +108,7 @@ export function AboutPage() {
         <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{t.about.protocolsLabel}</span>
-            <span className="text-foreground">SSH, SFTP, SMB, FTP, FTPS, RDP</span>
+            <span className="text-foreground">SSH, SFTP</span>
           </div>
           <div className="border-t border-border/30" />
           <div className="flex items-center justify-between text-sm">

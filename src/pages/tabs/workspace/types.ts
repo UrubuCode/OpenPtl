@@ -1,8 +1,8 @@
 import type { WorkspaceBlockLayout } from "@/components/workspace/workspace-block-controller";
 import type { EditorViewMode } from "@/functions/editor-file-utils";
-import type { BackendMessage, DbQueryResult, SftpEntry } from "@/types/openptl";
+import type { BackendMessage, SftpEntry } from "@/types/openptl";
 
-export type WorkspaceKind = "terminal" | "sftp" | "rdp" | "vnc" | "editor" | "database";
+export type WorkspaceKind = "terminal" | "sftp" | "editor";
 export type WorkspaceMode = "free";
 export type SortKey = "name" | "size" | "permissions" | "modified_at";
 export type SortDirection = "asc" | "desc";
@@ -11,7 +11,7 @@ export type WorkspaceMessage = string | BackendMessage;
 
 export interface WorkspaceTabPageProps {
   tabId: string;
-  initialBlock?: "terminal" | "sftp" | "rdp" | "vnc" | "database";
+  initialBlock?: "terminal" | "sftp";
   initialSourceId?: string;
   initialOpenFiles?: boolean;
 }
@@ -36,7 +36,6 @@ export interface PendingHostChallenge {
 
 export interface TerminalBlock extends BaseBlock {
   kind: "terminal";
-  useWebrtc?: boolean;
   sessionId: string | null;
   pendingProfileId: string | null;
   connectStage: ConnectStage;
@@ -90,58 +89,7 @@ export interface EditorBlock extends BaseBlock {
   saving: boolean;
 }
 
-export interface RdpBlock extends BaseBlock {
-  kind: "rdp";
-  profileId: string;
-  useWebrtc: boolean;
-  sessionId: string | null;
-  connectStage: ConnectStage;
-  connectMessage: WorkspaceMessage;
-  connectError: WorkspaceMessage | null;
-  passwordDraft: string;
-  savePasswordChoice: boolean;
-  retryAttempt: number;
-  retryInSeconds: number | null;
-  imageWidth: number;
-  imageHeight: number;
-  capturedAt: number | null;
-}
-
-export interface VncBlock extends BaseBlock {
-  kind: "vnc";
-  profileId: string;
-  useWebrtc: boolean;
-  sessionId: string | null;
-  connectStage: ConnectStage;
-  connectMessage: WorkspaceMessage;
-  connectError: WorkspaceMessage | null;
-  passwordDraft: string;
-  retryAttempt: number;
-  retryInSeconds: number | null;
-  imageWidth: number;
-  imageHeight: number;
-  capturedAt: number | null;
-}
-
-export interface DatabaseBlock extends BaseBlock {
-  kind: "database";
-  profileId: string | null;
-  sessionId: string | null;
-  connectStage: ConnectStage;
-  connectMessage: string | null;
-  connectError: string | null;
-  viewMode: "tabular" | "object_explorer";
-  selectedDatabase: string | null;
-  selectedSchema: string | null;
-  selectedTable: string | null;
-  expandedNodes: string[];
-  queryText: string;
-  queryResult: DbQueryResult | null;
-  queryRunning: boolean;
-  queryError: string | null;
-}
-
-export type WorkspaceBlock = TerminalBlock | SftpBlock | RdpBlock | VncBlock | EditorBlock | DatabaseBlock;
+export type WorkspaceBlock = TerminalBlock | SftpBlock | EditorBlock;
 export type WorkspaceLogLevel = "info" | "success" | "warn" | "error";
 export type TransferStatus = "queued" | "running" | "completed" | "error";
 

@@ -1,4 +1,3 @@
-pub mod database;
 pub mod key_actions;
 pub mod models;
 pub mod remote_fs;

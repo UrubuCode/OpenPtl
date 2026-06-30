@@ -39,7 +39,7 @@ export function SftpSectionPage() {
                 <span>{profile.name}</span>
                 <div className="flex items-center gap-2">
                   {(profile.protocols ?? [])
-                    .filter((protocol) => protocol === "sftp" || protocol === "ftp" || protocol === "ftps" || protocol === "smb")
+                    .filter((protocol) => protocol === "sftp")
                     .map((protocol) => (
                       <Badge key={`${profile.id}-${protocol}`} variant="outline">
                         {protocol.toUpperCase()}

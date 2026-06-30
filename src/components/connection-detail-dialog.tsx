@@ -1,4 +1,4 @@
-import { Copy, FolderOpen, HardDrive, Monitor, Pencil, Terminal, Trash2 } from "lucide-react";
+import { Copy, FolderOpen, Monitor, Pencil, Terminal, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { AppConfirmDialog } from "@/components/ui/app-dialog";
@@ -24,35 +24,21 @@ interface ConnectionDetailDialogProps {
   onAccess: (profile: ConnectionProfile) => void;
   onOpenSsh: (profile: ConnectionProfile) => void;
   onOpenFiles: (profile: ConnectionProfile) => void;
-  onOpenRdp: (profile: ConnectionProfile) => void;
 }
 
 const protocolColors: Record<ConnectionProtocol, string> = {
   ssh: "bg-primary/15 text-primary",
   sftp: "bg-info/15 text-info",
-  ftp: "bg-success/15 text-success",
-  ftps: "bg-success/15 text-success",
-  smb: "bg-warning/15 text-warning",
-  rdp: "bg-destructive/15 text-destructive",
-  vnc: "bg-purple-500/15 text-purple-400",
 };
 
 const protocolIcons: Record<ConnectionProtocol, typeof Monitor> = {
   ssh: Monitor,
   sftp: Monitor,
-  ftp: Monitor,
-  ftps: Monitor,
-  smb: HardDrive,
-  rdp: Monitor,
-  vnc: Monitor,
 };
 
 function normalizeProtocols(profile: ConnectionProfile): ConnectionProtocol[] {
   if (profile.protocols.length > 0) {
     return profile.protocols;
-  }
-  if (profile.kind === "rdp") {
-    return ["rdp"];
   }
   if (profile.kind === "sftp") {
     return ["sftp"];
@@ -62,28 +48,14 @@ function normalizeProtocols(profile: ConnectionProfile): ConnectionProtocol[] {
 
 function primaryProtocol(profile: ConnectionProfile): ConnectionProtocol {
   const normalized = normalizeProtocols(profile);
-  if (normalized.includes("rdp")) {
-    return "rdp";
-  }
   if (normalized.includes("sftp")) {
     return "sftp";
-  }
-  if (normalized.includes("ftp")) {
-    return "ftp";
-  }
-  if (normalized.includes("ftps")) {
-    return "ftps";
-  }
-  if (normalized.includes("smb")) {
-    return "smb";
   }
   return "ssh";
 }
 
 function supportsFileWorkspace(profile: ConnectionProfile): boolean {
-  return normalizeProtocols(profile).some(
-    (protocol) => protocol === "sftp" || protocol === "ftp" || protocol === "ftps" || protocol === "smb",
-  );
+  return normalizeProtocols(profile).some((protocol) => protocol === "sftp");
 }
 
 export function ConnectionDetailDialog({
@@ -96,7 +68,6 @@ export function ConnectionDetailDialog({
   onAccess,
   onOpenSsh,
   onOpenFiles,
-  onOpenRdp,
 }: ConnectionDetailDialogProps) {
   const t = useT();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -110,7 +81,6 @@ export function ConnectionDetailDialog({
   const Icon = protocolIcons[protocol];
   const hasSsh = protocols.includes("ssh");
   const hasFiles = supportsFileWorkspace(connection);
-  const hasRdp = protocols.includes("rdp");
 
   return (
     <>
@@ -170,16 +140,6 @@ export function ConnectionDetailDialog({
                 >
                   <FolderOpen className="h-3.5 w-3.5" />
                   {t.home.connections.openSftp}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 h-9 col-span-2"
-                  disabled={!hasRdp}
-                  onClick={() => onOpenRdp(connection)}
-                >
-                  <Monitor className="h-3.5 w-3.5" />
-                  {t.home.connections.openRdp}
                 </Button>
               </div>
             </div>

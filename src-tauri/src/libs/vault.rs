@@ -18,13 +18,13 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::constants::{
-    APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, DB_PROFILES_FILE_NAME,
+    APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION,
     KEYRING_VAULT_KEY, MANIFEST_FILE_NAME, OPENPTL_FILE_NAME, PROFILE_FILE_NAME, STORAGE_DIR_NAME,
     STORAGE_FILE_EXTENSION,
 };
 use crate::libs::models::{
-    AppSettings, AuthServer, ConnectionProfile, DatabaseProfile, KeyMode, KeychainEntry,
-    DbProfilesBinPayload, ManifestBinPayload, ProfileBinPayload, SyncMetadata, VaultPayload,
+    AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry,
+    ManifestBinPayload, ProfileBinPayload, SyncMetadata, VaultPayload,
     VaultStatus, WindowState,
 };
 
@@ -56,7 +56,6 @@ pub struct VaultManager {
     openptl_path: PathBuf,
     profile_path: PathBuf,
     manifest_path: PathBuf,
-    db_profiles_path: PathBuf,
     runtime: VaultRuntime,
 }
 
@@ -97,7 +96,6 @@ impl VaultManager {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),
             profile_path: storage_root.join(PROFILE_FILE_NAME),
             manifest_path: storage_root.join(MANIFEST_FILE_NAME),
-            db_profiles_path: storage_root.join(DB_PROFILES_FILE_NAME),
             storage_root,
             runtime: VaultRuntime::default(),
         })
@@ -373,71 +371,6 @@ impl VaultManager {
         let payload = self.payload_mut()?;
         payload.connections.retain(|item| item.id != id);
         touch_local_change(payload);
-        self.persist()
-    }
-
-    pub fn db_profile_list(&self) -> Result<Vec<DatabaseProfile>> {
-        Ok(self.payload()?.database_profiles.clone())
-    }
-
-    pub fn db_profile_save(&mut self, mut profile: DatabaseProfile) -> Result<DatabaseProfile> {
-        self.assert_unlocked()?;
-
-        if profile.id.trim().is_empty() {
-            profile.id = uuid::Uuid::new_v4().to_string();
-        }
-
-        if uuid::Uuid::parse_str(profile.id.trim()).is_err() {
-            return Err(anyhow!("ID de perfil de banco invalido: deve ser UUID"));
-        }
-
-        if profile.name.trim().is_empty() {
-            profile.name = profile
-                .host
-                .clone()
-                .unwrap_or_else(|| profile.file_path.clone().unwrap_or_default());
-        }
-
-        profile.name = profile.name.trim().to_string();
-        profile.password = normalize_option(profile.password);
-        profile.host = normalize_option(profile.host);
-        profile.username = normalize_option(profile.username);
-        profile.database = normalize_option(profile.database);
-        profile.file_path = normalize_option(profile.file_path);
-
-        let payload = self.payload_mut()?;
-        payload.database_profiles.retain(|item| item.id != profile.id);
-        payload.database_profiles.push(profile.clone());
-        payload.database_profiles.sort_by(|a, b| a.name.cmp(&b.name));
-        touch_local_change(payload);
-
-        self.persist()?;
-        Ok(profile)
-    }
-
-    pub fn db_profile_delete(&mut self, id: &str) -> Result<()> {
-        self.assert_unlocked()?;
-        let payload = self.payload_mut()?;
-        payload.database_profiles.retain(|item| item.id != id);
-        touch_local_change(payload);
-        self.persist()
-    }
-
-    pub fn db_profile_by_id(&self, id: &str) -> Result<DatabaseProfile> {
-        self.payload()?
-            .database_profiles
-            .iter()
-            .find(|item| item.id == id)
-            .cloned()
-            .ok_or_else(|| anyhow!("Perfil de banco {} nao encontrado", id))
-    }
-
-    pub fn db_profile_save_view_mode(&mut self, id: &str, view_mode: &str) -> Result<()> {
-        self.assert_unlocked()?;
-        let payload = self.payload_mut()?;
-        if let Some(profile) = payload.database_profiles.iter_mut().find(|p| p.id == id) {
-            profile.view_mode = view_mode.to_string();
-        }
         self.persist()
     }
 
@@ -949,14 +882,6 @@ impl VaultManager {
             encrypt_bin_payload(&profile_payload, &key, PROFILE_FILE_NAME, now)?;
         write_bin_file(&self.profile_path, &profile_encrypted)?;
 
-        let db_payload = DbProfilesBinPayload {
-            version: CURRENT_PAYLOAD_VERSION,
-            database_profiles: payload.database_profiles.clone(),
-        };
-        let db_encrypted =
-            encrypt_bin_payload(&db_payload, &key, DB_PROFILES_FILE_NAME, now)?;
-        write_bin_file(&self.db_profiles_path, &db_encrypted)?;
-
         let openptl = OpenPtlBin {
             version: CURRENT_STORAGE_VERSION,
             key_mode,
@@ -992,7 +917,6 @@ impl VaultManager {
                 continue;
             }
             if name == OPENPTL_FILE_NAME || name == PROFILE_FILE_NAME || name == MANIFEST_FILE_NAME
-                || name == DB_PROFILES_FILE_NAME
             {
                 continue;
             }
@@ -1092,18 +1016,6 @@ impl VaultManager {
             keychain.push(entry);
         }
 
-        let database_profiles = if self.db_profiles_path.exists() {
-            read_bin_file::<EncryptedBin>(&self.db_profiles_path)
-                .ok()
-                .and_then(|enc| {
-                    decrypt_bin_payload::<DbProfilesBinPayload>(&enc, key, DB_PROFILES_FILE_NAME).ok()
-                })
-                .map(|p| p.database_profiles)
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
-
         Ok(VaultPayload {
             version: CURRENT_PAYLOAD_VERSION,
             connections,
@@ -1112,7 +1024,6 @@ impl VaultManager {
             sync: profile_payload.sync,
             auth_servers: profile_payload.auth_servers,
             window_state: profile_payload.window_state,
-            database_profiles,
         })
     }
 
@@ -1422,7 +1333,6 @@ mod tests {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),
             profile_path: storage_root.join(PROFILE_FILE_NAME),
             manifest_path: storage_root.join(MANIFEST_FILE_NAME),
-            db_profiles_path: storage_root.join(DB_PROFILES_FILE_NAME),
             runtime: VaultRuntime::default(),
         }
     }

@@ -42,7 +42,7 @@ export const home: AppDictionary["home"] = {
   },
   connections: {
     title: "Connections",
-    subtitle: "Manage Ssh, Sftp, Rdp, FTP(S) and Smb in one panel.",
+    subtitle: "Manage SSH and SFTP connections in one panel.",
     searchPlaceholder: "Search connections...",
     filters: "Filters",
     filterProtocolLabel: "Protocol",
@@ -63,10 +63,9 @@ export const home: AppDictionary["home"] = {
     createFirst: "Create first connection",
     emptyTitle: "No connections registered",
     emptyDescription:
-      "Add a connection to open SSH terminals, browse SFTP files, access RDP and start protocol-aware workspaces.",
+      "Add a connection to open SSH terminals, browse SFTP files and start protocol-aware workspaces.",
     openSsh: "Open SSH",
     openSftp: "Open files",
-    openRdp: "Open RDP",
     accessAction: "Access",
     deleteConfirmTitle: "Delete connection",
     deleteConfirmMessage: 'Are you sure you want to delete connection "{name}"?',
@@ -75,10 +74,6 @@ export const home: AppDictionary["home"] = {
     cardHint: "Click the card to open its primary protocol.",
     protocolSsh: "SSH",
     protocolSftp: "SFTP",
-    protocolFtp: "FTP",
-    protocolFtps: "FTPS",
-    protocolSmb: "SMB",
-    protocolRdp: "RDP",
     protocolBoth: "SSH + SFTP",
   },
 };

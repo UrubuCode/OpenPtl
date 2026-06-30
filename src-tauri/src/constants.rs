@@ -51,17 +51,6 @@ pub const LEGACY_COMPACT_HEIGHT: u32 = 800;
 /// Maximum entries kept in the in-memory debug log ring buffer.
 pub const DEBUG_LOG_CAPACITY: usize = 2000;
 
-/// Default RDP port when omitted by the user.
-pub const DEFAULT_RDP_PORT: u16 = 3389;
-/// Default RDP render width.
-pub const DEFAULT_RDP_WIDTH: u16 = 1280;
-/// Default RDP render height.
-pub const DEFAULT_RDP_HEIGHT: u16 = 720;
-/// Minimum accepted RDP dimension.
-pub const MIN_RDP_DIMENSION: u16 = 320;
-/// Maximum accepted RDP dimension.
-pub const MAX_RDP_DIMENSION: u16 = 3840;
-
 /// Default upper limit for binary preview responses.
 pub const DEFAULT_BINARY_PREVIEW_LIMIT_BYTES: u64 = 25 * 1024 * 1024;
 
@@ -87,8 +76,6 @@ pub const OPENPTL_FILE_NAME: &str = "openptl.bin";
 pub const PROFILE_FILE_NAME: &str = "profile.bin";
 /// Encrypted manifest payload file.
 pub const MANIFEST_FILE_NAME: &str = "manifest.bin";
-/// Encrypted database profiles payload file.
-pub const DB_PROFILES_FILE_NAME: &str = "db_profiles.bin";
 /// File extension expected for encrypted payload files.
 pub const STORAGE_FILE_EXTENSION: &str = "bin";
 
@@ -106,8 +93,3 @@ pub const DRIVE_TOP_PARENT_ID: &str = "root";
 
 /// Timeout used while waiting for auth deep-link callbacks.
 pub const AUTH_DEEPLINK_TIMEOUT: Duration = Duration::from_secs(300);
-
-/// Default FTP control port.
-pub const FTP_DEFAULT_PORT: u16 = 21;
-/// Default SMB port.
-pub const SMB_DEFAULT_PORT: u16 = 445;

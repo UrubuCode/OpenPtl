@@ -14,9 +14,6 @@ function normalizeProtocols(profile: ConnectionProfile): string[] {
   if (profile.protocols?.length) {
     return profile.protocols;
   }
-  if (profile.kind === "rdp") {
-    return ["rdp"];
-  }
   if (profile.kind === "sftp") {
     return ["sftp"];
   }
@@ -25,37 +22,16 @@ function normalizeProtocols(profile: ConnectionProfile): string[] {
 
 function primaryProtocol(profile: ConnectionProfile): ConnectionProfile["protocols"][number] {
   const protocols = normalizeProtocols(profile);
-  if (protocols.includes("rdp")) {
-    return "rdp";
-  }
   if (protocols.includes("sftp")) {
     return "sftp";
-  }
-  if (protocols.includes("ftp")) {
-    return "ftp";
-  }
-  if (protocols.includes("ftps")) {
-    return "ftps";
-  }
-  if (protocols.includes("smb")) {
-    return "smb";
   }
   return "ssh";
 }
 
-function resolveFileProtocol(profile: ConnectionProfile): "sftp" | "ftp" | "ftps" | "smb" | null {
+function resolveFileProtocol(profile: ConnectionProfile): "sftp" | null {
   const protocols = normalizeProtocols(profile);
   if (protocols.includes("sftp")) {
     return "sftp";
-  }
-  if (protocols.includes("ftp")) {
-    return "ftp";
-  }
-  if (protocols.includes("ftps")) {
-    return "ftps";
-  }
-  if (protocols.includes("smb")) {
-    return "smb";
   }
   return null;
 }
@@ -68,7 +44,6 @@ export function HomePage() {
   const deleteHost = useAppStore((state) => state.deleteHost);
   const openSsh = useAppStore((state) => state.openSsh);
   const openSftpWorkspace = useAppStore((state) => state.openSftpWorkspace);
-  const openRdp = useAppStore((state) => state.openRdp);
   const openTab = useAppStore((state) => state.openTab);
 
   const [search, setSearch] = useState("");
@@ -133,12 +108,6 @@ export function HomePage() {
           const hasSsh = protocols.includes("ssh");
           const fileProtocol = resolveFileProtocol(profile);
 
-          if (protocols.includes("rdp")) {
-            void openRdp(profile);
-            setSelectedConn(null);
-            return;
-          }
-
           if (hasSsh) {
             openTab({
               id: `workspace:${Date.now()}:${Math.random().toString(16).slice(2, 7)}`,
@@ -173,10 +142,6 @@ export function HomePage() {
         }}
         onOpenFiles={(profile) => {
           void openSftpWorkspace(profile);
-          setSelectedConn(null);
-        }}
-        onOpenRdp={(profile) => {
-          void openRdp(profile);
           setSelectedConn(null);
         }}
       />
@@ -215,10 +180,6 @@ export function HomePage() {
             <SelectItem value="all">{t.home.connections.filterProtocolAll}</SelectItem>
             <SelectItem value="ssh">{t.home.connections.protocolSsh}</SelectItem>
             <SelectItem value="sftp">{t.home.connections.protocolSftp}</SelectItem>
-            <SelectItem value="ftp">{t.home.connections.protocolFtp}</SelectItem>
-            <SelectItem value="ftps">{t.home.connections.protocolFtps}</SelectItem>
-            <SelectItem value="smb">{t.home.connections.protocolSmb}</SelectItem>
-            <SelectItem value="rdp">{t.home.connections.protocolRdp}</SelectItem>
           </SelectContent>
         </Select>
       </div>

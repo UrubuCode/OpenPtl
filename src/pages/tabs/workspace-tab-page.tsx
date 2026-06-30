@@ -1,11 +1,9 @@
-import { Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   FileText,
   Folder,
-  HardDrive,
   Maximize2,
   Minimize2,
   Monitor,
@@ -45,30 +43,20 @@ import type {
   ConnectionProtocol,
   KeyActionsActiveTargetInput,
   KeyActionsStatusPayload,
-  RemoteTransferEndpoint,
-  RdpSessionControlEvent,
-  VncSessionControlEvent,
   SurfaceRect,
   SftpEntry,
 } from "@/types/openptl";
-import databaseWorkspace from "@/pages/tabs/workspace/database";
 import editorWorkspace from "@/pages/tabs/workspace/editor";
-import rdpWorkspace from "@/pages/tabs/workspace/rdp";
 import sftpWorkspace from "@/pages/tabs/workspace/sftp";
 import terminalWorkspace from "@/pages/tabs/workspace/terminal";
-import vncWorkspace from "@/pages/tabs/workspace/vnc";
-import { VncWebrtcBlockView } from "@/pages/tabs/workspace/vnc-webrtc";
 import type {
   BlockTransferItem,
-  DatabaseBlock,
   DragPayload,
   EditorBlock,
-  RdpBlock,
   SftpBlock,
   SftpContextAction,
   TerminalBlock,
   TransferItem,
-  VncBlock,
   WorkspaceBlock,
   WorkspaceKind,
   WorkspaceLogEntry,
@@ -78,20 +66,6 @@ import type {
 } from "@/pages/tabs/workspace/types";
 import { clampLayoutToWorkspace, snapLayoutToWorkspace, workspaceDefaultLayout } from "@/pages/tabs/workspace/natives/layout";
 import { joinPathBySource, joinRelativePathBySource, normalizeAnyPath, parentDirectory, shellQuote } from "@/pages/tabs/workspace/natives/paths";
-import {
-  emitRdpAudio,
-  emitRdpCursor,
-  emitRdpVideoRects,
-  parseRdpAudioPacket,
-  parseRdpCursorPacket,
-  parseRdpVideoRectsPacket,
-} from "@/pages/tabs/workspace/natives/rdp-stream";
-import {
-  emitVncCursor,
-  emitVncVideoRects,
-  parseVncCursorPacket,
-  parseVncVideoRectsPacket,
-} from "@/pages/tabs/workspace/natives/vnc-stream";
 import { createSourceFile, createSourceFolder, decodeBase64Chunk, deleteSourceEntry, listSourceEntries, readSourceBinaryPreview, readSourceFile, readSourceTextChunk, renameSourceEntry, writeSourceFile } from "@/pages/tabs/workspace/natives/source-io";
 import {
   workspaceNameInputSchema,
@@ -110,10 +84,7 @@ import {
 const workspaceModules = {
   terminal: terminalWorkspace,
   sftp: sftpWorkspace,
-  rdp: rdpWorkspace,
-  vnc: vncWorkspace,
   editor: editorWorkspace,
-  database: databaseWorkspace,
 } as const;
 const SFTP_DROP_TARGET_SELECTOR = "[data-openptl-drop-target='sftp']";
 
@@ -244,54 +215,30 @@ function profileProtocols(profile: { protocols?: string[]; kind?: string | null 
   if (profile.kind === "sftp") {
     return ["sftp"];
   }
-  if (profile.kind === "rdp") {
-    return ["rdp"];
-  }
   return ["ssh", "sftp"];
 }
 
 function supportsExactProfileProtocol(
   profile: { protocols?: string[]; kind?: string | null },
-  protocol: "ssh" | "sftp" | "ftp" | "ftps" | "smb" | "rdp",
+  protocol: "ssh" | "sftp",
 ): boolean {
   return profileProtocols(profile).includes(protocol);
 }
 
 function primaryProfileProtocol(profile: { protocols?: string[]; kind?: string | null }): ConnectionProtocol {
   const protocols = profileProtocols(profile);
-  if (protocols.includes("rdp")) {
-    return "rdp";
-  }
   if (protocols.includes("sftp")) {
     return "sftp";
-  }
-  if (protocols.includes("ftp")) {
-    return "ftp";
-  }
-  if (protocols.includes("ftps")) {
-    return "ftps";
-  }
-  if (protocols.includes("smb")) {
-    return "smb";
   }
   return "ssh";
 }
 
 function resolveWorkspaceFileProtocol(
   profile: { protocols?: string[]; kind?: string | null },
-): "sftp" | "ftp" | "ftps" | "smb" | null {
+): "sftp" | null {
   const protocols = profileProtocols(profile);
   if (protocols.includes("sftp")) {
     return "sftp";
-  }
-  if (protocols.includes("ftp")) {
-    return "ftp";
-  }
-  if (protocols.includes("ftps")) {
-    return "ftps";
-  }
-  if (protocols.includes("smb")) {
-    return "smb";
   }
   return null;
 }
@@ -299,25 +246,15 @@ function resolveWorkspaceFileProtocol(
 const connectionProtocolIcon: Record<ConnectionProtocol, typeof Monitor> = {
   ssh: Monitor,
   sftp: Server,
-  ftp: Server,
-  ftps: Server,
-  smb: HardDrive,
-  rdp: Monitor,
-  vnc: Monitor,
 };
 
 const connectionProtocolColor: Record<ConnectionProtocol, string> = {
   ssh: "bg-primary/15 text-primary",
   sftp: "bg-info/15 text-info",
-  ftp: "bg-success/15 text-success",
-  ftps: "bg-success/15 text-success",
-  smb: "bg-warning/15 text-warning",
-  rdp: "bg-destructive/15 text-destructive",
-  vnc: "bg-purple-500/15 text-purple-400",
 };
 
 function blockMinSize(kind: WorkspaceKind): { width: number; height: number } {
-  if (kind === "terminal" || kind === "rdp" || kind === "vnc") {
+  if (kind === "terminal") {
     return { width: 420, height: 260 };
   }
   return { width: 360, height: 240 };
@@ -327,7 +264,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const t = useT();
   const sessions = useAppStore((state) => state.sessions);
   const connections = useAppStore((state) => state.connections);
-  const databaseProfiles = useAppStore((state) => state.databaseProfiles);
   const settings = useAppStore((state) => state.settings);
   const activeTabId = useAppStore((state) => state.activeTabId);
   const sshWrite = useAppStore((state) => state.sshWrite);
@@ -374,7 +310,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
   const [selectConnectionDialogOpen, setSelectConnectionDialogOpen] = useState(false);
   const [selectConnectionSearch, setSelectConnectionSearch] = useState("");
-  const [createBlockKind, setCreateBlockKind] = useState<"terminal" | "sftp" | "rdp" | "editor">("terminal");
+  const [createBlockKind, setCreateBlockKind] = useState<"terminal" | "sftp" | "editor">("terminal");
   const [createSourceDraft, setCreateSourceDraft] = useState("local");
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(
     initialBlocks.find((item) => !item.minimized)?.id ?? initialBlocks[0]?.id ?? null,
@@ -395,14 +331,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   });
   const connectRetryTimersRef = useRef<Record<string, { retryTimer: number; countdownTimer: number }>>({});
   const connectCancelTokenRef = useRef<Map<string, number>>(new Map());
-  const rdpStreamSessionByBlockRef = useRef<Map<string, string>>(new Map());
-  const rdpStreamTokenByBlockRef = useRef<Map<string, string>>(new Map());
-  const rdpLastFrameAtByBlockRef = useRef<Map<string, number>>(new Map());
-  const rdpSurfaceRectByBlockRef = useRef<Map<string, SurfaceRect>>(new Map());
-  const vncStreamSessionByBlockRef = useRef<Map<string, string>>(new Map());
-  const vncStreamTokenByBlockRef = useRef<Map<string, string>>(new Map());
-  const vncLastFrameAtByBlockRef = useRef<Map<string, number>>(new Map());
-  const vncSurfaceRectByBlockRef = useRef<Map<string, SurfaceRect>>(new Map());
   const terminalCaptureByBlockRef = useRef<Map<string, TerminalCaptureContext>>(new Map());
   const lastPublishedKeyActionsTargetRef = useRef<string | null>(null);
   const lastExternalFileDropSignatureRef = useRef<{ signature: string; at: number } | null>(null);
@@ -430,7 +358,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const scheduleBlockAutoRetry = useCallback(
     (params: {
       blockId: string;
-      kind: "terminal" | "sftp" | "rdp" | "vnc";
+      kind: "terminal" | "sftp";
       delaySeconds: number;
       attempt: number;
       onRetry: () => void;
@@ -660,41 +588,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       ? blocksRef.current.find((block) => block.id === focusedBlockId) ?? null
       : null;
 
-    if (focused?.kind === "rdp" && focused.sessionId && focused.connectStage === "ready") {
-      const surface = rdpSurfaceRectByBlockRef.current.get(focused.id);
-      if (surface && focused.imageWidth > 0 && focused.imageHeight > 0) {
-        const sessionId = rdpStreamSessionByBlockRef.current.get(focused.id) ?? focused.sessionId;
-        if (sessionId) {
-          target = {
-            kind: "rdp",
-            session_id: sessionId,
-            tab_id: tabId,
-            block_id: focused.id,
-            surface_rect: surface,
-            dpi_scale: window.devicePixelRatio || 1,
-            remote_width: focused.imageWidth,
-            remote_height: focused.imageHeight,
-          };
-        }
-      }
-    } else if (focused?.kind === "vnc" && focused.sessionId && focused.connectStage === "ready") {
-      const surface = vncSurfaceRectByBlockRef.current.get(focused.id);
-      if (surface && focused.imageWidth > 0 && focused.imageHeight > 0) {
-        const sessionId = vncStreamSessionByBlockRef.current.get(focused.id) ?? focused.sessionId;
-        if (sessionId) {
-          target = {
-            kind: "vnc",
-            session_id: sessionId,
-            tab_id: tabId,
-            block_id: focused.id,
-            surface_rect: surface,
-            dpi_scale: window.devicePixelRatio || 1,
-            remote_width: focused.imageWidth,
-            remote_height: focused.imageHeight,
-          };
-        }
-      }
-    } else if (
+    if (
       focused?.kind === "terminal" &&
       focused.sessionId &&
       focused.connectStage === "ready"
@@ -778,26 +672,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     () => connections.filter((profile) => supportsExactProfileProtocol(profile, "sftp")),
     [connections],
   );
-  const ftpProfiles = useMemo(
-    () => connections.filter((profile) => supportsExactProfileProtocol(profile, "ftp")),
-    [connections],
-  );
-  const ftpsProfiles = useMemo(
-    () => connections.filter((profile) => supportsExactProfileProtocol(profile, "ftps")),
-    [connections],
-  );
-  const smbProfiles = useMemo(
-    () => connections.filter((profile) => supportsExactProfileProtocol(profile, "smb")),
-    [connections],
-  );
-  const rdpProfiles = useMemo(
-    () => connections.filter((profile) => supportsProtocol(profile, "rdp")),
-    [connections],
-  );
-  const vncProfiles = useMemo(
-    () => connections.filter((profile) => supportsProtocol(profile, "vnc")),
-    [connections],
-  );
   const sftpProfileSourceOptions = useMemo(
     () =>
       sftpProfiles.map((profile) => ({
@@ -814,34 +688,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       })),
     [sshProfiles],
   );
-  const rdpSourceOptions = useMemo(
-    () =>
-      rdpProfiles.map((profile) => ({
-        id: formatProfileSourceId(profile.id, "sftp"),
-        label: `${profile.host} (${profile.username})`,
-      })),
-    [rdpProfiles],
-  );
-  const externalFileProfileSourceOptions = useMemo(
-    () => [
-      ...ftpProfiles.map((profile) => ({
-        id: formatProfileSourceId(profile.id, "ftp"),
-        label: `${profile.host} (${profile.username}) · FTP`,
-      })),
-      ...ftpsProfiles.map((profile) => ({
-        id: formatProfileSourceId(profile.id, "ftps"),
-        label: `${profile.host} (${profile.username}) · FTPS`,
-      })),
-      ...smbProfiles.map((profile) => ({
-        id: formatProfileSourceId(profile.id, "smb"),
-        label: `${profile.host} (${profile.username}) · SMB`,
-      })),
-    ],
-    [ftpProfiles, ftpsProfiles, smbProfiles],
-  );
   const remoteFileSourceOptions = useMemo(
-    () => [...sftpProfileSourceOptions, ...externalFileProfileSourceOptions],
-    [externalFileProfileSourceOptions, sftpProfileSourceOptions],
+    () => [...sftpProfileSourceOptions],
+    [sftpProfileSourceOptions],
   );
   const createSourceOptions = useMemo(() => {
     if (createBlockKind === "terminal") {
@@ -856,15 +705,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         ...remoteFileSourceOptions,
       ];
     }
-    if (createBlockKind === "rdp") {
-      return rdpSourceOptions;
-    }
     return [];
-  }, [createBlockKind, rdpSourceOptions, remoteFileSourceOptions, terminalRemoteSourceOptions]);
+  }, [createBlockKind, remoteFileSourceOptions, terminalRemoteSourceOptions]);
   const selectedCreateSourceOptions = useMemo(() => {
-    if (createBlockKind === "rdp") {
-      return rdpSourceOptions;
-    }
     if (createBlockKind === "terminal" && createSourceDraft !== "local") {
       return terminalRemoteSourceOptions;
     }
@@ -875,7 +718,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   }, [
     createBlockKind,
     createSourceDraft,
-    rdpSourceOptions,
     remoteFileSourceOptions,
     terminalRemoteSourceOptions,
   ]);
@@ -912,9 +754,8 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           id: session.session_id,
           label: sessionLabelById.get(session.session_id) ?? session.session_id,
         })),
-      ...externalFileProfileSourceOptions,
     ],
-    [externalFileProfileSourceOptions, sessionLabelById, sessions],
+    [sessionLabelById, sessions],
   );
   const terminalOptions = useMemo(
     () =>
@@ -1012,31 +853,8 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       const targetBlock = blocksRef.current.find((block) => block.id === id);
       const remainingBlocks = blocksRef.current.filter((block) => block.id !== id);
       clearBlockRetryTimers(id);
-      rdpStreamTokenByBlockRef.current.delete(id);
-      rdpLastFrameAtByBlockRef.current.delete(id);
-      rdpSurfaceRectByBlockRef.current.delete(id);
-      vncStreamTokenByBlockRef.current.delete(id);
-      vncLastFrameAtByBlockRef.current.delete(id);
-      vncSurfaceRectByBlockRef.current.delete(id);
       terminalCaptureByBlockRef.current.delete(id);
       setCaptureContextVersion((value) => value + 1);
-
-      if (targetBlock?.kind === "rdp") {
-        const sessionId = rdpStreamSessionByBlockRef.current.get(id) ?? targetBlock.sessionId;
-        if (sessionId) {
-          void api.rdpSessionStop(sessionId).catch(() => undefined);
-        }
-      }
-
-      if (targetBlock?.kind === "vnc") {
-        const sessionId = vncStreamSessionByBlockRef.current.get(id) ?? targetBlock.sessionId;
-        if (sessionId) {
-          void api.vncSessionStop(sessionId).catch(() => undefined);
-        }
-      }
-
-      rdpStreamSessionByBlockRef.current.delete(id);
-      vncStreamSessionByBlockRef.current.delete(id);
 
       const resolveSessionInUse = (sessionId: string) =>
         remainingBlocks.some((block) => {
@@ -1620,32 +1438,21 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           ),
         );
 
-        const toEndpoint = (sourceId: string): RemoteTransferEndpoint => {
+        const toSessionId = (sourceId: string): string | null => {
           if (sourceId === "local") {
-            return { kind: "local" };
+            return null;
           }
-          const profileSource = parseProfileSourceRef(sourceId);
-          if (profileSource) {
-            if (profileSource.protocol === "sftp") {
-              throw new Error("Fonte SFTP por perfil requer sessao ativa antes de transferir.");
-            }
-            return {
-              kind: "profile",
-              profile_id: profileSource.profileId,
-              protocol: profileSource.protocol,
-            };
+          if (parseProfileSourceRef(sourceId)) {
+            throw new Error("Fonte por perfil requer sessao ativa antes de transferir.");
           }
-          return {
-            kind: "sftp_session",
-            session_id: sourceId,
-          };
+          return sourceId;
         };
 
-        await api.remoteTransfer(
+        await api.sftpTransfer(
           transferId,
-          toEndpoint(fromSourceId),
+          toSessionId(fromSourceId),
           fromPath,
-          toEndpoint(toSourceId),
+          toSessionId(toSourceId),
           toPath,
         );
 
@@ -2399,979 +2206,10 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     ],
   );
 
-  const touchRdpFrameForBlock = useCallback(
-    (blockId: string, width: number, height: number) => {
-      const currentBlock = blocksRef.current.find(
-        (item): item is RdpBlock => item.id === blockId && item.kind === "rdp",
-      );
-      if (!currentBlock) {
-        return;
-      }
-
-      const nextWidth = width > 0 ? width : currentBlock.imageWidth;
-      const nextHeight = height > 0 ? height : currentBlock.imageHeight;
-      const dimensionsChanged = nextWidth !== currentBlock.imageWidth || nextHeight !== currentBlock.imageHeight;
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const lastTouch = rdpLastFrameAtByBlockRef.current.get(blockId) ?? 0;
-      const shouldUpdateTimestamp = nowSeconds > lastTouch;
-
-      if (!dimensionsChanged && !shouldUpdateTimestamp) {
-        return;
-      }
-
-      if (shouldUpdateTimestamp) {
-        rdpLastFrameAtByBlockRef.current.set(blockId, nowSeconds);
-      }
-
-      setBlocks((current) =>
-        current.map((block) =>
-          block.id === blockId && block.kind === "rdp"
-            ? {
-                ...block,
-                imageWidth: nextWidth,
-                imageHeight: nextHeight,
-                capturedAt: shouldUpdateTimestamp ? nowSeconds : block.capturedAt,
-                connectStage: "ready",
-                connectMessage: t.workspace.rdp.ready,
-                connectError: null,
-                retryAttempt: 0,
-                retryInSeconds: null,
-              }
-            : block,
-        ),
-      );
-    },
-    [t.workspace.rdp.ready],
-  );
-
-  const resolvePendingRdpConnection = useCallback(
-    async (
-      blockId: string,
-      options?: {
-        passwordOverride?: string | null;
-        saveAuthChoice?: boolean;
-        retryAttempt?: number;
-      },
-    ) => {
-      const target = blocksRef.current.find((item): item is RdpBlock => item.id === blockId && item.kind === "rdp");
-      if (!target) {
-        return;
-      }
-
-      const profile = connections.find((item) => item.id === target.profileId);
-      if (!profile) {
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "rdp"
-              ? {
-                  ...block,
-                  connectStage: "error",
-                  connectMessage: t.workspace.rdp.error,
-                  connectError: "Perfil RDP nao encontrado.",
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                  sessionId: null,
-                }
-              : block,
-          ),
-        );
-        return;
-      }
-
-      const passwordOverride = options?.passwordOverride ?? null;
-      const saveAuthChoice = options?.saveAuthChoice ?? false;
-      const currentAttempt = Math.max(0, options?.retryAttempt ?? target.retryAttempt);
-      const connectingMessage = passwordOverride ? "Logando..." : t.workspace.rdp.connecting;
-      const previousSessionId = rdpStreamSessionByBlockRef.current.get(blockId) ?? target.sessionId;
-      if (previousSessionId) {
-        rdpStreamSessionByBlockRef.current.delete(blockId);
-        void api.rdpSessionStop(previousSessionId).catch(() => undefined);
-      }
-      rdpLastFrameAtByBlockRef.current.delete(blockId);
-      clearBlockRetryTimers(blockId);
-
-      setBlocks((current) =>
-        current.map((block) =>
-          block.id === blockId && block.kind === "rdp"
-            ? {
-                ...block,
-                connectStage: "connecting",
-                connectMessage: connectingMessage,
-                connectError: null,
-                retryAttempt: currentAttempt,
-                retryInSeconds: null,
-                sessionId: null,
-              }
-            : block,
-        ),
-      );
-      appendWorkspaceLog("info", "Conexao RDP em andamento", `${profile.username}@${profile.host}:${profile.port}`);
-
-      const streamToken = createId("rdpstream");
-      rdpStreamTokenByBlockRef.current.set(blockId, streamToken);
-
-      const controlChannel = new Channel<RdpSessionControlEvent>((event) => {
-        if (rdpStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-
-        if (event.event === "ready") {
-          clearBlockRetryTimers(blockId);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? {
-                    ...block,
-                    sessionId: event.data.session_id,
-                    connectStage: "ready",
-                    connectMessage: t.workspace.rdp.ready,
-                    connectError: null,
-                    imageWidth: event.data.width,
-                    imageHeight: event.data.height,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog(
-            "success",
-            "Sessao RDP conectada",
-            `${profile.host} ${event.data.width}x${event.data.height}`,
-          );
-          return;
-        }
-
-        if (event.event === "connecting") {
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? {
-                    ...block,
-                    connectStage: "connecting",
-                    connectMessage: event.data.message || t.workspace.rdp.connecting,
-                    connectError: null,
-                  }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        if (event.event === "auth_required") {
-          clearBlockRetryTimers(blockId);
-          rdpStreamSessionByBlockRef.current.delete(blockId);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "awaiting_password",
-                    connectMessage: t.workspace.rdp.authRequired,
-                    connectError: event.data.message,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog("warn", "Autenticacao RDP pendente", `${profile.username}@${profile.host}:${profile.port}`);
-          return;
-        }
-
-        if (event.event === "error") {
-          rdpStreamSessionByBlockRef.current.delete(blockId);
-          const timeoutDetected = isTimeoutErrorMessage(event.data.message);
-          const nextAttempt = currentAttempt + 1;
-          const delaySeconds = Math.max(1, settings.reconnect_delay_seconds);
-          const canRetry = settings.auto_reconnect_enabled && nextAttempt <= MAX_CONNECT_RETRY_ATTEMPTS && timeoutDetected;
-          const retryLabel = canRetry
-            ? `Nova tentativa em ${delaySeconds}s (${nextAttempt}/${MAX_CONNECT_RETRY_ATTEMPTS}).`
-            : `Limite de ${MAX_CONNECT_RETRY_ATTEMPTS} tentativas atingido.`;
-
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "error",
-                    connectMessage: timeoutDetected ? "Timeout na conexao RDP." : t.workspace.rdp.error,
-                    connectError: timeoutDetected ? `${event.data.message} ${retryLabel}`.trim() : event.data.message,
-                    retryAttempt: timeoutDetected ? nextAttempt : 0,
-                    retryInSeconds: canRetry ? delaySeconds : null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog("error", "Falha no stream RDP", event.data.message);
-
-          if (canRetry) {
-            scheduleBlockAutoRetry({
-              blockId,
-              kind: "rdp",
-              delaySeconds,
-              attempt: nextAttempt,
-              onRetry: () => {
-                void resolvePendingRdpConnection(blockId, {
-                  passwordOverride,
-                  saveAuthChoice,
-                  retryAttempt: nextAttempt,
-                });
-              },
-            });
-          }
-          return;
-        }
-
-        if (event.event === "stopped") {
-          const current = rdpStreamSessionByBlockRef.current.get(blockId);
-          if (current === event.data.session_id) {
-            rdpStreamSessionByBlockRef.current.delete(blockId);
-          }
-        }
-      });
-
-      const videoRectsChannel = new Channel<ArrayBuffer>((message) => {
-        if (rdpStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-        if (!(message instanceof ArrayBuffer)) {
-          return;
-        }
-
-        const packet = parseRdpVideoRectsPacket(message);
-        if (!packet) {
-          return;
-        }
-        touchRdpFrameForBlock(blockId, packet.width, packet.height);
-        emitRdpVideoRects({ blockId, packet });
-      });
-
-      const cursorChannel = new Channel<ArrayBuffer>((message) => {
-        if (rdpStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-        if (!(message instanceof ArrayBuffer)) {
-          return;
-        }
-        const packet = parseRdpCursorPacket(message);
-        if (!packet) {
-          return;
-        }
-        emitRdpCursor({ blockId, packet });
-      });
-
-      const audioPcmChannel = new Channel<ArrayBuffer>((message) => {
-        if (rdpStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-        if (!(message instanceof ArrayBuffer)) {
-          return;
-        }
-        const packet = parseRdpAudioPacket(message);
-        if (!packet) {
-          return;
-        }
-        emitRdpAudio({ blockId, packet });
-      });
-
-      try {
-        const result = await api.rdpSessionStart(
-          profile.id,
-          controlChannel,
-          videoRectsChannel,
-          cursorChannel,
-          audioPcmChannel,
-          {
-          width: 1280,
-          height: 720,
-          passwordOverride,
-          saveAuthChoice,
-          webrtcEnabled: false,
-          },
-        );
-
-        if (rdpStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-
-        if (result.status === "started") {
-          rdpStreamSessionByBlockRef.current.set(blockId, result.session_id);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? { ...block, sessionId: result.session_id, connectMessage: connectingMessage }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        if (result.status === "auth_required") {
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "rdp"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "awaiting_password",
-                    connectMessage: t.workspace.rdp.authRequired,
-                    connectError: result.message,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "rdp"
-              ? {
-                  ...block,
-                  sessionId: null,
-                  connectStage: "error",
-                  connectMessage: t.workspace.rdp.error,
-                  connectError: result.message,
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                }
-              : block,
-          ),
-        );
-      } catch (error) {
-        const message = getError(error);
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "rdp"
-              ? {
-                  ...block,
-                  sessionId: null,
-                  connectStage: "error",
-                  connectMessage: t.workspace.rdp.error,
-                  connectError: message,
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                }
-              : block,
-          ),
-        );
-        appendWorkspaceLog("error", "Erro ao iniciar stream RDP", message);
-      }
-    },
-    [
-      appendWorkspaceLog,
-      clearBlockRetryTimers,
-      connections,
-      settings.auto_reconnect_enabled,
-      settings.reconnect_delay_seconds,
-      scheduleBlockAutoRetry,
-      touchRdpFrameForBlock,
-      t.workspace.rdp.authRequired,
-      t.workspace.rdp.connecting,
-      t.workspace.rdp.error,
-      t.workspace.rdp.ready,
-    ],
-  );
-
-  const addPendingRdpBlock = useCallback(
-    (profileId: string) => {
-      const profile = connections.find((item) => item.id === profileId);
-      if (!profile) {
-        toast.error("Perfil RDP nao encontrado.");
-        return;
-      }
-
-      const host = profile.host || profileId.slice(0, 8);
-      const baseTitle = `RDP - ${host}`;
-      const count = blocksRef.current.filter((item) => item.kind === "rdp" && item.title.startsWith(baseTitle)).length;
-      const blockId = createId("rdp");
-      const block: RdpBlock = {
-        id: blockId,
-        kind: "rdp",
-        title: count > 0 ? `${baseTitle} (${count + 1})` : baseTitle,
-        profileId,
-        useWebrtc: true,
-        sessionId: null,
-        connectStage: "connecting",
-        connectMessage: t.workspace.rdp.connecting,
-        connectError: null,
-        passwordDraft: "",
-        savePasswordChoice: false,
-        retryAttempt: 0,
-        retryInSeconds: null,
-        imageWidth: 0,
-        imageHeight: 0,
-        capturedAt: null,
-        layout: workspaceDefaultLayout("rdp", blocksRef.current.length, workspaceSize.width, workspaceSize.height),
-        zIndex: blocksRef.current.reduce((acc, item) => Math.max(acc, item.zIndex), 1) + 1,
-        minimized: false,
-        maximized: false,
-      };
-      setBlocks((current) => [...current, block]);
-      appendWorkspaceLog("info", "Conexao RDP solicitada", `${profile.username}@${profile.host}:${profile.port}`);
-      window.setTimeout(() => {
-        void resolvePendingRdpConnection(blockId, { retryAttempt: 0 });
-      }, 0);
-    },
-    [appendWorkspaceLog, connections, resolvePendingRdpConnection, t.workspace.rdp.connecting, workspaceSize.height, workspaceSize.width],
-  );
-
-  const addPendingDatabaseBlock = useCallback(
-    (profileId: string) => {
-      const profile = databaseProfiles.find((item) => item.id === profileId);
-      if (!profile) {
-        toast.error("Perfil de banco nao encontrado.");
-        return;
-      }
-      const blockId = createId("database");
-      const block: DatabaseBlock = {
-        id: blockId,
-        kind: "database",
-        title: `DB - ${profile.name}`,
-        profileId,
-        sessionId: null,
-        connectStage: "connecting",
-        connectMessage: "Conectando...",
-        connectError: null,
-        viewMode: (profile.view_mode as DatabaseBlock["viewMode"]) ?? "tabular",
-        selectedDatabase: null,
-        selectedSchema: null,
-        selectedTable: null,
-        expandedNodes: [],
-        queryText: "",
-        queryResult: null,
-        queryRunning: false,
-        queryError: null,
-        layout: workspaceDefaultLayout("database", blocksRef.current.length, workspaceSize.width, workspaceSize.height),
-        zIndex: blocksRef.current.reduce((acc, item) => Math.max(acc, item.zIndex), 1) + 1,
-        minimized: false,
-        maximized: false,
-      };
-      setBlocks((current) => [...current, block]);
-      window.setTimeout(() => {
-        api.dbConnect(profileId).then((sessionId) => {
-          setBlocks((current) =>
-            current.map((item) =>
-              item.id === blockId && item.kind === "database"
-                ? { ...item, sessionId, connectStage: "ready", connectMessage: null }
-                : item,
-            ),
-          );
-        }).catch((err: unknown) => {
-          setBlocks((current) =>
-            current.map((item) =>
-              item.id === blockId && item.kind === "database"
-                ? {
-                    ...item,
-                    connectStage: "error",
-                    connectError: err instanceof Error ? err.message : String(err),
-                  }
-                : item,
-            ),
-          );
-        });
-      }, 0);
-    },
-    [databaseProfiles, workspaceSize.height, workspaceSize.width],
-  );
-
-  const touchVncFrameForBlock = useCallback(
-    (blockId: string, width: number, height: number) => {
-      const currentBlock = blocksRef.current.find(
-        (item): item is VncBlock => item.id === blockId && item.kind === "vnc",
-      );
-      if (!currentBlock) {
-        return;
-      }
-
-      const nextWidth = width > 0 ? width : currentBlock.imageWidth;
-      const nextHeight = height > 0 ? height : currentBlock.imageHeight;
-      const dimensionsChanged = nextWidth !== currentBlock.imageWidth || nextHeight !== currentBlock.imageHeight;
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const lastTouch = vncLastFrameAtByBlockRef.current.get(blockId) ?? 0;
-      const shouldUpdateTimestamp = nowSeconds > lastTouch;
-
-      if (!dimensionsChanged && !shouldUpdateTimestamp) {
-        return;
-      }
-
-      if (shouldUpdateTimestamp) {
-        vncLastFrameAtByBlockRef.current.set(blockId, nowSeconds);
-      }
-
-      setBlocks((current) =>
-        current.map((block) =>
-          block.id === blockId && block.kind === "vnc"
-            ? {
-                ...block,
-                imageWidth: nextWidth,
-                imageHeight: nextHeight,
-                capturedAt: shouldUpdateTimestamp ? nowSeconds : block.capturedAt,
-                connectStage: "ready",
-                connectMessage: t.workspace.vnc.ready,
-                connectError: null,
-                retryAttempt: 0,
-                retryInSeconds: null,
-              }
-            : block,
-        ),
-      );
-    },
-    [t.workspace.vnc.ready],
-  );
-
-  const resolvePendingVncConnection = useCallback(
-    async (
-      blockId: string,
-      options?: {
-        passwordOverride?: string | null;
-        retryAttempt?: number;
-      },
-    ) => {
-      const target = blocksRef.current.find((item): item is VncBlock => item.id === blockId && item.kind === "vnc");
-      if (!target) {
-        return;
-      }
-
-      const profile = connections.find((item) => item.id === target.profileId);
-      if (!profile) {
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "vnc"
-              ? {
-                  ...block,
-                  connectStage: "error",
-                  connectMessage: t.workspace.vnc.error,
-                  connectError: "Perfil VNC nao encontrado.",
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                  sessionId: null,
-                }
-              : block,
-          ),
-        );
-        return;
-      }
-
-      const passwordOverride = options?.passwordOverride ?? null;
-      const currentAttempt = Math.max(0, options?.retryAttempt ?? target.retryAttempt);
-      const connectingMessage = passwordOverride ? "Logando..." : t.workspace.vnc.connecting;
-      const previousSessionId = vncStreamSessionByBlockRef.current.get(blockId) ?? target.sessionId;
-      if (previousSessionId) {
-        vncStreamSessionByBlockRef.current.delete(blockId);
-        void api.vncSessionStop(previousSessionId).catch(() => undefined);
-      }
-      vncLastFrameAtByBlockRef.current.delete(blockId);
-      clearBlockRetryTimers(blockId);
-
-      setBlocks((current) =>
-        current.map((block) =>
-          block.id === blockId && block.kind === "vnc"
-            ? {
-                ...block,
-                connectStage: "connecting",
-                connectMessage: connectingMessage,
-                connectError: null,
-                retryAttempt: currentAttempt,
-                retryInSeconds: null,
-                sessionId: null,
-              }
-            : block,
-        ),
-      );
-      appendWorkspaceLog("info", "Conexao VNC em andamento", `${profile.host}:${profile.port}`);
-
-      const streamToken = createId("vncstream");
-      vncStreamTokenByBlockRef.current.set(blockId, streamToken);
-
-      const controlChannel = new Channel<VncSessionControlEvent>((event) => {
-        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-
-        if (event.event === "ready") {
-          clearBlockRetryTimers(blockId);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? {
-                    ...block,
-                    sessionId: event.data.session_id,
-                    connectStage: "ready",
-                    connectMessage: t.workspace.vnc.ready,
-                    connectError: null,
-                    imageWidth: event.data.width,
-                    imageHeight: event.data.height,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog("success", "Sessao VNC conectada", `${profile.host} ${event.data.width}x${event.data.height}`);
-          return;
-        }
-
-        if (event.event === "connecting") {
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? {
-                    ...block,
-                    connectStage: "connecting",
-                    connectMessage: event.data.message || t.workspace.vnc.connecting,
-                    connectError: null,
-                  }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        if (event.event === "auth_required") {
-          clearBlockRetryTimers(blockId);
-          vncStreamSessionByBlockRef.current.delete(blockId);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "awaiting_password",
-                    connectMessage: t.workspace.vnc.authRequired,
-                    connectError: event.data.message,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog("warn", "Autenticacao VNC pendente", `${profile.host}:${profile.port}`);
-          return;
-        }
-
-        if (event.event === "error") {
-          vncStreamSessionByBlockRef.current.delete(blockId);
-          const timeoutDetected = isTimeoutErrorMessage(event.data.message);
-          const nextAttempt = currentAttempt + 1;
-          const delaySeconds = Math.max(1, settings.reconnect_delay_seconds);
-          const canRetry = settings.auto_reconnect_enabled && nextAttempt <= MAX_CONNECT_RETRY_ATTEMPTS && timeoutDetected;
-
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "error",
-                    connectMessage: timeoutDetected ? "Timeout na conexao VNC." : t.workspace.vnc.error,
-                    connectError: event.data.message,
-                    retryAttempt: timeoutDetected ? nextAttempt : 0,
-                    retryInSeconds: canRetry ? delaySeconds : null,
-                  }
-                : block,
-            ),
-          );
-          appendWorkspaceLog("error", "Falha no stream VNC", event.data.message);
-
-          if (canRetry) {
-            scheduleBlockAutoRetry({
-              blockId,
-              kind: "vnc",
-              delaySeconds,
-              attempt: nextAttempt,
-              onRetry: () => {
-                void resolvePendingVncConnection(blockId, {
-                  passwordOverride,
-                  retryAttempt: nextAttempt,
-                });
-              },
-            });
-          }
-          return;
-        }
-
-        if (event.event === "stopped") {
-          const current = vncStreamSessionByBlockRef.current.get(blockId);
-          if (current === event.data.session_id) {
-            vncStreamSessionByBlockRef.current.delete(blockId);
-          }
-        }
-      });
-
-      const videoRectsChannel = new Channel<ArrayBuffer>((message) => {
-        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-        if (!(message instanceof ArrayBuffer)) {
-          return;
-        }
-        const packet = parseVncVideoRectsPacket(message);
-        if (!packet) {
-          return;
-        }
-        touchVncFrameForBlock(blockId, packet.width, packet.height);
-        emitVncVideoRects({ blockId, packet });
-      });
-
-      const cursorChannel = new Channel<ArrayBuffer>((message) => {
-        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-        if (!(message instanceof ArrayBuffer)) {
-          return;
-        }
-        const packet = parseVncCursorPacket(message);
-        if (!packet) {
-          return;
-        }
-        emitVncCursor({ blockId, packet });
-      });
-
-      try {
-        const result = await api.vncSessionStart(profile.id, controlChannel, videoRectsChannel, cursorChannel, {
-          passwordOverride,
-          webrtcEnabled: target.useWebrtc,
-        });
-
-        if (vncStreamTokenByBlockRef.current.get(blockId) !== streamToken) {
-          return;
-        }
-
-        if (result.status === "started") {
-          vncStreamSessionByBlockRef.current.set(blockId, result.session_id);
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? { ...block, sessionId: result.session_id, connectMessage: connectingMessage }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        if (result.status === "auth_required") {
-          setBlocks((current) =>
-            current.map((block) =>
-              block.id === blockId && block.kind === "vnc"
-                ? {
-                    ...block,
-                    sessionId: null,
-                    connectStage: "awaiting_password",
-                    connectMessage: t.workspace.vnc.authRequired,
-                    connectError: result.message,
-                    retryAttempt: 0,
-                    retryInSeconds: null,
-                  }
-                : block,
-            ),
-          );
-          return;
-        }
-
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "vnc"
-              ? {
-                  ...block,
-                  sessionId: null,
-                  connectStage: "error",
-                  connectMessage: t.workspace.vnc.error,
-                  connectError: result.message,
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                }
-              : block,
-          ),
-        );
-      } catch (error) {
-        const message = getError(error);
-        setBlocks((current) =>
-          current.map((block) =>
-            block.id === blockId && block.kind === "vnc"
-              ? {
-                  ...block,
-                  sessionId: null,
-                  connectStage: "error",
-                  connectMessage: t.workspace.vnc.error,
-                  connectError: message,
-                  retryAttempt: 0,
-                  retryInSeconds: null,
-                }
-              : block,
-          ),
-        );
-        appendWorkspaceLog("error", "Erro ao iniciar stream VNC", message);
-      }
-    },
-    [
-      appendWorkspaceLog,
-      clearBlockRetryTimers,
-      connections,
-      settings.auto_reconnect_enabled,
-      settings.reconnect_delay_seconds,
-      scheduleBlockAutoRetry,
-      touchVncFrameForBlock,
-      t.workspace.vnc.authRequired,
-      t.workspace.vnc.connecting,
-      t.workspace.vnc.error,
-      t.workspace.vnc.ready,
-    ],
-  );
-
-  const addPendingVncBlock = useCallback(
-    (profileId: string) => {
-      const profile = connections.find((item) => item.id === profileId);
-      if (!profile) {
-        toast.error("Perfil VNC nao encontrado.");
-        return;
-      }
-
-      const host = profile.host || profileId.slice(0, 8);
-      const baseTitle = `VNC - ${host}`;
-      const count = blocksRef.current.filter((item) => item.kind === "vnc" && item.title.startsWith(baseTitle)).length;
-      const blockId = createId("vnc");
-      const block: VncBlock = {
-        id: blockId,
-        kind: "vnc",
-        title: count > 0 ? `${baseTitle} (${count + 1})` : baseTitle,
-        profileId,
-        useWebrtc: true,
-        sessionId: null,
-        connectStage: "connecting",
-        connectMessage: t.workspace.vnc.connecting,
-        connectError: null,
-        passwordDraft: "",
-        retryAttempt: 0,
-        retryInSeconds: null,
-        imageWidth: 0,
-        imageHeight: 0,
-        capturedAt: null,
-        layout: workspaceDefaultLayout("vnc", blocksRef.current.length, workspaceSize.width, workspaceSize.height),
-        zIndex: blocksRef.current.reduce((acc, item) => Math.max(acc, item.zIndex), 1) + 1,
-        minimized: false,
-        maximized: false,
-      };
-      setBlocks((current) => [...current, block]);
-      appendWorkspaceLog("info", "Conexao VNC solicitada", `${profile.host}:${profile.port}`);
-      window.setTimeout(() => {
-        void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
-      }, 0);
-    },
-    [appendWorkspaceLog, connections, resolvePendingVncConnection, t.workspace.vnc.connecting, workspaceSize.height, workspaceSize.width],
-  );
-
-  const changeVncProfile = useCallback(
-    (blockId: string, profileId: string) => {
-      notifyModuleDropdownSelect("vnc", blockId, "profile_select", profileId);
-      clearBlockRetryTimers(blockId);
-      setBlocks((current) =>
-        current.map((item) =>
-          item.id === blockId && item.kind === "vnc"
-            ? {
-                ...item,
-                profileId,
-                sessionId: null,
-                connectStage: "connecting",
-                connectMessage: t.workspace.vnc.connecting,
-                connectError: null,
-                imageWidth: 0,
-                imageHeight: 0,
-                capturedAt: null,
-                retryAttempt: 0,
-                retryInSeconds: null,
-              }
-            : item,
-        ),
-      );
-      void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
-    },
-    [clearBlockRetryTimers, resolvePendingVncConnection, t.workspace.vnc.connecting],
-  );
-
-  const toggleVncWebrtc = useCallback(
-    (blockId: string) => {
-      const sessionId = vncStreamSessionByBlockRef.current.get(blockId);
-      if (sessionId) {
-        void api.vncSessionStop(sessionId).catch(() => undefined);
-        vncStreamSessionByBlockRef.current.delete(blockId);
-      }
-      clearBlockRetryTimers(blockId);
-      setBlocks((current) =>
-        current.map((item) =>
-          item.id === blockId && item.kind === "vnc"
-            ? {
-                ...item,
-                useWebrtc: !item.useWebrtc,
-                sessionId: null,
-                connectStage: "connecting",
-                connectMessage: t.workspace.vnc.connecting,
-                connectError: null,
-                imageWidth: 0,
-                imageHeight: 0,
-                capturedAt: null,
-                retryAttempt: 0,
-                retryInSeconds: null,
-              }
-            : item,
-        ),
-      );
-      void resolvePendingVncConnection(blockId, { retryAttempt: 0 });
-    },
-    [clearBlockRetryTimers, resolvePendingVncConnection, t.workspace.vnc.connecting],
-  );
-
-  const changeRdpProfile = useCallback(
-    (blockId: string, profileId: string) => {
-      notifyModuleDropdownSelect("rdp", blockId, "profile_select", profileId);
-      clearBlockRetryTimers(blockId);
-      setBlocks((current) =>
-        current.map((item) =>
-          item.id === blockId && item.kind === "rdp"
-            ? {
-                ...item,
-                profileId,
-                sessionId: null,
-                connectStage: "connecting",
-                connectMessage: t.workspace.rdp.connecting,
-                connectError: null,
-                imageWidth: 0,
-                imageHeight: 0,
-                capturedAt: null,
-                retryAttempt: 0,
-                retryInSeconds: null,
-              }
-            : item,
-        ),
-      );
-      void resolvePendingRdpConnection(blockId, { retryAttempt: 0 });
-    },
-    [clearBlockRetryTimers, resolvePendingRdpConnection, t.workspace.rdp.connecting],
-  );
-
   useEffect(() => {
     return () => {
-      rdpStreamTokenByBlockRef.current.clear();
-      rdpLastFrameAtByBlockRef.current.clear();
-      rdpSurfaceRectByBlockRef.current.clear();
-      vncStreamTokenByBlockRef.current.clear();
-      vncLastFrameAtByBlockRef.current.clear();
-      vncSurfaceRectByBlockRef.current.clear();
       terminalCaptureByBlockRef.current.clear();
       lastPublishedKeyActionsTargetRef.current = null;
-      rdpStreamSessionByBlockRef.current.forEach((sessionId) => {
-        void api.rdpSessionStop(sessionId).catch(() => undefined);
-      });
-      rdpStreamSessionByBlockRef.current.clear();
-      vncStreamSessionByBlockRef.current.forEach((sessionId) => {
-        void api.vncSessionStop(sessionId).catch(() => undefined);
-      });
-      vncStreamSessionByBlockRef.current.clear();
       void api.keyActionsSetActiveWorkspace(null).catch(() => undefined);
     };
   }, []);
@@ -3450,7 +2288,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           acceptUnknownHost,
           passwordOverride,
           saveAuthChoice,
-          webrtcEnabled: target.useWebrtc ?? true,
         });
         if (isCancelled()) {
           return;
@@ -4258,15 +3095,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
   const openConnectionInWorkspace = useCallback(
     (profile: ConnectionProfile, options?: { openSftpWithSsh?: boolean }) => {
       const protocols = profileProtocols(profile);
-      if (protocols.includes("vnc")) {
-        addPendingVncBlock(profile.id);
-        return;
-      }
-      if (protocols.includes("rdp")) {
-        addPendingRdpBlock(profile.id);
-        return;
-      }
-
       const hasSsh = protocols.includes("ssh");
       const fileProtocol = resolveWorkspaceFileProtocol(profile);
 
@@ -4282,14 +3110,10 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         addPendingSftpBlock(profile.id);
         return;
       }
-      if (fileProtocol) {
-        addSftpBlock(formatProfileSourceId(profile.id, fileProtocol));
-        return;
-      }
 
       toast.error("Esta conexão não possui protocolo suportado para abrir no workspace.");
     },
-    [addPendingRdpBlock, addPendingVncBlock, addPendingSftpBlock, addPendingTerminalBlock, addSftpBlock],
+    [addPendingSftpBlock, addPendingTerminalBlock],
   );
 
   useEffect(() => {
@@ -4325,21 +3149,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       addSftpBlock(initialSourceId ?? "local");
       return;
     }
-    if (initialBlock === "rdp") {
-      const profileId = parseProfileSourceId(initialSourceId) ?? initialSourceId ?? null;
-      if (profileId) {
-        addPendingRdpBlock(profileId);
-      }
-    }
-    if (initialBlock === "database") {
-      const profileId = initialSourceId?.replace("db:", "") ?? null;
-      if (profileId) {
-        addPendingDatabaseBlock(profileId);
-      }
-    }
   }, [
-    addPendingDatabaseBlock,
-    addPendingRdpBlock,
     addPendingSftpBlock,
     addPendingTerminalBlock,
     addSftpBlock,
@@ -4655,17 +3465,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         setCreateBlockModalOpen(false);
         return;
       }
-      if (createBlockKind === "rdp") {
-        const profileSource = parseProfileSourceRef(createSourceDraft);
-        if (!profileSource) {
-          toast.error(t.workspace.rdp.selectProfile);
-          return;
-        }
-        addPendingRdpBlock(profileSource.profileId);
-        setCreateBlockModalOpen(false);
-        return;
-      }
-
       let sourceId = createSourceDraft;
       if (createSourceDraft === "local" && createBlockKind === "terminal") {
         sourceId = await connectLocalTerminal();
@@ -4700,7 +3499,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
       toast.error(getError(error));
     }
   }, [
-    addPendingRdpBlock,
     addPendingSftpBlock,
     addPendingTerminalBlock,
     addSftpBlock,
@@ -4709,7 +3507,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     createBlockKind,
     createSourceDraft,
     openFile,
-    t.workspace.rdp.selectProfile,
   ]);
 
   useEffect(() => {
@@ -4780,17 +3577,13 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                 ? "text-primary"
                 : block.kind === "sftp"
                   ? "text-info"
-                  : block.kind === "rdp"
-                    ? "text-destructive"
-                    : "text-warning";
+                  : "text-warning";
             const Icon =
               block.kind === "terminal"
                 ? TerminalSquare
                 : block.kind === "sftp"
                   ? Folder
-                  : block.kind === "rdp"
-                    ? Monitor
-                    : FileText;
+                  : FileText;
             const active = focusedBlockId === block.id && !block.minimized;
             return (
               <button
@@ -4914,8 +3707,8 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
             onDragPreview={onBlockDragPreview}
             onDragEnd={onBlockDragEnd}
             onLayoutChange={onLayoutChange}
-            minWidth={block.kind === "terminal" || block.kind === "rdp" ? 420 : 360}
-            minHeight={block.kind === "terminal" || block.kind === "rdp" ? 260 : 240}
+            minWidth={block.kind === "terminal" ? 420 : 360}
+            minHeight={block.kind === "terminal" ? 260 : 240}
             headerRight={
               <>
                 <button
@@ -5247,161 +4040,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                 })
               : null}
 
-            {block.kind === "rdp"
-              ? rdpWorkspace.render({
-                  block,
-                  active: focusedBlockId === block.id,
-                  profiles: rdpProfiles,
-                  captureUnavailableMessage: null,
-                  onFocus: () => focusBlock(block.id),
-                  onProfileChange: (profileId) => changeRdpProfile(block.id, profileId),
-                  onInputBatch: (events) => {
-                    const sessionId =
-                      rdpStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
-                    if (!sessionId || events.length === 0) {
-                      return;
-                    }
-                    void api.rdpInputBatch(sessionId, { events }).catch(() => undefined);
-                  },
-                  onFocusChange: (focus) => {
-                    const sessionId =
-                      rdpStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
-                    if (!sessionId) {
-                      return;
-                    }
-                    void api.rdpSessionFocus(sessionId, focus).catch((error) => {
-                      appendWorkspaceLog("warn", "Falha ao atualizar foco RDP", getError(error));
-                    });
-                  },
-                  onRetry: () => {
-                    clearBlockRetryTimers(block.id);
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "rdp"
-                          ? { ...item, retryAttempt: 0, retryInSeconds: null }
-                          : item,
-                      ),
-                    );
-                    void resolvePendingRdpConnection(block.id, { retryAttempt: 0 });
-                  },
-                  onPasswordDraftChange: (value) =>
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "rdp"
-                          ? { ...item, passwordDraft: value }
-                          : item,
-                      ),
-                    ),
-                  onSavePasswordChange: (checked) =>
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "rdp"
-                          ? { ...item, savePasswordChoice: checked }
-                          : item,
-                      ),
-                    ),
-                  onSubmitPassword: () => {
-                    const parsed = workspacePasswordSchema.safeParse({
-                      password: block.passwordDraft,
-                      save: block.savePasswordChoice,
-                    });
-                    if (!parsed.success) {
-                      setBlocks((current) =>
-                        current.map((item) =>
-                          item.id === block.id && item.kind === "rdp"
-                            ? { ...item, connectError: parsed.error.issues[0]?.message ?? "invalid_input" }
-                            : item,
-                        ),
-                      );
-                      return;
-                    }
-                    clearBlockRetryTimers(block.id);
-                    void resolvePendingRdpConnection(block.id, {
-                      passwordOverride: parsed.data.password,
-                      saveAuthChoice: block.savePasswordChoice,
-                      retryAttempt: 0,
-                    });
-                  },
-                })
-              : null}
-
-            {block.kind === "vnc"
-              ? block.useWebrtc
-                ? (
-                    <VncWebrtcBlockView
-                      block={block}
-                      active={focusedBlockId === block.id}
-                      profiles={vncProfiles}
-                      onFocus={() => focusBlock(block.id)}
-                      onToggleWebrtc={() => toggleVncWebrtc(block.id)}
-                      onProfileChange={(profileId) => changeVncProfile(block.id, profileId)}
-                      onFocusChange={(focus) => {
-                        const sessionId =
-                          vncStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
-                        if (!sessionId) {
-                          return;
-                        }
-                        void api.vncSessionFocus(sessionId, focus).catch((error) => {
-                          appendWorkspaceLog("warn", "Falha ao atualizar foco VNC", getError(error));
-                        });
-                      }}
-                      onRetry={() => {
-                        clearBlockRetryTimers(block.id);
-                        void resolvePendingVncConnection(block.id, { retryAttempt: 0 });
-                      }}
-                    />
-                  )
-                : vncWorkspace.render({
-                    block,
-                    active: focusedBlockId === block.id,
-                    profiles: vncProfiles,
-                    captureUnavailableMessage:
-                      focusedBlockId === block.id ? captureUnavailableMessage : null,
-                    onFocus: () => focusBlock(block.id),
-                    onToggleWebrtc: () => toggleVncWebrtc(block.id),
-                    onProfileChange: (profileId) => changeVncProfile(block.id, profileId),
-                    onFocusChange: (focus) => {
-                      const currentRect = vncSurfaceRectByBlockRef.current.get(block.id) ?? null;
-                      const nextRect = focus.surface_rect ?? null;
-                      if (!areSurfaceRectsEqual(currentRect, nextRect)) {
-                        if (nextRect) {
-                          vncSurfaceRectByBlockRef.current.set(block.id, nextRect);
-                        } else {
-                          vncSurfaceRectByBlockRef.current.delete(block.id);
-                        }
-                        setCaptureContextVersion((value) => value + 1);
-                      }
-                      const sessionId =
-                        vncStreamSessionByBlockRef.current.get(block.id) ?? block.sessionId;
-                      if (!sessionId) {
-                        return;
-                      }
-                      void api.vncSessionFocus(sessionId, focus).catch((error) => {
-                        appendWorkspaceLog("warn", "Falha ao atualizar foco VNC", getError(error));
-                      });
-                    },
-                    onRetry: () => {
-                      clearBlockRetryTimers(block.id);
-                      void resolvePendingVncConnection(block.id, { retryAttempt: 0 });
-                    },
-                    onPasswordDraftChange: (value) =>
-                      setBlocks((current) =>
-                        current.map((item) =>
-                          item.id === block.id && item.kind === "vnc"
-                            ? { ...item, passwordDraft: value }
-                            : item,
-                        ),
-                      ),
-                    onSubmitPassword: () => {
-                      clearBlockRetryTimers(block.id);
-                      void resolvePendingVncConnection(block.id, {
-                        passwordOverride: block.passwordDraft,
-                        retryAttempt: 0,
-                      });
-                    },
-                  })
-              : null}
-
             {block.kind === "editor"
               ? editorWorkspace.render({
                   block,
@@ -5415,67 +4053,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                     ),
                   onSave: () => void saveEditorBlock(block.id),
                   onOpenExternal: () => void openEditorBlockExternal(block.id),
-                })
-              : null}
-
-            {block.kind === "database"
-              ? databaseWorkspace.render({
-                  block,
-                  profile: databaseProfiles.find((p) => p.id === block.profileId) ?? null,
-                  onFocus: () => focusBlock(block.id),
-                  onConnectStageChange: (stage, message, error) => {
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "database"
-                          ? { ...item, connectStage: stage, connectMessage: message, connectError: error }
-                          : item,
-                      ),
-                    );
-                    if (stage === "connecting" && block.profileId) {
-                      api.dbConnect(block.profileId).then((sessionId) => {
-                        setBlocks((current) =>
-                          current.map((item) =>
-                            item.id === block.id && item.kind === "database"
-                              ? { ...item, sessionId, connectStage: "ready", connectMessage: null }
-                              : item,
-                          ),
-                        );
-                      }).catch((err: unknown) => {
-                        setBlocks((current) =>
-                          current.map((item) =>
-                            item.id === block.id && item.kind === "database"
-                              ? {
-                                  ...item,
-                                  connectStage: "error",
-                                  connectError: err instanceof Error ? err.message : String(err),
-                                }
-                              : item,
-                          ),
-                        );
-                      });
-                    }
-                  },
-                  onBlockUpdate: (patch) => {
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "database"
-                          ? { ...item, ...patch }
-                          : item,
-                      ),
-                    );
-                  },
-                  onViewModeChange: (mode) => {
-                    setBlocks((current) =>
-                      current.map((item) =>
-                        item.id === block.id && item.kind === "database"
-                          ? { ...item, viewMode: mode }
-                          : item,
-                      ),
-                    );
-                    if (block.profileId) {
-                      void api.dbSaveViewMode(block.profileId, mode);
-                    }
-                  },
                 })
               : null}
           </WorkspaceBlockController>
@@ -5700,17 +4277,9 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                 const quickLabel =
                   hasSsh && fileProtocol === "sftp"
                     ? t.home.connections.protocolBoth
-                    : protocols.includes("rdp")
-                      ? t.home.connections.protocolRdp
-                      : fileProtocol === "sftp"
-                        ? t.home.connections.protocolSftp
-                        : fileProtocol === "ftp"
-                          ? t.home.connections.protocolFtp
-                          : fileProtocol === "ftps"
-                            ? t.home.connections.protocolFtps
-                            : fileProtocol === "smb"
-                              ? t.home.connections.protocolSmb
-                              : t.home.connections.protocolSsh;
+                    : fileProtocol === "sftp"
+                      ? t.home.connections.protocolSftp
+                      : t.home.connections.protocolSsh;
 
                 return (
                   <button
@@ -5845,7 +4414,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {t.workspace.createRemoteTitle}
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 disabled={terminalRemoteSourceOptions.length === 0}
@@ -5888,27 +4457,6 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
                 <Folder className="mx-auto h-4 w-4" />
                 <p className="mt-1">{t.workspace.remoteFiles}</p>
               </button>
-              <button
-                type="button"
-                disabled={rdpSourceOptions.length === 0}
-                className={cn(
-                  "rounded-lg border p-2 text-xs transition disabled:cursor-not-allowed disabled:opacity-45",
-                  createBlockKind === "rdp"
-                    ? "border-primary/60 bg-primary/15 text-primary"
-                    : "border-border/50 bg-secondary/50 text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                )}
-                onClick={() => {
-                  const nextSource = rdpSourceOptions[0]?.id;
-                  if (!nextSource) {
-                    return;
-                  }
-                  setCreateBlockKind("rdp");
-                  setCreateSourceDraft(nextSource);
-                }}
-              >
-                <Monitor className="mx-auto h-4 w-4" />
-                <p className="mt-1">{t.workspace.remoteRdp}</p>
-              </button>
             </div>
           </div>
 
@@ -5929,9 +4477,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
               <p className="text-xs text-muted-foreground">
                 {createBlockKind === "terminal"
                   ? t.workspace.sourceHelpTerminal
-                  : createBlockKind === "sftp"
-                    ? t.workspace.sourceHelpFiles
-                    : t.workspace.sourceHelpRdp}
+                  : t.workspace.sourceHelpFiles}
               </p>
             </div>
           ) : null}

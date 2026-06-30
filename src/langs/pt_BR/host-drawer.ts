@@ -53,11 +53,6 @@ export const hostDrawer: AppDictionary["hostDrawer"] = {
     sshAlsoSftpDescription: "Ative para abrir terminal SSH e bloco de arquivos SFTP no mesmo perfil.",
     sshDescription: "Abre blocos de terminal remoto no workspace.",
     sftpDescription: "Abre explorador de arquivos remoto e transferências.",
-    ftpDescription: "Abre explorador e transferências remotas via FTP.",
-    ftpsDescription: "Abre explorador e transferências remotas via FTPS (TLS).",
-    smbDescription: "Abre compartilhamentos SMB para navegar e transferir arquivos.",
-    rdpDescription: "Abre acesso remoto de desktop (RDP) no workspace.",
-    vncDescription: "Abre desktop remoto VNC via protocolo RFB no workspace.",
   },
   password: {
     label: "Senha",

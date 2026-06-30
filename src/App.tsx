@@ -6,7 +6,6 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
-import { DatabaseFormDrawer } from "@/components/drawers/database-form-drawer";
 import { HostFormDrawer } from "@/components/drawers/host-form-drawer";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -18,14 +17,12 @@ import { useT } from "@/langs";
 import { logFrontendDebug, logFrontendError } from "@/lib/debug-logs";
 import { api } from "@/lib/tauri";
 import { AboutPage } from "@/pages/sections/about-page";
-import { DatabaseSectionPage } from "@/pages/sections/database-section-page";
 import { DebugLogsPage } from "@/pages/sections/debug-logs-page";
 import { NotesPage } from "@/pages/sections/notes-page";
 import { HomePage } from "@/pages/sections/home-page";
 import { KeychainPage } from "@/pages/sections/keychain-page";
 import { KnownHostsPage } from "@/pages/sections/known-hosts-page";
 import { SettingsPage } from "@/pages/sections/settings-page";
-import { DatabaseTabPage } from "@/pages/tabs/database-tab-page";
 import { EditorTabPage } from "@/pages/tabs/editor-tab-page";
 import { WorkspaceTabPage } from "@/pages/tabs/workspace-tab-page";
 import { VaultGatePage } from "@/pages/vault-gate-page";
@@ -59,9 +56,6 @@ function sectionFromPath(pathname: string): SidebarSection {
   if (pathname.startsWith("/notes")) {
     return "notes";
   }
-  if (pathname.startsWith("/database")) {
-    return "database";
-  }
   return "home";
 }
 
@@ -84,9 +78,6 @@ function pathFromSection(section: SidebarSection): string {
   if (section === "settings") {
     return "/settings";
   }
-  if (section === "database") {
-    return "/database";
-  }
   return "/home";
 }
 
@@ -100,7 +91,7 @@ function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-type DeepLinkProtocol = "ssh" | "sftp" | "rdp" | "smb";
+type DeepLinkProtocol = "ssh" | "sftp";
 
 interface ParsedConnectionDeepLink {
   protocol: DeepLinkProtocol;
@@ -121,7 +112,7 @@ function normalizeDeepLinkInput(raw: string): string {
 
 function parseDirectConnectionUrl(url: URL): ParsedConnectionDeepLink | null {
   const protocol = url.protocol.replace(":", "").toLowerCase();
-  if (protocol !== "ssh" && protocol !== "sftp" && protocol !== "rdp" && protocol !== "smb") {
+  if (protocol !== "ssh" && protocol !== "sftp") {
     return null;
   }
 
@@ -130,15 +121,14 @@ function parseDirectConnectionUrl(url: URL): ParsedConnectionDeepLink | null {
     return null;
   }
 
-  const defaultPort = protocol === "rdp" ? 3389 : protocol === "smb" ? 445 : 22;
-  const parsedPort = url.port ? Number(url.port) : defaultPort;
+  const parsedPort = url.port ? Number(url.port) : 22;
   if (!Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
     return null;
   }
 
   const username = decodeURIComponent(url.username || "").trim();
   const pathname = decodeURIComponent(url.pathname || "/").trim();
-  const remotePath = protocol === "sftp" || protocol === "smb" ? (pathname.length ? pathname : "/") : "/";
+  const remotePath = protocol === "sftp" ? (pathname.length ? pathname : "/") : "/";
 
   return {
     protocol,
@@ -182,7 +172,7 @@ function parseConnectionDeepLink(raw: string): ParsedConnectionDeepLink | null {
   }
 
   const hostBasedProtocol = parsed.hostname.toLowerCase();
-  if (hostBasedProtocol === "ssh" || hostBasedProtocol === "sftp" || hostBasedProtocol === "rdp" || hostBasedProtocol === "smb") {
+  if (hostBasedProtocol === "ssh" || hostBasedProtocol === "sftp") {
     const rebuilt = `${hostBasedProtocol}://${parsed.pathname.replace(/^\/+/, "")}${parsed.search}`;
     return parseConnectionDeepLink(rebuilt);
   }
@@ -251,7 +241,6 @@ function App() {
   const selectedLoginServerId = useAppStore((state) => state.selectedLoginServerId);
   const openSsh = useAppStore((state) => state.openSsh);
   const openSftpWorkspace = useAppStore((state) => state.openSftpWorkspace);
-  const openRdp = useAppStore((state) => state.openRdp);
   const openHostDrawer = useAppStore((state) => state.openHostDrawer);
 
   const bootstrap = useAppStore((state) => state.bootstrap);
@@ -472,20 +461,8 @@ function App() {
       return false;
     }
 
-    const protocolList =
-      parsed.protocol === "ssh"
-        ? (["ssh"] as const)
-        : parsed.protocol === "sftp"
-          ? (["sftp"] as const)
-          : parsed.protocol === "smb"
-            ? (["smb"] as const)
-            : (["rdp"] as const);
-    const profileKind =
-      parsed.protocol === "ssh"
-        ? ("host" as const)
-        : parsed.protocol === "rdp"
-          ? ("rdp" as const)
-          : ("sftp" as const);
+    const protocolList = parsed.protocol === "ssh" ? (["ssh"] as const) : (["sftp"] as const);
+    const profileKind = parsed.protocol === "ssh" ? ("host" as const) : ("sftp" as const);
     const fallbackName = `${parsed.protocol.toUpperCase()} ${parsed.host}`;
 
     if (!parsed.username) {
@@ -548,10 +525,8 @@ function App() {
 
     if (parsed.protocol === "ssh") {
       await openSsh(profile);
-    } else if (parsed.protocol === "sftp" || parsed.protocol === "smb") {
-      await openSftpWorkspace(profile);
     } else {
-      await openRdp(profile);
+      await openSftpWorkspace(profile);
     }
     return true;
   }
@@ -771,7 +746,7 @@ function App() {
         setPendingDeepLinks(current.slice(1));
         deepLinkProcessingRef.current = false;
       });
-  }, [openHostDrawer, openRdp, openSftpWorkspace, openSsh, pendingDeepLinks, vaultStatus]);
+  }, [openHostDrawer, openSftpWorkspace, openSsh, pendingDeepLinks, vaultStatus]);
 
   async function handleResolveStartupConflicts() {
     const decisions: SyncConflictDecision[] = startupConflicts.map((item) => ({
@@ -981,13 +956,6 @@ function App() {
                   initialOpenFiles={tab.initialOpenFiles}
                 />
               ) : null}
-              {tab.type === "database" && tab.profileId ? (
-                <DatabaseTabPage
-                  key={`database:${tab.id}`}
-                  tabId={tab.id}
-                  profileId={tab.profileId}
-                />
-              ) : null}
             </div>
           ))}
 
@@ -1002,7 +970,6 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/debug-logs" element={<DebugLogsPage />} />
               <Route path="/notes" element={<NotesPage />} />
-              <Route path="/database" element={<DatabaseSectionPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
@@ -1010,7 +977,6 @@ function App() {
         </section>
 
         <HostFormDrawer />
-        <DatabaseFormDrawer />
         <AppDialog
         open={loginServerModalOpen}
         title={t.app.header.loginServerTitle}

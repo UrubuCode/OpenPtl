@@ -1,4 +1,4 @@
-import { HardDrive, Monitor, Server, User } from "lucide-react";
+import { Monitor, Server, User } from "lucide-react";
 
 import type { ConnectionProtocol } from "@/types/openptl";
 
@@ -13,21 +13,11 @@ interface ConnectionCardProps {
 const protocolColors: Record<ConnectionProtocol, string> = {
   ssh: "bg-primary/15 text-primary",
   sftp: "bg-info/15 text-info",
-  ftp: "bg-success/15 text-success",
-  ftps: "bg-success/15 text-success",
-  smb: "bg-warning/15 text-warning",
-  rdp: "bg-destructive/15 text-destructive",
-  vnc: "bg-purple-500/15 text-purple-400",
 };
 
 const protocolIcons: Record<ConnectionProtocol, typeof Monitor> = {
   ssh: Monitor,
   sftp: Server,
-  ftp: Server,
-  ftps: Server,
-  smb: HardDrive,
-  rdp: Monitor,
-  vnc: Monitor,
 };
 
 export function ConnectionCard({ name, host, protocol, user, lastUsed }: ConnectionCardProps) {

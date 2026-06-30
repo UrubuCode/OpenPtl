@@ -38,18 +38,10 @@ open = "5"
 rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 sha2 = "0.10"
-suppaftp = { version = "8.0.2", features = ["rustls-ring"] }
 rustls-native-certs = "0.8"
-smb = "0.11.1"
 futures-util = "0.3"
 russh = "0.52.0"
 russh-sftp = "2.1.1"
-ironrdp = { version = "0.14.0", features = ["connector", "session", "graphics", "core"] }
-ironrdp-blocking = "0.8.0"
-ironrdp-graphics = "0.7.0"
-ironrdp-pdu = "0.7.0"
-lz4_flex = "0.11.5"
-sspi = { version = "0.18.7", features = ["network_client"] }
 tempfile = "3"
 tokio = { version = "1", features = ["time", "net", "io-util", "macros"] }
 tokio-rustls = "0.26.4"
@@ -57,12 +49,6 @@ urlencoding = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 x509-cert = { version = "0.2", default-features = false, features = ["std"] }
 rdev = "0.5.3"
-des = "0.8"
-webrtc = "0.13"
-openh264 = "0.9"
-bytes = "1"
-yuv = "0.8"
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.2"

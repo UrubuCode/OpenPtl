@@ -1,14 +1,11 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use rdev::{Button, Event, EventType, Key};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
-
-use crate::protocols::rdp::{RdpInputBatch, RdpInputEvent, RdpMouseButton};
-use crate::protocols::vnc::VncInputBatch;
 
 const STATUS_EVENT: &str = "key_actions:status";
 const MAX_MOVE_RATE: Duration = Duration::from_millis(16);
@@ -39,26 +36,6 @@ pub struct SurfaceRectInput {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum KeyActionsActiveTargetInput {
-    Rdp {
-        session_id: String,
-        tab_id: String,
-        block_id: String,
-        surface_rect: SurfaceRectInput,
-        #[serde(default)]
-        dpi_scale: Option<f64>,
-        remote_width: u16,
-        remote_height: u16,
-    },
-    Vnc {
-        session_id: String,
-        tab_id: String,
-        block_id: String,
-        surface_rect: SurfaceRectInput,
-        #[serde(default)]
-        dpi_scale: Option<f64>,
-        remote_width: u16,
-        remote_height: u16,
-    },
     Ssh {
         session_id: String,
         tab_id: String,
@@ -82,16 +59,6 @@ struct TargetCommon {
 
 #[derive(Debug, Clone)]
 enum ActiveTarget {
-    Rdp {
-        common: TargetCommon,
-        remote_width: u16,
-        remote_height: u16,
-    },
-    Vnc {
-        common: TargetCommon,
-        remote_width: u16,
-        remote_height: u16,
-    },
     Ssh {
         common: TargetCommon,
         cols: u16,
@@ -109,14 +76,6 @@ struct Modifiers {
 
 #[derive(Debug, Clone)]
 enum DispatchEvent {
-    Rdp {
-        session_id: String,
-        event: RdpInputEvent,
-    },
-    Vnc {
-        session_id: String,
-        event: RdpInputEvent,
-    },
     Ssh {
         session_id: String,
         bytes: Vec<u8>,
@@ -304,46 +263,6 @@ impl KeyActionsService {
 
 fn parse_active_target(input: KeyActionsActiveTargetInput) -> Result<ActiveTarget, String> {
     match input {
-        KeyActionsActiveTargetInput::Rdp {
-            session_id,
-            tab_id,
-            block_id,
-            surface_rect,
-            dpi_scale,
-            remote_width,
-            remote_height,
-        } => {
-            let common =
-                parse_target_common(session_id, tab_id, block_id, surface_rect, dpi_scale)?;
-            if remote_width == 0 || remote_height == 0 {
-                return Err("Resolucao remota RDP invalida para captura.".to_string());
-            }
-            Ok(ActiveTarget::Rdp {
-                common,
-                remote_width,
-                remote_height,
-            })
-        }
-        KeyActionsActiveTargetInput::Vnc {
-            session_id,
-            tab_id,
-            block_id,
-            surface_rect,
-            dpi_scale,
-            remote_width,
-            remote_height,
-        } => {
-            let common =
-                parse_target_common(session_id, tab_id, block_id, surface_rect, dpi_scale)?;
-            if remote_width == 0 || remote_height == 0 {
-                return Err("Resolucao remota VNC invalida para captura.".to_string());
-            }
-            Ok(ActiveTarget::Vnc {
-                common,
-                remote_width,
-                remote_height,
-            })
-        }
         KeyActionsActiveTargetInput::Ssh {
             session_id,
             tab_id,
@@ -480,26 +399,7 @@ fn build_key_dispatch(
     key_name: Option<&str>,
     modifiers: Modifiers,
 ) -> Option<DispatchEvent> {
-    let key_press = |session_id: String, kind: &str| -> Option<DispatchEvent> {
-        let event = RdpInputEvent::KeyPress {
-            code: rdev_key_to_web_code(key)?.to_string(),
-            text: key_name
-                .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
-                .map(|value| value.to_string()),
-            ctrl: modifiers.ctrl,
-            alt: modifiers.alt,
-            shift: modifiers.shift,
-            meta: modifiers.meta,
-        };
-        if kind == "vnc" {
-            Some(DispatchEvent::Vnc { session_id, event })
-        } else {
-            Some(DispatchEvent::Rdp { session_id, event })
-        }
-    };
     match target {
-        ActiveTarget::Rdp { common, .. } => key_press(common.session_id.clone(), "rdp"),
-        ActiveTarget::Vnc { common, .. } => key_press(common.session_id.clone(), "vnc"),
         ActiveTarget::Ssh { common, .. } => Some(DispatchEvent::Ssh {
             session_id: common.session_id.clone(),
             bytes: ssh_bytes_from_key(key, key_name, modifiers)?,
@@ -516,38 +416,6 @@ fn build_move_dispatch(
     pressed_buttons: &HashSet<Button>,
 ) -> Option<DispatchEvent> {
     match target {
-        ActiveTarget::Rdp {
-            common,
-            remote_width,
-            remote_height,
-        } => {
-            let (mapped_x, mapped_y) =
-                map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
-            Some(DispatchEvent::Rdp {
-                session_id: common.session_id.clone(),
-                event: RdpInputEvent::MouseMove {
-                    x: mapped_x,
-                    y: mapped_y,
-                    t_ms: Some(now_millis()),
-                },
-            })
-        }
-        ActiveTarget::Vnc {
-            common,
-            remote_width,
-            remote_height,
-        } => {
-            let (mapped_x, mapped_y) =
-                map_rdp_pointer(*remote_width, *remote_height, common, x, y, window_origin?)?;
-            Some(DispatchEvent::Vnc {
-                session_id: common.session_id.clone(),
-                event: RdpInputEvent::MouseMove {
-                    x: mapped_x,
-                    y: mapped_y,
-                    t_ms: Some(now_millis()),
-                },
-            })
-        }
         ActiveTarget::Ssh { common, cols, rows } => {
             let button = if pressed_buttons.contains(&Button::Left) {
                 Button::Left
@@ -577,33 +445,7 @@ fn build_button_dispatch(
     y: f64,
     window_origin: Option<(f64, f64)>,
 ) -> Option<DispatchEvent> {
-    let make_button_event = |common: &TargetCommon, rw: u16, rh: u16, is_vnc: bool| -> Option<DispatchEvent> {
-        let (mapped_x, mapped_y) =
-            map_rdp_pointer(rw, rh, common, x, y, window_origin?)?;
-        let mapped_button = match button {
-            Button::Left => RdpMouseButton::Left,
-            Button::Right => RdpMouseButton::Right,
-            Button::Middle => RdpMouseButton::Middle,
-            Button::Unknown(_) => return None,
-        };
-        let event = if pressed {
-            RdpInputEvent::MouseButtonDown { x: mapped_x, y: mapped_y, button: mapped_button }
-        } else {
-            RdpInputEvent::MouseButtonUp { x: mapped_x, y: mapped_y, button: mapped_button }
-        };
-        if is_vnc {
-            Some(DispatchEvent::Vnc { session_id: common.session_id.clone(), event })
-        } else {
-            Some(DispatchEvent::Rdp { session_id: common.session_id.clone(), event })
-        }
-    };
     match target {
-        ActiveTarget::Rdp { common, remote_width, remote_height } => {
-            make_button_event(common, *remote_width, *remote_height, false)
-        }
-        ActiveTarget::Vnc { common, remote_width, remote_height } => {
-            make_button_event(common, *remote_width, *remote_height, true)
-        }
         ActiveTarget::Ssh { common, cols, rows } => {
             let (col, row) = map_ssh_pointer(*cols, *rows, common, x, y, window_origin?)?;
             let code = if pressed { ssh_button_code(button) } else { 3 };
@@ -624,28 +466,7 @@ fn build_wheel_dispatch(
     y: f64,
     window_origin: Option<(f64, f64)>,
 ) -> Option<DispatchEvent> {
-    let make_scroll_event = |common: &TargetCommon, rw: u16, rh: u16, is_vnc: bool| -> Option<DispatchEvent> {
-        let (mapped_x, mapped_y) =
-            map_rdp_pointer(rw, rh, common, x, y, window_origin?)?;
-        let dx = normalize_wheel(delta_x);
-        let dy = normalize_wheel(delta_y);
-        if dx == 0 && dy == 0 {
-            return None;
-        }
-        let event = RdpInputEvent::MouseScroll { x: mapped_x, y: mapped_y, delta_x: dx, delta_y: dy };
-        if is_vnc {
-            Some(DispatchEvent::Vnc { session_id: common.session_id.clone(), event })
-        } else {
-            Some(DispatchEvent::Rdp { session_id: common.session_id.clone(), event })
-        }
-    };
     match target {
-        ActiveTarget::Rdp { common, remote_width, remote_height } => {
-            make_scroll_event(common, *remote_width, *remote_height, false)
-        }
-        ActiveTarget::Vnc { common, remote_width, remote_height } => {
-            make_scroll_event(common, *remote_width, *remote_height, true)
-        }
         ActiveTarget::Ssh { common, cols, rows } => {
             let (col, row) = map_ssh_pointer(*cols, *rows, common, x, y, window_origin?)?;
             let mut bytes = Vec::new();
@@ -667,25 +488,6 @@ fn build_wheel_dispatch(
             })
         }
     }
-}
-
-fn map_rdp_pointer(
-    remote_width: u16,
-    remote_height: u16,
-    common: &TargetCommon,
-    screen_x: f64,
-    screen_y: f64,
-    window_origin: (f64, f64),
-) -> Option<(u16, u16)> {
-    let (local_x, local_y, width, height) =
-        map_surface_pointer(common, screen_x, screen_y, window_origin)?;
-    let x = ((local_x / width) * f64::from(remote_width.saturating_sub(1)))
-        .round()
-        .clamp(0.0, f64::from(remote_width.saturating_sub(1))) as u16;
-    let y = ((local_y / height) * f64::from(remote_height.saturating_sub(1)))
-        .round()
-        .clamp(0.0, f64::from(remote_height.saturating_sub(1))) as u16;
-    Some((x, y))
 }
 
 fn map_ssh_pointer(
@@ -729,19 +531,6 @@ fn map_surface_pointer(
 
 fn should_throttle_move(last_move_at: Option<Instant>) -> bool {
     last_move_at.is_some_and(|value| value.elapsed() < MAX_MOVE_RATE)
-}
-
-fn normalize_wheel(delta: i64) -> i16 {
-    delta
-        .saturating_mul(120)
-        .clamp(i64::from(i16::MIN), i64::from(i16::MAX)) as i16
-}
-
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_millis().min(u128::from(u64::MAX)) as u64)
-        .unwrap_or(0)
 }
 
 fn sgr_mouse_packet(code: u8, col: u16, row: u16, pressed: bool) -> Vec<u8> {
@@ -961,26 +750,6 @@ fn platform_capture_disabled_reason() -> Option<(&'static str, &'static str)> {
 
 async fn handle_dispatch_event(app: &AppHandle, event: DispatchEvent) {
     match event {
-        DispatchEvent::Rdp { session_id, event } => {
-            let state = app.state::<crate::AppState>();
-            let mut manager = state.rdp_sessions.lock().await;
-            let _ = manager.input_batch(
-                session_id.as_str(),
-                RdpInputBatch {
-                    events: vec![event],
-                },
-            );
-        }
-        DispatchEvent::Vnc { session_id, event } => {
-            let state = app.state::<crate::AppState>();
-            let mut manager = state.vnc_sessions.lock().await;
-            let _ = manager.input_batch(
-                session_id.as_str(),
-                VncInputBatch {
-                    events: vec![event],
-                },
-            );
-        }
         DispatchEvent::Ssh {
             session_id,
             bytes,
@@ -1005,10 +774,9 @@ async fn handle_dispatch_event(app: &AppHandle, event: DispatchEvent) {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_key_dispatch, map_rdp_pointer, map_ssh_pointer, parse_active_target,
-        process_native_event, should_throttle_move, ssh_bytes_from_key, ssh_ctrl_byte,
-        ActiveTarget, DispatchEvent, InnerState, KeyActionsActiveTargetInput, Modifiers,
-        SurfaceRectInput, TargetCommon,
+        map_ssh_pointer, parse_active_target, process_native_event, should_throttle_move,
+        ssh_bytes_from_key, ssh_ctrl_byte, ActiveTarget, InnerState, KeyActionsActiveTargetInput,
+        Modifiers, SurfaceRectInput, TargetCommon,
     };
     use rdev::{Event, EventType, Key};
     use std::sync::{Arc, Mutex as StdMutex};
@@ -1067,45 +835,9 @@ mod tests {
     }
 
     #[test]
-    fn should_map_rdp_pointer_to_remote_surface() {
-        let mapped = map_rdp_pointer(200, 100, &test_common(), 60.0, 45.0, (0.0, 0.0));
-        assert_eq!(mapped, Some((100, 50)));
-    }
-
-    #[test]
     fn should_map_ssh_pointer_to_terminal_cells() {
         let mapped = map_ssh_pointer(80, 24, &test_common(), 109.0, 69.0, (0.0, 0.0));
         assert_eq!(mapped, Some((80, 24)));
-    }
-
-    #[test]
-    fn should_translate_native_key_to_rdp_dispatch() {
-        let target = ActiveTarget::Rdp {
-            common: test_common(),
-            remote_width: 1920,
-            remote_height: 1080,
-        };
-        let modifiers = Modifiers {
-            ctrl: false,
-            alt: false,
-            shift: false,
-            meta: false,
-        };
-
-        let dispatch = build_key_dispatch(&target, Key::KeyA, Some("a"), modifiers);
-        match dispatch {
-            Some(DispatchEvent::Rdp { session_id, event }) => {
-                assert_eq!(session_id, "session");
-                match event {
-                    crate::protocols::rdp::RdpInputEvent::KeyPress { code, text, .. } => {
-                        assert_eq!(code, "KeyA");
-                        assert_eq!(text.as_deref(), Some("a"));
-                    }
-                    _ => panic!("Esperava evento de tecla RDP."),
-                }
-            }
-            _ => panic!("Esperava dispatch RDP."),
-        }
     }
 
     #[test]

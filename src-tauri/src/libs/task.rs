@@ -16,10 +16,6 @@ pub enum TaskProtocol {
     Generic,
     Local,
     Sftp,
-    Ftp,
-    Ftps,
-    Smb,
-    Rdp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -151,10 +147,6 @@ impl TaskManager {
             TaskProtocol::Generic,
             TaskProtocol::Local,
             TaskProtocol::Sftp,
-            TaskProtocol::Ftp,
-            TaskProtocol::Ftps,
-            TaskProtocol::Smb,
-            TaskProtocol::Rdp,
         ] {
             protocol_limits.insert(
                 protocol,

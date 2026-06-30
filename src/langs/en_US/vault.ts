@@ -4,7 +4,7 @@ export const vault: AppDictionary["vault"] = {
   intro: {
     title: "Welcome to OpenPtl",
     description: "Before you start, here is how the app handles connections and protects your vault.",
-    pointOne: "Workspaces with SSH, SFTP, FTP/FTPS, SMB and RDP in one place.",
+    pointOne: "Workspaces with SSH and SFTP in one place.",
     pointTwo: "Sensitive data is encrypted locally using your master password.",
     pointThree: "Optional Google Drive sync with explicit server selection.",
     continue: "Continue",
@@ -14,7 +14,7 @@ export const vault: AppDictionary["vault"] = {
     start: "Start",
     stepWelcomeTitle: "Welcome to OpenPtl",
     stepWelcomeDescription:
-      "A terminal control panel that lets you use multiple protocols — SSH, SFTP, FTP, FTPS, SMB and RDP — focused on organization and trust.",
+      "A terminal control panel that lets you use SSH and SFTP — focused on organization and trust.",
     stepWelcomePointOne: "Manage all your connections in one place.",
     stepWelcomePointTwo: "Workspaces with multiple side-by-side windows.",
     stepWelcomePointThree: "Automatic Windows-style snap for organization.",

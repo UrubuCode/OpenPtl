@@ -1,13 +1,9 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 
 import type {
   AppSettings,
   AuthServer,
   BinaryPreviewResult,
-  DatabaseProfile,
-  DbQueryResult,
-  DbTableInfo,
-  DbTableDefinition,
   KeyActionsActiveTargetInput,
   ClipboardLocalItem,
   ConnectionProfile,
@@ -17,16 +13,8 @@ import type {
   SshKeyGenerateInput,
   SshKeyGenerateResult,
   LocalPathStat,
-  RemoteTransferEndpoint,
   RecoveryProbeResult,
   ReleaseCheckResult,
-  RdpInputBatch,
-  RdpSessionControlEvent,
-  RdpSessionFocusInput,
-  RdpSessionStartResult,
-  VncInputBatch,
-  VncSessionControlEvent,
-  VncSessionStartResult,
   SftpEntry,
   SshConnectPurpose,
   SyncLoggedUser,
@@ -97,7 +85,6 @@ export const api = {
       keychainIdOverride?: string | null;
       saveAuthChoice?: boolean;
       connectPurpose?: SshConnectPurpose;
-      webrtcEnabled?: boolean;
     },
   ) =>
     invoke<SshConnectResult>("ssh_connect_ex", {
@@ -107,82 +94,7 @@ export const api = {
       keychainIdOverride: options?.keychainIdOverride,
       saveAuthChoice: options?.saveAuthChoice,
       connectPurpose: options?.connectPurpose,
-      webrtcEnabled: options?.webrtcEnabled ?? false,
     }),
-  sshWebrtcOffer: (sessionId: string) =>
-    invoke<RTCSessionDescriptionInit>("ssh_webrtc_offer", { sessionId }),
-  sshWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
-    invoke<void>("ssh_webrtc_answer", { sessionId, answer }),
-  sshWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
-    invoke<void>("ssh_webrtc_ice", { sessionId, candidate }),
-  rdpSessionStart: (
-    profileId: string,
-    controlChannel: Channel<RdpSessionControlEvent>,
-    videoRectsChannel: Channel<ArrayBuffer>,
-    cursorChannel: Channel<ArrayBuffer>,
-    audioPcmChannel: Channel<ArrayBuffer>,
-    options?: {
-      width?: number;
-      height?: number;
-      passwordOverride?: string | null;
-      keychainIdOverride?: string | null;
-      saveAuthChoice?: boolean;
-      webrtcEnabled?: boolean;
-    },
-  ) =>
-    invoke<RdpSessionStartResult>("rdp_session_start", {
-      profileId,
-      width: options?.width,
-      height: options?.height,
-      passwordOverride: options?.passwordOverride,
-      keychainIdOverride: options?.keychainIdOverride,
-      saveAuthChoice: options?.saveAuthChoice,
-      controlChannel,
-      videoRectsChannel,
-      cursorChannel,
-      audioPcmChannel,
-      webrtcEnabled: options?.webrtcEnabled ?? false,
-    }),
-  rdpSessionFocus: (sessionId: string, focus: RdpSessionFocusInput) =>
-    invoke<void>("rdp_session_focus", { sessionId, focus }),
-  rdpInputBatch: (sessionId: string, batch: RdpInputBatch) =>
-    invoke<void>("rdp_input_batch", { sessionId, batch }),
-  rdpSessionStop: (sessionId: string) => invoke<void>("rdp_session_stop", { sessionId }),
-  rdpWebrtcOffer: (sessionId: string) =>
-    invoke<RTCSessionDescriptionInit>("rdp_webrtc_offer", { sessionId }),
-  rdpWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
-    invoke<void>("rdp_webrtc_answer", { sessionId, answer }),
-  rdpWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
-    invoke<void>("rdp_webrtc_ice", { sessionId, candidate }),
-  vncSessionStart: (
-    profileId: string,
-    controlChannel: Channel<VncSessionControlEvent>,
-    videoRectsChannel: Channel<ArrayBuffer>,
-    cursorChannel: Channel<ArrayBuffer>,
-    options?: {
-      passwordOverride?: string | null;
-      webrtcEnabled?: boolean;
-    },
-  ) =>
-    invoke<VncSessionStartResult>("vnc_session_start", {
-      profileId,
-      passwordOverride: options?.passwordOverride,
-      controlChannel,
-      videoRectsChannel,
-      cursorChannel,
-      webrtcEnabled: options?.webrtcEnabled ?? false,
-    }),
-  vncWebrtcOffer: (sessionId: string) =>
-    invoke<RTCSessionDescriptionInit>("vnc_webrtc_offer", { sessionId }),
-  vncWebrtcAnswer: (sessionId: string, answer: RTCSessionDescriptionInit) =>
-    invoke<void>("vnc_webrtc_answer", { sessionId, answer }),
-  vncWebrtcIce: (sessionId: string, candidate: RTCIceCandidateInit) =>
-    invoke<void>("vnc_webrtc_ice", { sessionId, candidate }),
-  vncSessionFocus: (sessionId: string, focus: RdpSessionFocusInput) =>
-    invoke<void>("vnc_session_focus", { sessionId, focus }),
-  vncInputBatch: (sessionId: string, batch: VncInputBatch) =>
-    invoke<void>("vnc_input_batch", { sessionId, batch }),
-  vncSessionStop: (sessionId: string) => invoke<void>("vnc_session_stop", { sessionId }),
   keyActionsSetActiveWorkspace: (target?: KeyActionsActiveTargetInput | null) =>
     invoke<void>("key_actions_set_active_workspace", { target }),
   sshWrite: (sessionId: string, data: string) => invoke<string>("ssh_write", { sessionId, data }),
@@ -224,36 +136,6 @@ export const api = {
   sftpCreateFile: (sessionId: string, path: string) => invoke<void>("sftp_create_file", { sessionId, path }),
   sftpReadBinaryPreview: (sessionId: string, path: string, maxBytes?: number | null) =>
     invoke<BinaryPreviewResult>("sftp_read_binary_preview", { sessionId, path, maxBytes }),
-  remoteProfileList: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string) =>
-    invoke<SftpEntry[]>("remote_profile_list", { profileId, protocol, path }),
-  remoteProfileRead: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string) =>
-    invoke<string>("remote_profile_read", { profileId, protocol, path }),
-  remoteProfileReadChunk: (
-    profileId: string,
-    protocol: "ftp" | "ftps" | "smb",
-    path: string,
-    offset: number,
-  ) => invoke<TextReadChunk>("remote_profile_read_chunk", { profileId, protocol, path, offset }),
-  remoteProfileWrite: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string, content: string) =>
-    invoke<void>("remote_profile_write", { profileId, protocol, path, content }),
-  remoteProfileRename: (
-    profileId: string,
-    protocol: "ftp" | "ftps" | "smb",
-    fromPath: string,
-    toPath: string,
-  ) => invoke<void>("remote_profile_rename", { profileId, protocol, fromPath, toPath }),
-  remoteProfileDelete: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string, isDir: boolean) =>
-    invoke<void>("remote_profile_delete", { profileId, protocol, path, isDir }),
-  remoteProfileMkdir: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string) =>
-    invoke<void>("remote_profile_mkdir", { profileId, protocol, path }),
-  remoteProfileCreateFile: (profileId: string, protocol: "ftp" | "ftps" | "smb", path: string) =>
-    invoke<void>("remote_profile_create_file", { profileId, protocol, path }),
-  remoteProfileReadBinaryPreview: (
-    profileId: string,
-    protocol: "ftp" | "ftps" | "smb",
-    path: string,
-    maxBytes?: number | null,
-  ) => invoke<BinaryPreviewResult>("remote_profile_read_binary_preview", { profileId, protocol, path, maxBytes }),
   sftpTransfer: (
     transferId: string,
     fromSessionId: string | null,
@@ -266,20 +148,6 @@ export const api = {
       fromSessionId,
       fromPath,
       toSessionId,
-      toPath,
-    }),
-  remoteTransfer: (
-    transferId: string,
-    fromEndpoint: RemoteTransferEndpoint,
-    fromPath: string,
-    toEndpoint: RemoteTransferEndpoint,
-    toPath: string,
-  ) =>
-    invoke<void>("remote_transfer", {
-      transferId,
-      fromEndpoint,
-      fromPath,
-      toEndpoint,
       toPath,
     }),
   localList: (path?: string | null) => invoke<SftpEntry[]>("local_list", { path }),
@@ -327,45 +195,4 @@ export const api = {
   windowClose: () => invoke<void>("window_close"),
   windowStateSave: () => invoke<void>("window_state_save"),
   windowStateRestore: () => invoke<void>("window_state_restore"),
-
-  dbProfileList: () => invoke<DatabaseProfile[]>("db_profile_list"),
-  dbProfileSave: (profile: DatabaseProfile) =>
-    invoke<DatabaseProfile>("db_profile_save", { profile }),
-  dbProfileDelete: (id: string) => invoke<void>("db_profile_delete", { id }),
-  dbConnect: (profileId: string) => invoke<string>("db_connect", { profileId }),
-  dbDisconnect: (sessionId: string) => invoke<void>("db_disconnect", { sessionId }),
-  dbSetDatabase: (sessionId: string, database: string) =>
-    invoke<void>("db_set_database", { sessionId, database }),
-  dbQuery: (sessionId: string, sql: string) =>
-    invoke<DbQueryResult>("db_query", { sessionId, sql }),
-  dbListDatabases: (sessionId: string) =>
-    invoke<string[]>("db_list_databases", { sessionId }),
-  dbListSchemas: (sessionId: string, database: string) =>
-    invoke<string[]>("db_list_schemas", { sessionId, database }),
-  dbListTables: (sessionId: string, database: string, schema: string) =>
-    invoke<DbTableInfo[]>("db_list_tables", { sessionId, database, schema }),
-  dbDescribeTable: (
-    sessionId: string,
-    database: string,
-    schema: string,
-    table: string,
-  ) => invoke<DbTableDefinition>("db_describe_table", { sessionId, database, schema, table }),
-  dbGetTableData: (
-    sessionId: string,
-    database: string,
-    schema: string,
-    table: string,
-    limit: number,
-    offset: number,
-  ) =>
-    invoke<DbQueryResult>("db_get_table_data", {
-      sessionId,
-      database,
-      schema,
-      table,
-      limit,
-      offset,
-    }),
-  dbSaveViewMode: (profileId: string, viewMode: string) =>
-    invoke<void>("db_save_view_mode", { profileId, viewMode }),
 };

@@ -1,6 +1,6 @@
-export type SidebarSection = "home" | "keychain" | "known_hosts" | "notes" | "settings" | "debug_logs" | "about" | "database";
+export type SidebarSection = "home" | "keychain" | "known_hosts" | "notes" | "settings" | "debug_logs" | "about";
 
-export type WorkTabType = "workspace" | "editor" | "database";
+export type WorkTabType = "workspace" | "editor";
 
 export interface WorkTab {
   id: string;
@@ -10,7 +10,7 @@ export interface WorkTab {
   sessionId?: string;
   profileId?: string;
   path?: string;
-  initialBlock?: "terminal" | "sftp" | "rdp";
+  initialBlock?: "terminal" | "sftp";
   initialSourceId?: string;
   initialOpenFiles?: boolean;
 }

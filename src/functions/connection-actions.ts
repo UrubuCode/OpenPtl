@@ -20,9 +20,6 @@ import type {
 
 function normalizeProtocols(protocols: ConnectionProtocol[]): ConnectionProtocol[] {
   const next = Array.from(new Set(protocols));
-  if (next.includes("rdp")) {
-    return ["rdp"];
-  }
   if (next.length === 0) {
     return ["ssh"];
   }
@@ -171,17 +168,9 @@ export function createConnectionActions(
       }),
 
     openHostDrawer: (profile, protocol: ConnectionProtocol = "ssh") => {
-      const initialProtocols = protocol === "rdp" ? (["rdp"] as ConnectionProtocol[]) : ([protocol] as ConnectionProtocol[]);
-      const isFileProtocol =
-        protocol === "sftp" || protocol === "ftp" || protocol === "ftps" || protocol === "smb";
-      const defaultPort =
-        protocol === "rdp"
-          ? 3389
-          : protocol === "smb"
-            ? 445
-            : protocol === "ftp" || protocol === "ftps"
-              ? 21
-              : BLANK_PROFILE.port;
+      const initialProtocols = [protocol] as ConnectionProtocol[];
+      const isFileProtocol = protocol === "sftp";
+      const defaultPort = BLANK_PROFILE.port;
       const draft: ConnectionProfile = profile
         ? {
             ...profile,

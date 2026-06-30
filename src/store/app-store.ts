@@ -3,7 +3,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { BLANK_KEYCHAIN_ENTRY, BLANK_PROFILE, DEFAULT_PANE, DEFAULT_SETTINGS, INITIAL_SYNC_STATE } from "@/constants";
 import { createConnectionActions } from "@/functions/connection-actions";
-import { BLANK_DATABASE_PROFILE, createDatabaseActions } from "@/functions/database-actions";
 import { createSessionActions } from "@/functions/session-actions";
 import { createSftpEditorActions } from "@/functions/sftp-editor-actions";
 import { createVaultActions } from "@/functions/vault-actions";
@@ -67,7 +66,6 @@ const initialState: Omit<
   | "clearSessionListeners"
   | "getOrCreateSession"
   | "openSsh"
-  | "openRdp"
   | "sshWrite"
   | "disconnectSession"
   | "refreshPane"
@@ -77,11 +75,6 @@ const initialState: Omit<
   | "copyBetween"
   | "saveEditor"
   | "openEditorExternal"
-  | "openDatabaseDrawer"
-  | "closeDatabaseDrawer"
-  | "saveDatabaseProfile"
-  | "deleteDatabaseProfile"
-  | "openDatabase"
 > = {
   vaultStatus: null,
   connections: [],
@@ -125,9 +118,6 @@ const initialState: Omit<
   loginServers: [],
   loginServerPings: {},
   selectedLoginServerId: null,
-  databaseProfiles: [],
-  databaseDrawerOpen: false,
-  databaseDraft: BLANK_DATABASE_PROFILE,
 };
 
 export const useAppStore = create<AppStore>()(
@@ -143,7 +133,6 @@ export const useAppStore = create<AppStore>()(
         ...createSessionActions(setPartial, get),
         ...createSftpEditorActions(setPartial, get),
         ...createVaultActions(setPartial, get),
-        ...createDatabaseActions(setPartial, get),
       };
     },
     {

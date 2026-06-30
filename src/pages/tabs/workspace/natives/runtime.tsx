@@ -3,7 +3,7 @@ import type { BackendMessage } from "@/types/openptl";
 
 export const MAX_CONNECT_RETRY_ATTEMPTS = 3;
 
-export type FileSourceProtocol = "sftp" | "ftp" | "ftps" | "smb";
+export type FileSourceProtocol = "sftp";
 
 export interface ProfileSourceRef {
   profileId: string;
@@ -57,7 +57,7 @@ export function parseProfileSourceRef(sourceId?: string): ProfileSourceRef | nul
     return null;
   }
 
-  if (rawProtocol === "sftp" || rawProtocol === "ftp" || rawProtocol === "ftps" || rawProtocol === "smb") {
+  if (rawProtocol === "sftp") {
     return {
       profileId,
       protocol: rawProtocol,

@@ -1,6 +1,6 @@
 export type KeyMode = "password" | "keychain";
-export type ConnectionKind = "host" | "sftp" | "rdp" | "vnc" | "both";
-export type ConnectionProtocol = "ssh" | "sftp" | "ftp" | "ftps" | "smb" | "rdp" | "vnc";
+export type ConnectionKind = "host" | "sftp" | "both";
+export type ConnectionProtocol = "ssh" | "sftp";
 export type KeychainEntryType = "password" | "ssh_key" | "secret";
 export type EditorPreference = "internal" | "vscode" | "system";
 export type ModifiedUploadPolicy = "auto" | "ask" | "manual";
@@ -39,7 +39,6 @@ export interface ConnectionProfile {
   remote_path?: string | null;
   protocols: ConnectionProtocol[];
   kind?: ConnectionKind | null;
-  ftp_tls?: boolean;
 }
 
 export interface KeychainEntry {
@@ -103,14 +102,6 @@ export interface SshSessionInfo {
   session_kind: "ssh" | "local";
 }
 
-export type RdpMouseButton = "left" | "right" | "middle";
-export interface RdpViewportRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export interface SurfaceRect {
   x: number;
   y: number;
@@ -118,173 +109,22 @@ export interface SurfaceRect {
   height: number;
 }
 
-export interface RdpSessionFocusInput {
-  focused: boolean;
-  viewport_rect?: RdpViewportRect | null;
+export type KeyActionsActiveTargetInput = {
+  kind: "ssh";
+  session_id: string;
+  tab_id: string;
+  block_id: string;
+  surface_rect: SurfaceRect;
   dpi_scale?: number | null;
-  surface_rect?: SurfaceRect | null;
-}
-
-export interface RdpPathPoint {
-  x: number;
-  y: number;
-  t_ms?: number | null;
-}
-
-export type RdpInputEvent =
-  | {
-      kind: "mouse_move";
-      x: number;
-      y: number;
-      t_ms?: number | null;
-    }
-  | {
-      kind: "mouse_button_down";
-      x: number;
-      y: number;
-      button: RdpMouseButton;
-    }
-  | {
-      kind: "mouse_button_up";
-      x: number;
-      y: number;
-      button: RdpMouseButton;
-    }
-  | {
-      kind: "mouse_path";
-      points: RdpPathPoint[];
-    }
-  | {
-      kind: "mouse_click";
-      x: number;
-      y: number;
-      button: RdpMouseButton;
-      double_click?: boolean;
-    }
-  | {
-      kind: "mouse_scroll";
-      x: number;
-      y: number;
-      delta_x?: number;
-      delta_y?: number;
-    }
-  | {
-      kind: "key_press";
-      code: string;
-      text?: string | null;
-      ctrl?: boolean;
-      alt?: boolean;
-      shift?: boolean;
-      meta?: boolean;
-    };
-
-export interface RdpInputBatch {
-  events: RdpInputEvent[];
-}
-
-export type KeyActionsActiveTargetInput =
-  | {
-      kind: "rdp";
-      session_id: string;
-      tab_id: string;
-      block_id: string;
-      surface_rect: SurfaceRect;
-      dpi_scale?: number | null;
-      remote_width: number;
-      remote_height: number;
-    }
-  | {
-      kind: "vnc";
-      session_id: string;
-      tab_id: string;
-      block_id: string;
-      surface_rect: SurfaceRect;
-      dpi_scale?: number | null;
-      remote_width: number;
-      remote_height: number;
-    }
-  | {
-      kind: "ssh";
-      session_id: string;
-      tab_id: string;
-      block_id: string;
-      surface_rect: SurfaceRect;
-      dpi_scale?: number | null;
-      cols: number;
-      rows: number;
-    };
+  cols: number;
+  rows: number;
+};
 
 export interface KeyActionsStatusPayload {
   status: "ready" | "disabled";
   reason?: string | null;
   platform: string;
   details?: string | null;
-}
-
-export type RdpSessionStartResult =
-  | {
-      status: "started";
-      session_id: string;
-    }
-  | {
-      status: "auth_required";
-      message: BackendMessage;
-    }
-  | {
-      status: "error";
-      message: BackendMessage;
-    };
-
-export type RdpSessionControlEvent =
-  | {
-      event: "connecting";
-      data: {
-        session_id: string;
-        message: BackendMessage;
-      };
-    }
-  | {
-      event: "ready";
-      data: {
-        session_id: string;
-        width: number;
-        height: number;
-      };
-    }
-  | {
-      event: "auth_required";
-      data: {
-        session_id: string;
-        message: BackendMessage;
-      };
-    }
-  | {
-      event: "error";
-      data: {
-        session_id: string;
-        message: BackendMessage;
-      };
-    }
-  | {
-      event: "stopped";
-      data: {
-        session_id: string;
-      };
-    }
-  | {
-      event: "released_capture";
-      data: {
-        session_id: string;
-        message: BackendMessage;
-      };
-    };
-
-export type VncSessionStartResult = RdpSessionStartResult;
-
-export type VncSessionControlEvent = RdpSessionControlEvent;
-
-export interface VncInputBatch {
-  events: RdpInputEvent[];
 }
 
 export interface SftpEntry {
@@ -305,20 +145,6 @@ export interface LocalPathStat {
   is_dir: boolean;
   size: number;
 }
-
-export type RemoteTransferEndpoint =
-  | {
-      kind: "local";
-    }
-  | {
-      kind: "sftp_session";
-      session_id: string;
-    }
-  | {
-      kind: "profile";
-      profile_id: string;
-      protocol: ConnectionProtocol;
-    };
 
 export type BinaryPreviewResult =
   | {
@@ -402,89 +228,6 @@ export interface KnownHostEntry {
   fingerprint: string;
   line_raw: string;
   path: string;
-}
-
-export type DatabaseDriver = "postgres" | "mysql" | "mariadb" | "sqlite";
-
-export interface DatabaseProfile {
-  id: string;
-  name: string;
-  driver: DatabaseDriver;
-  host?: string | null;
-  port?: number | null;
-  username?: string | null;
-  password?: string | null;
-  database?: string | null;
-  file_path?: string | null;
-  ssl: boolean;
-  view_mode: "tabular" | "object_explorer";
-}
-
-export interface DbColumnMeta {
-  name: string;
-  type_name: string;
-  nullable: boolean;
-}
-
-export interface DbQueryResult {
-  columns: DbColumnMeta[];
-  rows: unknown[][];
-  affected_rows: number;
-  duration_ms: number;
-}
-
-export interface DbTableInfo {
-  name: string;
-  schema: string;
-  kind: "table" | "view";
-  rows: number | null;
-  size_bytes: number | null;
-  engine: string | null;
-  comment: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  collation: string | null;
-  auto_increment: number | null;
-  data_free: number | null;
-  index_length: number | null;
-  avg_row_length: number | null;
-  max_data_length: number | null;
-  check_time: string | null;
-  checksum: number | null;
-  create_options: string | null;
-  row_format: string | null;
-  version: number | null;
-}
-
-export interface DbColumnDef {
-  name: string;
-  data_type: string;
-  nullable: boolean;
-  default_value?: string | null;
-  is_primary_key: boolean;
-  extra?: string | null;
-  comment?: string | null;
-}
-
-export interface DbIndex {
-  name: string;
-  columns: string[];
-  unique: boolean;
-}
-
-export interface DbForeignKey {
-  name: string;
-  columns: string[];
-  ref_table: string;
-  ref_columns: string[];
-}
-
-export interface DbTableDefinition {
-  columns: DbColumnDef[];
-  indexes: DbIndex[];
-  foreign_keys: DbForeignKey[];
-  primary_key: string[];
-  ddl?: string | null;
 }
 
 export type SshConnectPurpose = "terminal" | "sftp";
