@@ -9,6 +9,8 @@ import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { HostFormDrawer } from "@/components/drawers/host-form-drawer";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { BottomNav } from "@/components/layout/bottom-nav";
+import { isMobilePlatform } from "@/hooks/use-mobile-platform";
 import { AppConfirmDialog, AppDialog } from "@/components/ui/app-dialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getError } from "@/functions/common";
@@ -317,9 +319,19 @@ function App() {
     [loginServerPings, loginServers],
   );
   const currentSection = activeTabId ? "home" : sectionFromPath(location.pathname);
-  const shellClass = isWindowMaximized
-    ? "flex h-full w-full overflow-hidden bg-background text-foreground"
-    : "flex h-full w-full overflow-hidden rounded-2xl border border-border/50 bg-background/95 text-foreground";
+  const handleSectionSelect = (next: SidebarSection) => {
+    if (currentSection === "settings" && next !== "settings" && settingsUnsavedDraft) {
+      setPendingSettingsNavigation(next);
+      return;
+    }
+    setSettingsUnsavedDraft(null);
+    setActiveTab(null);
+    navigate(pathFromSection(next));
+  };
+  const shellClass =
+    isWindowMaximized || isMobilePlatform
+      ? "flex h-full w-full overflow-hidden bg-background text-foreground"
+      : "flex h-full w-full overflow-hidden rounded-2xl border border-border/50 bg-background/95 text-foreground";
   const insetShellClass = "flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground";
   const bootSteps = [t.app.boot.starting, t.app.boot.checkingUpdates, t.app.boot.loadingData];
   const displayedBootMessage = bootMessage || t.app.boot.starting;
@@ -875,18 +887,9 @@ function App() {
 
   return (
     <SidebarProvider className={shellClass}>
-      <AppSidebar
-        current={currentSection}
-        onSelect={(next) => {
-          if (currentSection === "settings" && next !== "settings" && settingsUnsavedDraft) {
-            setPendingSettingsNavigation(next);
-            return;
-          }
-          setSettingsUnsavedDraft(null);
-          setActiveTab(null);
-          navigate(pathFromSection(next));
-        }}
-      />
+      {!isMobilePlatform ? (
+        <AppSidebar current={currentSection} onSelect={handleSectionSelect} />
+      ) : null}
       <SidebarInset className={insetShellClass}>
         <Toaster theme="dark" richColors position="bottom-right" />
 
@@ -975,6 +978,10 @@ function App() {
             </Routes>
           ) : null}
         </section>
+
+        {isMobilePlatform ? (
+          <BottomNav current={currentSection} onSelect={handleSectionSelect} />
+        ) : null}
 
         <HostFormDrawer />
         <AppDialog

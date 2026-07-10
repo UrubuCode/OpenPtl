@@ -25,6 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
 import { WorkspaceBlockController, type WorkspaceBlockLayout } from "@/components/workspace/workspace-block-controller";
+import { isMobilePlatform } from "@/hooks/use-mobile-platform";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { resolveBackendMessage } from "@/functions/backend-message";
 import { baseName, getError, joinPath, joinRemotePath, normalizeRemotePath, supportsProtocol } from "@/functions/common";
@@ -3558,6 +3559,21 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
     [blocks, workspaceSize.height, workspaceSize.width],
   );
 
+  const blocksToRender = useMemo(() => {
+    if (!isMobilePlatform || renderedBlocks.length === 0) {
+      return renderedBlocks;
+    }
+    const focused = renderedBlocks.find((entry) => entry.block.id === focusedBlockId);
+    const single = focused ?? renderedBlocks[0];
+    return [
+      {
+        block: single.block,
+        layout: { x: 0, y: 0, width: workspaceSize.width, height: workspaceSize.height },
+        interactive: false,
+      },
+    ];
+  }, [renderedBlocks, focusedBlockId, workspaceSize.width, workspaceSize.height]);
+
   const activeTransfers = transfers.filter((item) => item.status === "running" || item.status === "queued").length;
   const draggingBlockZIndex = useMemo(() => {
     if (!draggingBlockId) {
@@ -3642,7 +3658,13 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
         ) : null}
       </div>
 
-      <div ref={workspaceRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
+      <div
+        ref={workspaceRef}
+        className={cn(
+          "relative min-h-0 flex-1 overflow-hidden bg-background",
+          isMobilePlatform && "flex flex-col",
+        )}
+      >
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.04]"
           style={{
@@ -3680,7 +3702,7 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           </div>
         ) : null}
 
-        {snapPreview ? (
+        {!isMobilePlatform && snapPreview ? (
           <div
             className="pointer-events-none absolute rounded-md border border-primary/70 bg-primary/10"
             style={{
@@ -3693,10 +3715,11 @@ export function WorkspaceTabPage({ tabId, initialBlock, initialSourceId, initial
           />
         ) : null}
 
-        {renderedBlocks.map(({ block, layout, interactive }) => (
+        {blocksToRender.map(({ block, layout, interactive }) => (
           <WorkspaceBlockController
             key={block.id}
             id={block.id}
+            mobile={isMobilePlatform}
             title={block.title}
             layout={layout}
             zIndex={block.maximized ? 9999 : block.zIndex}

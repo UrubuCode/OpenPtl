@@ -16,6 +16,7 @@ interface WorkspaceBlockControllerProps {
   zIndex?: number;
   active?: boolean;
   interactive?: boolean;
+  mobile?: boolean;
   minWidth?: number;
   minHeight?: number;
   headerRight?: ReactNode;
@@ -35,6 +36,7 @@ export function WorkspaceBlockController({
   zIndex = 1,
   active = false,
   interactive = true,
+  mobile = false,
   minWidth = 320,
   minHeight = 220,
   headerRight,
@@ -45,6 +47,21 @@ export function WorkspaceBlockController({
   onLayoutChange,
   children,
 }: WorkspaceBlockControllerProps) {
+  if (mobile) {
+    return (
+      <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-border/55 bg-card">
+        <header className="flex items-center justify-between gap-2 border-b border-border/55 bg-secondary/35 px-2 py-1.5">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-foreground">{title}</p>
+            {subtitle ? <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p> : null}
+          </div>
+          <div className="flex items-center gap-1">{headerRight}</div>
+        </header>
+        <div className="min-h-0 flex-1">{children}</div>
+      </div>
+    );
+  }
+
   const enabledResizeHandles = interactive
     ? {
         top: true,

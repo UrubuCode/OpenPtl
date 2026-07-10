@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useT } from "@/langs";
 import { cn } from "@/lib/utils";
+import { isMobilePlatform } from "@/hooks/use-mobile-platform";
 import type { SyncLoggedUser, SyncProgressState } from "@/types/openptl";
 import type { WorkTab } from "@/types/workspace";
 
@@ -93,7 +94,7 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-30 h-11 flex items-center border-b border-border/50 bg-background/80 backdrop-blur-sm">
-      {compact ? null : <div data-tauri-drag-region className="h-full flex items-center px-2">
+      {compact || isMobilePlatform ? null : <div data-tauri-drag-region className="h-full flex items-center px-2">
         <div style={{ WebkitAppRegion: "no-drag" } as CSSProperties}>
           <SidebarTrigger
             variant="ghost"
@@ -193,27 +194,31 @@ export function AppHeader({
             </PopoverContent>
           </Popover>
         ) : null}
-        <button
-          className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          title={t.app.header.windowMinimize}
-          onClick={onMinimize}
-        >
-          <Minimize2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          title={maximized ? t.app.header.windowRestore : t.app.header.windowMaximize}
-          onClick={onToggleMaximize}
-        >
-          {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-        </button>
-        <button
-          className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-colors"
-          title={t.app.header.windowClose}
-          onClick={onCloseWindow}
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {isMobilePlatform ? null : (
+          <>
+            <button
+              className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              title={t.app.header.windowMinimize}
+              onClick={onMinimize}
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              title={maximized ? t.app.header.windowRestore : t.app.header.windowMaximize}
+              onClick={onToggleMaximize}
+            >
+              {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              className="h-8 w-10 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-colors"
+              title={t.app.header.windowClose}
+              onClick={onCloseWindow}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
