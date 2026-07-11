@@ -55,6 +55,14 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: bun run tauri android init
 
+      - name: Allow APK install (self-updater)
+        run: |
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          if ! grep -q REQUEST_INSTALL_PACKAGES "$MANIFEST"; then
+            awk '/<application/ && !done {print "    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\" />"; done=1} {print}' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+          fi
+          grep INSTALL_PACKAGES "$MANIFEST" || { echo "manifest patch failed"; exit 1; }
+
       - name: Build Android APK (release)
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}

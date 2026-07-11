@@ -1,15 +1,19 @@
-name: Release
+name: Canary
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: canary
+  cancel-in-progress: true
+
 jobs:
-  build:
+  desktop:
     strategy:
       fail-fast: false
       matrix:
@@ -28,18 +32,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract & verify version
+      - name: Compute canary version
         id: ver
         shell: bash
         run: |
-          tag_version="${GITHUB_REF_NAME#v}"
           conf_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          echo "tag=${tag_version} conf=${conf_version}"
-          if [ "$tag_version" != "$conf_version" ]; then
-            echo "::error::Tag v${tag_version} does not match tauri.conf.json version ${conf_version}"
-            exit 1
-          fi
-          echo "version=${tag_version}" >> "$GITHUB_OUTPUT"
+          # Bump patch so canary sorts above the current stable but below the next release.
+          next=$(node -p "const [a,b,c]=require('./src-tauri/tauri.conf.json').version.split('.').map(Number); [a,b,c+1].join('.')")
+          canary="${next}-canary.${{ github.run_number }}"
+          echo "conf=${conf_version} canary=${canary}"
+          echo "version=${canary}" >> "$GITHUB_OUTPUT"
+
+      - name: Patch tauri.conf.json version
+        shell: bash
+        env:
+          CANARY_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          node -e "const fs=require('fs'); const p='./src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p)); c.version=process.env.CANARY_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2));"
+          node -p "require('./src-tauri/tauri.conf.json').version"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -58,7 +68,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          key: ${{ matrix.target }}
+          key: canary-${{ matrix.target }}
 
       - name: Install Linux deps
         if: matrix.os == 'ubuntu-22.04'
@@ -82,31 +92,38 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "OpenPtl v${{ steps.ver.outputs.version }}"
+          tagName: canary-latest
+          releaseName: "OpenPtl canary"
           releaseBody: |
-            Automated release for ${{ github.ref_name }}.
+            Rolling canary pre-release built from `main`.
 
-            Downloads:
-            - Windows: `.msi` / `.exe`
-            - macOS: `.dmg` (arm64 + x64)
-            - Linux: `.deb` / `.AppImage`
+            Version: ${{ steps.ver.outputs.version }} (run ${{ github.run_number }})
           releaseDraft: false
-          prerelease: false
+          prerelease: true
           args: --target ${{ matrix.target }}
 
   android:
-    needs: build
+    needs: desktop
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve version
+      - name: Compute canary version
         id: ver
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          next=$(node -p "const [a,b,c]=require('./src-tauri/tauri.conf.json').version.split('.').map(Number); [a,b,c+1].join('.')")
+          canary="${next}-canary.${{ github.run_number }}"
+          echo "canary=${canary}"
+          echo "version=${canary}" >> "$GITHUB_OUTPUT"
+
+      - name: Patch tauri.conf.json version
+        shell: bash
+        env:
+          CANARY_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          node -e "const fs=require('fs'); const p='./src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p)); c.version=process.env.CANARY_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2));"
+          node -p "require('./src-tauri/tauri.conf.json').version"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -141,7 +158,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          key: android
+          key: canary-android
 
       - name: Install JS deps
         run: bun install --frozen-lockfile
@@ -192,36 +209,12 @@ jobs:
           cp "$RUNNER_TEMP/openptl-release.apk" openptl.apk
           node -e "require('fs').writeFileSync('android-latest.json', JSON.stringify({
             version: process.env.VERSION,
-            notes: 'Release ${{ github.ref_name }}',
-            url: 'https://github.com/UrubuCode/OpenPtl/releases/latest/download/openptl.apk'
+            notes: 'Canary build ${{ github.run_number }}',
+            url: 'https://github.com/UrubuCode/OpenPtl/releases/download/canary-latest/openptl.apk'
           }, null, 2))"
           cat android-latest.json
 
-      - name: Upload APK + manifest to release
+      - name: Upload APK + manifest to canary release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref_name }} openptl.apk android-latest.json --clobber
-
-  publish-pages:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build landing page
-        run: node scripts/build-pages.mjs
-        env:
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages-dist
-      - id: deployment
-        uses: actions/deploy-pages@v4
+        run: gh release upload canary-latest openptl.apk android-latest.json --clobber

@@ -10,4 +10,5 @@ pub mod shared_fs;
 pub mod sync;
 pub mod task;
 pub mod transfer;
+pub mod updater;
 pub mod vault;

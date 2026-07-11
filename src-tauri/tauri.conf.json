@@ -34,10 +34,15 @@
       "desktop": {
         "schemes": ["openptl", "ssh", "sftp"]
       }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFMzA0MjcyODAzQjdFODEKUldTQmZqdUFja0l3YnUza2ovQTdmWFBxUkFtMFU0VmRoNmhCLy92WW10dU1UZ2x2RUpyaHhxWngK",
+      "endpoints": []
     }
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",

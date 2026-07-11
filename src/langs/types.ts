@@ -229,6 +229,24 @@ export interface AppDictionary {
       modifiedFiles: string;
       googleDrive: string;
       masterPassword: string;
+      updates: string;
+    };
+    updates: {
+      title: string;
+      channel: string;
+      channelDescription: string;
+      channelRelease: string;
+      channelReleaseDescription: string;
+      channelCanary: string;
+      channelCanaryDescription: string;
+      checkButton: string;
+      checking: string;
+      upToDate: string;
+      updateAvailable: string;
+      installButton: string;
+      installing: string;
+      notesLabel: string;
+      errorGeneric: string;
     };
     editor: {
       title: string;

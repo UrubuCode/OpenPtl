@@ -24,6 +24,7 @@ import type {
   SshSessionInfo,
   SyncState,
   TextReadChunk,
+  UpdateInfo,
   VaultStatus,
 } from "@/types/openptl";
 
@@ -183,6 +184,10 @@ export const api = {
   syncRecoveryRestore: (password: string, serverAddress?: string | null) =>
     invoke<VaultStatus>("sync_recovery_restore", { password, serverAddress }),
   releaseCheckLatest: () => invoke<ReleaseCheckResult>("release_check_latest"),
+  updateChannelGet: () => invoke<string>("update_channel_get"),
+  updateChannelSet: (channel: string) => invoke<void>("update_channel_set", { channel }),
+  updateCheck: () => invoke<UpdateInfo>("update_check"),
+  updateInstall: () => invoke<void>("update_install"),
   deeplinkTakePending: () => invoke<string[]>("deeplink_take_pending"),
   openExternalUrl: (url: string) => invoke<void>("open_external_url", { url }),
 

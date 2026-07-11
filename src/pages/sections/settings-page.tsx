@@ -4,6 +4,7 @@ import {
   Cloud,
   CloudDownload,
   CloudUpload,
+  DownloadCloud,
   ExternalLink,
   FolderOpen,
   Lock,
@@ -23,10 +24,12 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { open } from "@tauri-apps/plugin-dialog";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { useWindowOverlayBoundsClassName } from "@/components/ui/window-overlay";
 import { getError } from "@/functions/common";
@@ -48,7 +51,7 @@ import {
 } from "@/schemas/settings";
 import { useAppStore } from "@/store/app-store";
 import { api } from "@/lib/tauri";
-import type { AppSettings, AuthServer, ModifiedUploadPolicy, SyncLoggedUser } from "@/types/openptl";
+import type { AppSettings, AuthServer, ModifiedUploadPolicy, SyncLoggedUser, UpdateInfo } from "@/types/openptl";
 import { OptionDropdown } from "@/pages/sections/settings/option-dropdown";
 import { SettingsPanel } from "@/pages/sections/settings/settings-panel";
 import { SettingsRow } from "@/pages/sections/settings/settings-row";
@@ -88,7 +91,14 @@ export function SettingsPage() {
   const [authServers, setAuthServers] = useState<AuthServer[]>([]);
   const [loggedUser, setLoggedUser] = useState<SyncLoggedUser | null>(null);
   const [driveTab, setDriveTab] = useState<"account" | "config">("account");
-  const [settingsTab, setSettingsTab] = useState<"general" | "sftp" | "terminal" | "sync" | "security">("general");
+  const [settingsTab, setSettingsTab] = useState<
+    "general" | "sftp" | "terminal" | "sync" | "security" | "updates"
+  >("general");
+  const [updateChannel, setUpdateChannel] = useState<"release" | "canary">("release");
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<{ downloaded: number; total: number | null } | null>(null);
   const [serverPings, setServerPings] = useState<Record<string, number | null>>({});
   const [serverFilter, setServerFilter] = useState("");
   const [serverFilterStatus, setServerFilterStatus] = useState<"all" | "online" | "offline">("all");
@@ -183,6 +193,23 @@ export function SettingsPage() {
     void api.authServersList().then(setAuthServers);
     void api.syncLoggedUser().then(setLoggedUser);
   }, [syncState]);
+
+  useEffect(() => {
+    void api
+      .updateChannelGet()
+      .then((channel) => setUpdateChannel(channel === "canary" ? "canary" : "release"))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const stopPromise = listen<{ downloaded: number; total: number | null }>(
+      "update:progress",
+      (event) => setUpdateProgress(event.payload),
+    );
+    return () => {
+      void stopPromise.then((stop) => stop());
+    };
+  }, []);
 
   useEffect(() => {
     if (driveTab !== "config") return;
@@ -290,6 +317,49 @@ export function SettingsPage() {
     }
   }
 
+  async function handleUpdateChannelChange(channel: "release" | "canary") {
+    const previous = updateChannel;
+    setUpdateChannel(channel);
+    setUpdateInfo(null);
+    try {
+      await api.updateChannelSet(channel);
+    } catch (error) {
+      setUpdateChannel(previous);
+      toast.error(getError(error) || t.settings.updates.errorGeneric);
+    }
+  }
+
+  async function handleCheckUpdates() {
+    if (updateChecking || updateInstalling) {
+      return;
+    }
+    setUpdateChecking(true);
+    try {
+      const info = await api.updateCheck();
+      setUpdateInfo(info);
+    } catch (error) {
+      toast.error(getError(error) || t.settings.updates.errorGeneric);
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (updateInstalling || updateChecking) {
+      return;
+    }
+    setUpdateInstalling(true);
+    setUpdateProgress(null);
+    try {
+      await api.updateInstall();
+    } catch (error) {
+      toast.error(getError(error) || t.settings.updates.errorGeneric);
+    } finally {
+      setUpdateInstalling(false);
+      setUpdateProgress(null);
+    }
+  }
+
   const watchedNewPassword = passwordForm.watch("newPassword");
   const cloudConnected = Boolean(loggedUser);
 
@@ -329,12 +399,29 @@ export function SettingsPage() {
     return server.id.startsWith("local:") && !server.from_remote;
   }
 
+  const updateChannelOptions = useMemo(
+    () => [
+      {
+        value: "release" as const,
+        label: t.settings.updates.channelRelease,
+        description: t.settings.updates.channelReleaseDescription,
+      },
+      {
+        value: "canary" as const,
+        label: t.settings.updates.channelCanary,
+        description: t.settings.updates.channelCanaryDescription,
+      },
+    ],
+    [t.settings.updates],
+  );
+
   const tabLabels = {
     general: t.settings.sections.application,
     sftp: t.settings.sections.sftp,
     terminal: t.settings.sections.terminal,
     sync: t.settings.sections.sync,
     security: t.settings.sections.masterPassword,
+    updates: t.settings.sections.updates,
   } as const;
 
   const settingsTabs = useMemo(
@@ -344,8 +431,9 @@ export function SettingsPage() {
       { id: "terminal" as const, label: tabLabels.terminal, icon: TerminalSquare },
       { id: "sync" as const, label: tabLabels.sync, icon: RefreshCw },
       { id: "security" as const, label: tabLabels.security, icon: Shield },
+      { id: "updates" as const, label: tabLabels.updates, icon: DownloadCloud },
     ],
-    [tabLabels.general, tabLabels.security, tabLabels.sftp, tabLabels.sync, tabLabels.terminal],
+    [tabLabels.general, tabLabels.security, tabLabels.sftp, tabLabels.sync, tabLabels.terminal, tabLabels.updates],
   );
 
   const filteredServers = useMemo(() => {
@@ -1236,6 +1324,109 @@ export function SettingsPage() {
                     {t.settings.security.totalKnownHosts.replace("{count}", String(knownHosts.length))}
                   </div>
                 </div>
+              </div>
+            </div>
+          </SettingsPanel>
+        ) : null}
+
+        {settingsTab === "updates" ? (
+          <SettingsPanel icon={DownloadCloud} title={t.settings.updates.title}>
+            <div className="divide-y divide-border/20">
+              <SettingsRow
+                title={t.settings.updates.channel}
+                description={t.settings.updates.channelDescription}
+                control={
+                  <OptionDropdown
+                    value={updateChannel}
+                    onChange={(value) => void handleUpdateChannelChange(value)}
+                    options={updateChannelOptions}
+                  />
+                }
+              />
+              <div className="space-y-3 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={updateChecking || updateInstalling}
+                    onClick={() => void handleCheckUpdates()}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${updateChecking ? "animate-spin" : ""}`} />
+                    {updateChecking ? t.settings.updates.checking : t.settings.updates.checkButton}
+                  </Button>
+
+                  {updateInfo?.available ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2"
+                      disabled={updateInstalling || updateChecking}
+                      onClick={() => void handleInstallUpdate()}
+                    >
+                      <DownloadCloud className={`h-3.5 w-3.5 ${updateInstalling ? "animate-pulse" : ""}`} />
+                      {updateInstalling ? t.settings.updates.installing : t.settings.updates.installButton}
+                    </Button>
+                  ) : null}
+                </div>
+
+                {updateInfo ? (
+                  <div
+                    className={`rounded-lg border px-4 py-3 ${
+                      updateInfo.available
+                        ? "border-primary/30 bg-primary/5"
+                        : "border-success/25 bg-success/5"
+                    }`}
+                  >
+                    <p
+                      className={`flex items-center gap-2 text-sm font-medium ${
+                        updateInfo.available ? "text-foreground" : "text-success"
+                      }`}
+                    >
+                      {updateInfo.available ? (
+                        <DownloadCloud className="h-4 w-4 text-primary" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                      )}
+                      {updateInfo.available
+                        ? t.settings.updates.updateAvailable.replace("{version}", updateInfo.version)
+                        : t.settings.updates.upToDate.replace("{version}", updateInfo.currentVersion)}
+                    </p>
+                    {updateInfo.available && updateInfo.notes ? (
+                      <div className="mt-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                          {t.settings.updates.notesLabel}
+                        </p>
+                        <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                          {updateInfo.notes}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {updateInstalling ? (
+                  <div className="space-y-1.5">
+                    <Progress
+                      value={
+                        updateProgress && updateProgress.total
+                          ? Math.min(100, Math.round((updateProgress.downloaded / updateProgress.total) * 100))
+                          : undefined
+                      }
+                      className="h-2"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      {updateProgress
+                        ? updateProgress.total
+                          ? `${Math.round(updateProgress.downloaded / 1024)} KB / ${Math.round(
+                              updateProgress.total / 1024,
+                            )} KB`
+                          : `${Math.round(updateProgress.downloaded / 1024)} KB`
+                        : t.settings.updates.installing}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </SettingsPanel>

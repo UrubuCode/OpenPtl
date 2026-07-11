@@ -1813,6 +1813,32 @@ async fn release_check_latest() -> Result<ReleaseCheckResult, String> {
 }
 
 #[tauri::command]
+fn update_channel_get(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(libs::updater::get_channel(&app))
+}
+
+#[tauri::command]
+fn update_channel_set(app: tauri::AppHandle, channel: String) -> Result<(), String> {
+    libs::updater::set_channel(&app, &channel)
+}
+
+#[tauri::command]
+async fn update_check(
+    app: tauri::AppHandle,
+    _state: State<'_, AppState>,
+) -> Result<libs::updater::UpdateInfo, String> {
+    libs::updater::check(&app).await
+}
+
+#[tauri::command]
+async fn update_install(
+    app: tauri::AppHandle,
+    _state: State<'_, AppState>,
+) -> Result<(), String> {
+    libs::updater::install(&app).await
+}
+
+#[tauri::command]
 fn window_minimize(window: tauri::Window) -> Result<(), String> {
     #[cfg(desktop)]
     {
@@ -2034,6 +2060,11 @@ pub fn run() {
                 }
             }
         }));
+        // Auto-update: the updater plugin is desktop-only (no mobile backend);
+        // the process plugin provides relaunch after install.
+        builder = builder
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_process::init());
     }
 
     builder
@@ -2190,6 +2221,10 @@ pub fn run() {
             sync_recovery_probe,
             sync_recovery_restore,
             release_check_latest,
+            update_channel_get,
+            update_channel_set,
+            update_check,
+            update_install,
             open_external_url,
             open_external_editor,
             window_state_save,

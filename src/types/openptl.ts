@@ -221,6 +221,13 @@ export interface ReleaseCheckResult {
   message: BackendMessage;
 }
 
+export interface UpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  version: string;
+  notes: string;
+}
+
 export interface KnownHostEntry {
   host: string;
   port: number;
