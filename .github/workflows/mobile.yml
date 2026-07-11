@@ -55,17 +55,35 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: bun run tauri android init
 
-      - name: Build Android APK (debug)
+      - name: Build Android APK (release)
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bun run tauri android build --debug --apk --target aarch64
+        run: bun run tauri android build --apk --target aarch64
+
+      # Release APKs are unsigned and won't install. Sign with an ephemeral
+      # keystore so the artifact is sideloadable for testing (signature identity
+      # is throwaway; uninstall the previous build before installing a new one).
+      - name: Sign APK
+        run: |
+          KS="$RUNNER_TEMP/openptl-ci.jks"
+          keytool -genkeypair -v -keystore "$KS" -alias openptl \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass androidci -keypass androidci -dname "CN=OpenPtl CI"
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -1)
+          echo "Unsigned APK: $UNSIGNED"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:androidci \
+            --key-pass pass:androidci --out "$RUNNER_TEMP/openptl-release.apk" \
+            "$RUNNER_TEMP/aligned.apk"
+          ls -lh "$RUNNER_TEMP/openptl-release.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: openptl-android-debug
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: openptl-android-release
+          path: ${{ runner.temp }}/openptl-release.apk
           if-no-files-found: error
 
   ios:

@@ -60,3 +60,12 @@ macos-accessibility-client = "0.0.2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+# Size-optimized release: strips symbols, LTO, size opt-level. Keeps the mobile
+# APK (and desktop installers) small — a debug build ships the unstripped,
+# unoptimized Rust lib and balloons to hundreds of MB.
+[profile.release]
+strip = true
+lto = true
+opt-level = "s"
+codegen-units = 1
