@@ -39,7 +39,9 @@ jobs:
           conf_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
           # Bump patch so canary sorts above the current stable but below the next release.
           next=$(node -p "const [a,b,c]=require('./src-tauri/tauri.conf.json').version.split('.').map(Number); [a,b,c+1].join('.')")
-          canary="${next}-canary.${{ github.run_number }}"
+          # Pre-release identifier must be numeric-only for the Windows MSI target
+          # (<=65535). Use the run number so it stays MSI-valid and semver-sortable.
+          canary="${next}-${{ github.run_number }}"
           echo "conf=${conf_version} canary=${canary}"
           echo "version=${canary}" >> "$GITHUB_OUTPUT"
 
@@ -113,7 +115,9 @@ jobs:
         shell: bash
         run: |
           next=$(node -p "const [a,b,c]=require('./src-tauri/tauri.conf.json').version.split('.').map(Number); [a,b,c+1].join('.')")
-          canary="${next}-canary.${{ github.run_number }}"
+          # Pre-release identifier must be numeric-only for the Windows MSI target
+          # (<=65535). Use the run number so it stays MSI-valid and semver-sortable.
+          canary="${next}-${{ github.run_number }}"
           echo "canary=${canary}"
           echo "version=${canary}" >> "$GITHUB_OUTPUT"
 
