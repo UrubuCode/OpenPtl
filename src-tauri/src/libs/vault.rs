@@ -138,6 +138,18 @@ impl VaultManager {
             return Err(anyhow!("Vault ja foi inicializado"));
         }
 
+        // Mobile has no OS keychain, so keychain-mode (no master password) would put
+        // the vault key in an app-private file — a security downgrade. Require a
+        // master password on mobile.
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        if password
+            .as_ref()
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true)
+        {
+            return Err(anyhow!("Senha mestre obrigatoria neste dispositivo"));
+        }
+
         self.clear_local_storage()?;
 
         let (key_mode, key, salt) = if let Some(raw_password) = password {

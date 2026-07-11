@@ -2043,6 +2043,8 @@ pub fn run() {
             #[cfg(any(target_os = "android", target_os = "ios"))]
             let vault = {
                 let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+                // Sync token / user fields live here on mobile (no OS keychain).
+                libs::secret_store::init_dir(dir.clone());
                 VaultManager::new_in(dir).map_err(|e| e.to_string())?
             };
 

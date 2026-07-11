@@ -195,7 +195,7 @@ impl SyncManager {
                 Some(cid) => format!("{}/auth/google?client_id={}", server_address, urlencoding::encode(cid)),
                 None => format!("{}/auth/google", server_address),
             };
-            open::that_detached(&login_url).context("Falha ao abrir navegador para login")?;
+            open_login_url(app, &login_url)?;
             let result = tokio::select! {
                 result = tokio::time::timeout(AUTH_DEEPLINK_TIMEOUT, wait_for_auth_callback()) => {
                     finalize_auth_result(app, result)?
@@ -230,7 +230,7 @@ impl SyncManager {
                 ),
             };
 
-            open::that_detached(&login_url).context("Falha ao abrir navegador para login")?;
+            open_login_url(app, &login_url)?;
             let result = tokio::select! {
                 result = tokio::time::timeout(AUTH_DEEPLINK_TIMEOUT, wait_for_callback(&listener)) => {
                     finalize_auth_result(app, result)?
@@ -681,6 +681,23 @@ fn finalize_auth_result(
 
     app.emit("sync:status", &state).ok();
     Ok(state)
+}
+
+// Open the OAuth login URL in the system browser. The `open` crate has no
+// Android/iOS backend, so mobile uses the Tauri opener plugin instead.
+fn open_login_url(app: &tauri::AppHandle, url: &str) -> Result<()> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(url.to_string(), None::<&str>)
+            .context("Falha ao abrir navegador para login")
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = app;
+        open::that_detached(url).context("Falha ao abrir navegador para login")
+    }
 }
 
 pub fn handle_auth_callback_deeplink(raw_url: &str) -> Result<bool> {
