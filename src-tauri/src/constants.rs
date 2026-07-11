@@ -76,6 +76,10 @@ pub const OPENPTL_FILE_NAME: &str = "openptl.bin";
 pub const PROFILE_FILE_NAME: &str = "profile.bin";
 /// Encrypted manifest payload file.
 pub const MANIFEST_FILE_NAME: &str = "manifest.bin";
+
+/// Encrypted, synced known_hosts store (separate .bin so it never alters the
+/// positional layout of profile.bin, which would break existing vaults).
+pub const KNOWN_HOSTS_FILE_NAME: &str = "known_hosts.bin";
 /// File extension expected for encrypted payload files.
 pub const STORAGE_FILE_EXTENSION: &str = "bin";
 

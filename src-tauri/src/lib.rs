@@ -461,6 +461,14 @@ fn debug_log_frontend(
     Ok(())
 }
 
+fn effective_known_hosts_path(vault: &VaultManager, configured: &str) -> String {
+    if configured.trim().is_empty() {
+        vault.known_hosts_path().to_string_lossy().to_string()
+    } else {
+        configured.to_string()
+    }
+}
+
 #[tauri::command]
 async fn ssh_connect(
     state: State<'_, AppState>,
@@ -479,13 +487,18 @@ async fn ssh_connect(
             }
         }
         let settings = vault.settings_get().map_err(app_error)?;
-        (profile, settings.known_hosts_path)
+        let path = effective_known_hosts_path(&vault, &settings.known_hosts_path);
+        (profile, path)
     };
 
-    let mut ssh = state.ssh.lock().await;
-    ssh.connect(&profile, Some(Path::new(&known_hosts_path)))
-        .await
-        .map_err(app_error)
+    let result = {
+        let mut ssh = state.ssh.lock().await;
+        ssh.connect(&profile, Some(Path::new(&known_hosts_path)))
+            .await
+    };
+    // Persist any host key learned during the connect back into the encrypted vault.
+    let _ = state.vault.lock().await.capture_known_hosts();
+    result.map_err(app_error)
 }
 
 #[tauri::command]
@@ -547,20 +560,25 @@ async fn ssh_connect_ex(
         }
 
         let settings = vault.settings_get().map_err(app_error)?;
-        (profile, settings.known_hosts_path)
+        let path = effective_known_hosts_path(&vault, &settings.known_hosts_path);
+        (profile, path)
     };
 
-    let mut ssh = state.ssh.lock().await;
-    ssh.connect_ex(
-        &profile,
-        Some(Path::new(&known_hosts_path)),
-        accept_unknown_host.unwrap_or(false),
-        connect_purpose.unwrap_or(SshConnectPurpose::Terminal),
-        webrtc_enabled.unwrap_or(false),
-        Some(app),
-    )
-    .await
-    .map_err(app_error)
+    let result = {
+        let mut ssh = state.ssh.lock().await;
+        ssh.connect_ex(
+            &profile,
+            Some(Path::new(&known_hosts_path)),
+            accept_unknown_host.unwrap_or(false),
+            connect_purpose.unwrap_or(SshConnectPurpose::Terminal),
+            webrtc_enabled.unwrap_or(false),
+            Some(app),
+        )
+        .await
+    };
+    // Persist any host key learned during the connect back into the encrypted vault.
+    let _ = state.vault.lock().await.capture_known_hosts();
+    result.map_err(app_error)
 }
 
 #[tauri::command]
@@ -580,11 +598,13 @@ async fn known_hosts_list_cmd(
     state: State<'_, AppState>,
     path: Option<String>,
 ) -> Result<Vec<KnownHostEntry>, String> {
-    let path_value = if let Some(value) = path {
-        value
-    } else {
+    let path_value = {
         let vault = state.vault.lock().await;
-        vault.settings_get().map_err(app_error)?.known_hosts_path
+        let configured = match &path {
+            Some(value) if !value.trim().is_empty() => value.clone(),
+            _ => vault.settings_get().map_err(app_error)?.known_hosts_path,
+        };
+        effective_known_hosts_path(&vault, &configured)
     };
 
     known_hosts_list(Some(path_value.as_str())).map_err(app_error)
@@ -599,21 +619,25 @@ async fn known_hosts_add_cmd(
     key_base64: String,
     path: Option<String>,
 ) -> Result<KnownHostEntry, String> {
-    let path_value = if let Some(value) = path {
-        value
-    } else {
+    let path_value = {
         let vault = state.vault.lock().await;
-        vault.settings_get().map_err(app_error)?.known_hosts_path
+        let configured = match &path {
+            Some(value) if !value.trim().is_empty() => value.clone(),
+            _ => vault.settings_get().map_err(app_error)?.known_hosts_path,
+        };
+        effective_known_hosts_path(&vault, &configured)
     };
 
-    known_hosts_add(
+    let entry = known_hosts_add(
         Some(path_value.as_str()),
         host.as_str(),
         port,
         key_type.as_str(),
         key_base64.as_str(),
     )
-    .map_err(app_error)
+    .map_err(app_error)?;
+    let _ = state.vault.lock().await.capture_known_hosts();
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -622,14 +646,18 @@ async fn known_hosts_remove_cmd(
     line_raw: String,
     path: Option<String>,
 ) -> Result<(), String> {
-    let path_value = if let Some(value) = path {
-        value
-    } else {
+    let path_value = {
         let vault = state.vault.lock().await;
-        vault.settings_get().map_err(app_error)?.known_hosts_path
+        let configured = match &path {
+            Some(value) if !value.trim().is_empty() => value.clone(),
+            _ => vault.settings_get().map_err(app_error)?.known_hosts_path,
+        };
+        effective_known_hosts_path(&vault, &configured)
     };
 
-    known_hosts_remove(Some(path_value.as_str()), line_raw.as_str()).map_err(app_error)
+    known_hosts_remove(Some(path_value.as_str()), line_raw.as_str()).map_err(app_error)?;
+    let _ = state.vault.lock().await.capture_known_hosts();
+    Ok(())
 }
 
 #[tauri::command]
@@ -637,11 +665,13 @@ async fn known_hosts_ensure_cmd(
     state: State<'_, AppState>,
     path: Option<String>,
 ) -> Result<String, String> {
-    let path_value = if let Some(value) = path {
-        value
-    } else {
+    let path_value = {
         let vault = state.vault.lock().await;
-        vault.settings_get().map_err(app_error)?.known_hosts_path
+        let configured = match &path {
+            Some(value) if !value.trim().is_empty() => value.clone(),
+            _ => vault.settings_get().map_err(app_error)?.known_hosts_path,
+        };
+        effective_known_hosts_path(&vault, &configured)
     };
 
     known_hosts_ensure(Some(path_value.as_str())).map_err(app_error)

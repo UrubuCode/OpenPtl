@@ -19,9 +19,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::constants::{
-    APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION,
-    KEYRING_VAULT_KEY, MANIFEST_FILE_NAME, OPENPTL_FILE_NAME, PROFILE_FILE_NAME, STORAGE_DIR_NAME,
-    STORAGE_FILE_EXTENSION,
+    APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, KEYRING_VAULT_KEY,
+    KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, OPENPTL_FILE_NAME, PROFILE_FILE_NAME,
+    STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
 };
 use crate::libs::models::{
     AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry,
@@ -57,6 +57,8 @@ pub struct VaultManager {
     openptl_path: PathBuf,
     profile_path: PathBuf,
     manifest_path: PathBuf,
+    known_hosts_path: PathBuf,
+    known_hosts_bin_path: PathBuf,
     runtime: VaultRuntime,
 }
 
@@ -104,6 +106,8 @@ impl VaultManager {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),
             profile_path: storage_root.join(PROFILE_FILE_NAME),
             manifest_path: storage_root.join(MANIFEST_FILE_NAME),
+            known_hosts_path: storage_root.join("known_hosts"),
+            known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
             storage_root,
             runtime: VaultRuntime::default(),
         })
@@ -169,6 +173,7 @@ impl VaultManager {
         };
 
         self.persist()?;
+        self.apply_known_hosts_after_load()?;
         self.status()
     }
 
@@ -220,6 +225,7 @@ impl VaultManager {
             created_at: Some(openptl.created_at),
         };
 
+        self.apply_known_hosts_after_load()?;
         self.status()
     }
 
@@ -742,6 +748,72 @@ impl VaultManager {
         Ok(self.payload()?.window_state.clone())
     }
 
+    /// Working known_hosts file materialized from the vault. Lives under the app
+    /// data dir (no HOME dependency), so it works on Android. russh verifies host
+    /// keys against this file; its content is mirrored into the encrypted vault.
+    pub fn known_hosts_path(&self) -> PathBuf {
+        self.known_hosts_path.clone()
+    }
+
+    fn write_known_hosts_file(&self, content: &str) -> Result<()> {
+        if let Some(parent) = self.known_hosts_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&self.known_hosts_path, content.as_bytes()).with_context(|| {
+            format!(
+                "Falha ao escrever known_hosts em {}",
+                self.known_hosts_path.display()
+            )
+        })
+    }
+
+    fn read_known_hosts_store(&self) -> Result<String> {
+        if !self.known_hosts_bin_path.exists() {
+            return Ok(String::new());
+        }
+        let key = self.current_key()?;
+        let encrypted: EncryptedBin = read_bin_file(&self.known_hosts_bin_path)?;
+        decrypt_bin_payload(&encrypted, &key, KNOWN_HOSTS_FILE_NAME)
+    }
+
+    fn write_known_hosts_store(&self, content: &str) -> Result<()> {
+        let key = self.current_key()?;
+        let encrypted = encrypt_bin_payload(
+            &content.to_string(),
+            &key,
+            KNOWN_HOSTS_FILE_NAME,
+            Utc::now().timestamp(),
+        )?;
+        write_bin_file(&self.known_hosts_bin_path, &encrypted)
+    }
+
+    /// After loading the vault: read the encrypted known_hosts.bin (synced), do a
+    /// one-time import of the legacy ~/.ssh/known_hosts (desktop only) if empty,
+    /// then materialize the plaintext working file so connections can verify.
+    fn apply_known_hosts_after_load(&mut self) -> Result<()> {
+        let mut content = self.read_known_hosts_store().unwrap_or_default();
+        if content.trim().is_empty() {
+            if let Some(legacy) = legacy_known_hosts_content() {
+                content = legacy;
+                self.write_known_hosts_store(&content)?;
+            }
+        }
+        self.write_known_hosts_file(&content)
+    }
+
+    /// Read the working known_hosts file back into the encrypted known_hosts.bin so
+    /// hosts learned/removed during a session are persisted and synced. No-op if
+    /// nothing changed.
+    pub fn capture_known_hosts(&mut self) -> Result<()> {
+        self.assert_unlocked()?;
+        let content = fs::read_to_string(&self.known_hosts_path).unwrap_or_default();
+        let current = self.read_known_hosts_store().unwrap_or_default();
+        if content == current {
+            return Ok(());
+        }
+        self.write_known_hosts_store(&content)
+    }
+
     fn reload_unlocked_from_disk(&mut self) -> Result<()> {
         self.assert_unlocked()?;
 
@@ -764,6 +836,7 @@ impl VaultManager {
         self.runtime.salt = openptl.salt;
         self.runtime.created_at = Some(openptl.created_at);
 
+        self.apply_known_hosts_after_load()?;
         Ok(())
     }
 
@@ -924,7 +997,10 @@ impl VaultManager {
             if !is_bin_file_name(&name) {
                 continue;
             }
-            if name == OPENPTL_FILE_NAME || name == PROFILE_FILE_NAME || name == MANIFEST_FILE_NAME
+            if name == OPENPTL_FILE_NAME
+                || name == PROFILE_FILE_NAME
+                || name == MANIFEST_FILE_NAME
+                || name == KNOWN_HOSTS_FILE_NAME
             {
                 continue;
             }
@@ -1042,6 +1118,22 @@ impl VaultManager {
     fn openptl_exists(&self) -> bool {
         self.openptl_path.exists()
     }
+}
+
+/// Legacy desktop ~/.ssh/known_hosts content for one-time import into the vault.
+/// Android/iOS have no such file, so this is desktop-only.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn legacy_known_hosts_content() -> Option<String> {
+    let base = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    let path = PathBuf::from(base).join(".ssh").join("known_hosts");
+    fs::read_to_string(path)
+        .ok()
+        .filter(|content| !content.trim().is_empty())
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn legacy_known_hosts_content() -> Option<String> {
+    None
 }
 
 fn cleanup_legacy_layout(data_dir: &Path, storage_root: &Path) -> Result<()> {
@@ -1332,6 +1424,8 @@ mod tests {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),
             profile_path: storage_root.join(PROFILE_FILE_NAME),
             manifest_path: storage_root.join(MANIFEST_FILE_NAME),
+            known_hosts_path: storage_root.join("known_hosts"),
+            known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
             runtime: VaultRuntime::default(),
         }
     }
@@ -1387,6 +1481,38 @@ mod tests {
         let decrypted =
             decrypt_bin_payload::<ManifestBinPayload>(&encrypted, &wrong_key, "decrypt");
         assert!(decrypted.is_err());
+    }
+
+    #[test]
+    fn known_hosts_round_trip_through_encrypted_store() {
+        let temp_dir = tempdir().expect("temp dir should be created");
+        let storage_root = temp_dir.path().join("kh-test");
+        let mut vault = test_vault_manager(&storage_root);
+        vault
+            .init(Some("senha-super-segura".to_string()))
+            .expect("vault should initialize");
+
+        // Simulate a host learned during a session: written to the working file,
+        // then captured into the encrypted store.
+        let kh = "example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5\n";
+        fs::write(vault.known_hosts_path(), kh).expect("write working known_hosts");
+        vault.capture_known_hosts().expect("capture should persist");
+
+        assert!(
+            storage_root.join(KNOWN_HOSTS_FILE_NAME).exists(),
+            "encrypted known_hosts.bin should be written"
+        );
+
+        // Lock and unlock: the working file must be re-materialized from the store.
+        vault.lock();
+        fs::remove_file(vault.known_hosts_path()).ok();
+        vault
+            .unlock(Some("senha-super-segura".to_string()))
+            .expect("vault should unlock");
+
+        let materialized =
+            fs::read_to_string(vault.known_hosts_path()).expect("working file materialized");
+        assert_eq!(materialized, kh, "known_hosts survives the encrypted round-trip");
     }
 
     #[test]
