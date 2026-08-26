@@ -1,227 +1,75 @@
-name: Release
+name: Native Release
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            artifact: openptl-linux-x86_64
+            binary: target/release/openptl
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            name: windows
+            artifact: openptl-windows-x86_64
+            binary: target/release/openptl.exe
           - os: macos-latest
-            target: aarch64-apple-darwin
-            name: macos-arm64
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            name: linux
-
-    runs-on: ${{ matrix.os }}
+            artifact: openptl-macos
+            binary: target/release/openptl
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Extract & verify version
-        id: ver
-        shell: bash
-        run: |
-          tag_version="${GITHUB_REF_NAME#v}"
-          conf_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          echo "tag=${tag_version} conf=${conf_version}"
-          if [ "$tag_version" != "$conf_version" ]; then
-            echo "::error::Tag v${tag_version} does not match tauri.conf.json version ${conf_version}"
-            exit 1
-          fi
-          echo "version=${tag_version}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          key: ${{ matrix.target }}
-
-      - name: Install Linux deps
-        if: matrix.os == 'ubuntu-22.04'
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libxdo-dev \
-            libssl-dev
+          sudo apt-get install -y build-essential pkg-config libx11-dev libxkbcommon-dev libwayland-dev libudev-dev
 
-      - name: Install JS deps
-        run: bun install --frozen-lockfile
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "OpenPtl v${{ steps.ver.outputs.version }}"
-          releaseBody: |
-            Automated release for ${{ github.ref_name }}.
-
-            Downloads:
-            - Windows: `.msi` / `.exe`
-            - macOS: `.dmg` (arm64 + x64)
-            - Linux: `.deb` / `.AppImage`
-          releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
-
-  android:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve version
-        id: ver
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-          add-to-path: false
-
-      - name: Setup Rust
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          key: android
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
 
-      - name: Install JS deps
-        run: bun install --frozen-lockfile
+      - name: Build release
+        run: cargo build --release
 
-      - name: Init Android project
-        env:
-          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bun run tauri android init
-
-      - name: Allow APK install (self-updater)
-        run: |
-          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
-          if ! grep -q REQUEST_INSTALL_PACKAGES "$MANIFEST"; then
-            awk '/<application/ && !done {print "    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\" />"; done=1} {print}' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
-          fi
-          grep INSTALL_PACKAGES "$MANIFEST" || { echo "manifest patch failed"; exit 1; }
-
-      - name: Build Android APK (release)
-        env:
-          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bun run tauri android build --apk --target aarch64
-
-      # Release APKs are unsigned and won't install. Sign with an ephemeral
-      # keystore so the artifact is sideloadable for testing (signature identity
-      # is throwaway; uninstall the previous build before installing a new one).
-      - name: Sign APK
-        run: |
-          KS="$RUNNER_TEMP/openptl-ci.jks"
-          keytool -genkeypair -v -keystore "$KS" -alias openptl \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass androidci -keypass androidci -dname "CN=OpenPtl CI"
-          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -1)
-          echo "Unsigned APK: $UNSIGNED"
-          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/zipalign" -p -f 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:androidci \
-            --key-pass pass:androidci --out "$RUNNER_TEMP/openptl-release.apk" \
-            "$RUNNER_TEMP/aligned.apk"
-          ls -lh "$RUNNER_TEMP/openptl-release.apk"
-
-      - name: Prepare release artifacts
+      - name: Package binary
         shell: bash
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          cp "$RUNNER_TEMP/openptl-release.apk" openptl.apk
-          node -e "require('fs').writeFileSync('android-latest.json', JSON.stringify({
-            version: process.env.VERSION,
-            notes: 'Release ${{ github.ref_name }}',
-            url: 'https://github.com/UrubuCode/OpenPtl/releases/latest/download/openptl.apk'
-          }, null, 2))"
-          cat android-latest.json
+          mkdir -p dist
+          cp "${{ matrix.binary }}" "dist/${{ matrix.artifact }}"
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C dist "${{ matrix.artifact }}"
 
-      - name: Upload APK + manifest to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref_name }} openptl.apk android-latest.json --clobber
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
 
-  publish-pages:
+  publish:
+    name: Publish GitHub release
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Build landing page
-        run: node scripts/build-pages.mjs
-        env:
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: pages-dist
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz
+          generate_release_notes: true

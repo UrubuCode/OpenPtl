@@ -1,8 +1,0 @@
-name = "openptl-auth"
-main = "src/index.js"
-compatibility_date = "2024-12-01"
-
-[vars]
-ALLOWED_ORIGINS = "http://localhost:1420,tauri://localhost"
-
-# GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET vêm do .env (local) ou secrets (produção)

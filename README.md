@@ -1,105 +1,61 @@
-# OpenPtl (OP)
+# OpenPtl
 
-OpenPtl is a multi-protocol desktop remote workspace built with **Tauri + React**.  
-It combines terminals, remote file management, encrypted local persistence, and Google Drive cloud sync for profile data.
+OpenPtl é um cliente desktop nativo para conexões SSH e operações SFTP, construído integralmente em **Rust** com **eframe/egui**. A aplicação não depende de runtime web: a interface, a orquestração de tarefas e os serviços de domínio são compilados no mesmo binário.
 
-## Screenshots
+## Recursos principais
 
-![OpenPtl Screenshot 1](.github/images/Screenshot_1.png)
-![OpenPtl Screenshot 2](.github/images/Screenshot_2.png)
-![OpenPtl Screenshot 3](.github/images/Screenshot_3.png)
-![OpenPtl Screenshot 5](.github/images/Screenshot_5.png)
-![OpenPtl Screenshot 6](.github/images/Screenshot_6.png)
-![OpenPtl Screenshot 7](.github/images/Screenshot_7.png)
-![OpenPtl Screenshot 8](.github/images/Screenshot_8.png)
-![OpenPtl Screenshot 9](.github/images/Screenshot_9.png)
+O cliente oferece um vault local criptografado para perfis e credenciais, proteção por senha mestre com Argon2id e XChaCha20-Poly1305, gerenciamento de conexões SSH/SFTP, shell local, terminal integrado, validação explícita de hosts desconhecidos e armazenamento seguro de `known_hosts`.
 
-## Supported protocols
+A interface principal é formada por telas nativas de visão geral, conexões, keychain, workspace, configurações e informações do produto. As operações de rede permanecem isoladas do código de apresentação e usam Tokio para executar tarefas assíncronas do protocolo SSH.
 
-- SSH
-- SFTP
-- FTP
-- FTPS
-- SMB
-- RDP
+## Arquitetura
 
-## What OpenPtl does
+| Camada | Responsabilidade | Localização |
+| --- | --- | --- |
+| Entrada | Inicialização da janela nativa e ciclo egui | `src/main.rs` |
+| Aplicação | Estado de navegação e casos de uso | `src/app.rs` |
+| Backend | Coordenação de vault, SSH, SFTP e runtime assíncrono | `src/backend.rs` |
+| Interface | Telas e componentes egui | `src/ui/` |
+| Domínio | Modelos, vault criptografado e tarefas de transferência | `src/libs/` |
+| Protocolos | Sessões SSH e adaptadores SFTP | `src/protocols/` |
 
-- Encrypted vault for profiles/settings:
-  - master password mode (`Argon2id` + `XChaCha20-Poly1305`)
-  - keychain-backed mode (generated key stored in OS keychain)
-- Workspace tabs with draggable/resizable blocks
-- SSH terminal sessions (PTY-backed) with live event streaming
-- Remote file blocks for SFTP/FTP/FTPS/SMB operations
-- RDP session blocks for remote desktop workflows
-- Internal Monaco editor + open in external editor
-- Google Drive sync for encrypted profile backup (appDataFolder + OAuth flow)
-- Custom desktop shell (header/sidebar/tabs/workspaces) in Tauri
+Os arquivos Rust são mantidos abaixo de **500 linhas**, com módulos separados por responsabilidade. O formato binário do vault mantém os índices históricos dos enums para preservar a compatibilidade com dados existentes.
 
-## Architecture
+## Requisitos
 
-- Frontend: `React + TypeScript + Zustand + Vite`
-- Backend: `Rust + Tauri 2`
-- Key backend modules:
-  - `src-tauri/src/lib.rs`: command surface and app bootstrap
-  - `src-tauri/src/ssh.rs`: SSH/SFTP session handling
-  - `src-tauri/src/libs/*`: shared libraries (vault, sync, transfers, tasks)
-  - `src-tauri/src/protocols/*`: protocol-specific adapters
+É necessário ter o toolchain Rust estável, um compilador C compatível e as bibliotecas gráficas nativas da plataforma. Em distribuições Debian/Ubuntu, o ambiente básico pode ser preparado com `build-essential`, `pkg-config`, `libx11-dev`, `libxkbcommon-dev`, `libwayland-dev` e `libudev-dev`.
 
-## Requirements
-
-- Node.js 20+ (or Bun)
-- Rust stable toolchain
-- Tauri v2 system prerequisites for your OS
-
-## Development
-
-### Option 1: npm
+## Desenvolvimento
 
 ```bash
-npm install
-npm run tauri dev
+cargo run
 ```
 
-### Option 2: Bun
+Para uma compilação otimizada:
 
 ```bash
-bun install
-bun run tauri dev
+cargo build --release
 ```
 
-## Build and tests
+Para executar os testes:
 
 ```bash
-bun run build
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test
 ```
 
-You can also use npm equivalents:
+Para validar estilo e problemas comuns:
 
 ```bash
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-## Auth worker (Google OAuth broker)
+## Segurança operacional
 
-The optional auth worker lives in `server/` and is used by sync/auth flows.
+A primeira execução solicita uma senha mestre com pelo menos seis caracteres. A senha é usada localmente para derivar a chave do vault e não é persistida em texto puro. Ao conectar a um servidor cuja chave ainda não é conhecida, a aplicação exibe a impressão digital e exige uma confirmação explícita antes de gravá-la.
 
-```bash
-cd server
-npm install
-npm run dev
-```
+As credenciais devem ser cadastradas no vault e nunca em arquivos de configuração do projeto. O arquivo `known_hosts` de trabalho é materializado a partir de uma cópia protegida dentro do vault e é recapturado após alterações da sessão.
 
-Environment variables for the worker:
+## Licença
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `ALLOWED_ORIGINS` (configured in `server/wrangler.toml`)
-
-## Notes
-
-- Deep link callback scheme: `openptl://auth`
-- Transfer progress events follow `transfer:progress:{id}`
-- Default auth server list is in `auth-servers.json`
+Este projeto é distribuído sob a licença MIT. Consulte `LICENSE` para o texto completo.
