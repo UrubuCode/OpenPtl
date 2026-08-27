@@ -57,9 +57,11 @@ pub struct OpenPtlApp {
     pub connections: Vec<ConnectionProfile>,
     pub connection_form: ConnectionForm,
     pub editing_connection_id: Option<String>,
+    pub show_connection_editor: bool,
     pub keychain: Vec<KeychainEntry>,
     pub new_keychain_name: String,
     pub new_keychain_secret: String,
+    pub show_keychain_editor: bool,
     pub settings: AppSettings,
     pub settings_loaded: bool,
     pub selected_session: Option<String>,
@@ -92,9 +94,11 @@ impl OpenPtlApp {
                     connections: Vec::new(),
                     connection_form: ConnectionForm::default(),
                     editing_connection_id: None,
+                    show_connection_editor: false,
                     keychain: Vec::new(),
                     new_keychain_name: String::new(),
                     new_keychain_secret: String::new(),
+                    show_keychain_editor: false,
                     settings: AppSettings::default(),
                     settings_loaded: false,
                     selected_session: None,
@@ -122,9 +126,11 @@ impl OpenPtlApp {
                 connections: Vec::new(),
                 connection_form: ConnectionForm::default(),
                 editing_connection_id: None,
+                show_connection_editor: false,
                 keychain: Vec::new(),
                 new_keychain_name: String::new(),
                 new_keychain_secret: String::new(),
+                show_keychain_editor: false,
                 settings: AppSettings::default(),
                 settings_loaded: false,
                 selected_session: None,
@@ -194,6 +200,8 @@ impl OpenPtlApp {
                 self.keychain.clear();
                 self.settings_loaded = false;
                 self.dialog = None;
+                self.show_connection_editor = false;
+                self.show_keychain_editor = false;
                 self.sessions.clear();
                 self.selected_session = None;
                 self.screen = Screen::Home;
@@ -214,6 +222,7 @@ impl OpenPtlApp {
             Ok(saved) => {
                 self.editing_connection_id = Some(saved.id.clone());
                 self.connection_form = ConnectionForm::from_profile(&saved);
+                self.show_connection_editor = false;
                 self.set_message("Conexão salva no vault criptografado.");
                 self.refresh();
             }
@@ -258,6 +267,7 @@ impl OpenPtlApp {
             Ok(()) => {
                 self.connection_form = ConnectionForm::default();
                 self.editing_connection_id = None;
+                self.show_connection_editor = false;
                 self.set_message("Conexão excluída.");
                 self.refresh();
             }
@@ -269,6 +279,7 @@ impl OpenPtlApp {
         if let Some(profile) = self.connections.iter().find(|item| item.id == id) {
             self.connection_form = ConnectionForm::from_profile(profile);
             self.editing_connection_id = Some(id.to_string());
+            self.show_connection_editor = true;
             self.screen = Screen::Connections;
         }
     }

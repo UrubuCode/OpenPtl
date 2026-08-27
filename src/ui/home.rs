@@ -77,6 +77,7 @@ fn render_quick_actions(app: &mut OpenPtlApp, ui: &mut egui::Ui) {
                 if components::primary_button(ui, "＋  Nova conexão").clicked() {
                     app.connection_form = super::connection_form::ConnectionForm::default();
                     app.editing_connection_id = None;
+                    app.show_connection_editor = true;
                     app.screen = Screen::Connections;
                 }
                 if components::secondary_button(ui, "⌁  Abrir shell local").clicked() {

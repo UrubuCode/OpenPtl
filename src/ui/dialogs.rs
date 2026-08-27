@@ -1,4 +1,4 @@
-use eframe::egui::{self, Align2, RichText, Vec2};
+use eframe::egui::{self, Id, RichText, Stroke};
 
 use crate::app::{Dialog, OpenPtlApp};
 
@@ -9,27 +9,31 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
         return;
     };
 
-    let mut open = true;
-    egui::Window::new("Confirmar ação")
-        .collapsible(false)
-        .resizable(false)
-        .fixed_size(Vec2::new(420.0, 0.0))
-        .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-        .open(&mut open)
+    let modal_response = egui::Modal::new(Id::new("openptl_confirm_dialog"))
+        .backdrop_color(egui::Color32::from_black_alpha(170))
+        .frame(
+            egui::Frame::new()
+                .fill(theme::PANEL)
+                .stroke(Stroke::new(1.0_f32, theme::BORDER))
+                .corner_radius(egui::CornerRadius::same(12))
+                .inner_margin(egui::Margin::same(20)),
+        )
         .show(context, |ui| {
+            ui.set_min_width(430.0);
             let (title, description, detail) = dialog_copy(app, &dialog);
             ui.label(RichText::new(title).size(20.0).strong());
             ui.add_space(8.0);
-            ui.label(description);
-            ui.add_space(10.0);
+            ui.label(RichText::new(description).color(theme::TEXT_MUTED));
+            ui.add_space(12.0);
             egui::Frame::new()
                 .fill(theme::BACKGROUND)
+                .stroke(Stroke::new(1.0_f32, theme::BORDER))
                 .corner_radius(egui::CornerRadius::same(8))
-                .inner_margin(egui::Margin::same(10))
+                .inner_margin(egui::Margin::same(11))
                 .show(ui, |ui| {
-                    ui.label(RichText::new(detail).color(theme::TEXT_MUTED));
+                    ui.label(RichText::new(detail).color(theme::TEXT));
                 });
-            ui.add_space(16.0);
+            ui.add_space(18.0);
             ui.horizontal(|ui| {
                 if components::secondary_button(ui, "Cancelar").clicked() {
                     app.dialog = None;
@@ -40,7 +44,9 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
             });
         });
 
-    if !open {
+    if modal_response.backdrop_response.clicked()
+        || context.input(|input| input.key_pressed(egui::Key::Escape))
+    {
         app.dialog = None;
     }
 }

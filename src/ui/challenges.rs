@@ -1,4 +1,4 @@
-use eframe::egui::{self, Align2, RichText, Stroke, Vec2};
+use eframe::egui::{self, Id, RichText, Stroke};
 
 use crate::app::OpenPtlApp;
 
@@ -10,12 +10,17 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
     };
     let mut accept = false;
     let mut cancel = false;
-    egui::Window::new("Verificação de segurança")
-        .collapsible(false)
-        .resizable(false)
-        .fixed_size(Vec2::new(500.0, 0.0))
-        .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+    let modal_response = egui::Modal::new(Id::new("ssh_host_challenge_modal"))
+        .backdrop_color(egui::Color32::from_black_alpha(180))
+        .frame(
+            egui::Frame::new()
+                .fill(theme::PANEL)
+                .stroke(Stroke::new(1.0_f32, theme::WARNING.linear_multiply(0.8)))
+                .corner_radius(egui::CornerRadius::same(12))
+                .inner_margin(egui::Margin::same(20)),
+        )
         .show(context, |ui| {
+            ui.set_min_width(500.0);
             ui.horizontal(|ui| {
                 ui.colored_label(theme::WARNING, RichText::new("!").size(24.0).strong());
                 ui.vertical(|ui| {
@@ -49,7 +54,10 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
                 }
             });
         });
-    if cancel {
+    if cancel
+        || modal_response.backdrop_response.clicked()
+        || context.input(|input| input.key_pressed(egui::Key::Escape))
+    {
         app.host_challenge = None;
     }
     if accept {

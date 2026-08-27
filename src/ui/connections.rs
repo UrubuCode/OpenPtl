@@ -1,6 +1,6 @@
-use eframe::egui::{self, Align, Layout, RichText, Stroke};
+use eframe::egui::{self, Align, Id, Layout, RichText, Stroke};
 
-use crate::app::{OpenPtlApp, Screen};
+use crate::app::OpenPtlApp;
 use crate::libs::models::{ConnectionProfile, ConnectionProtocol, SshConnectPurpose};
 
 use super::{components, theme};
@@ -22,68 +22,50 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
                     }
                 });
             });
-            ui.columns(2, |columns| {
-                render_list(app, &mut columns[0]);
-                render_editor(app, &mut columns[1]);
-            });
-        });
-}
-
-fn render_list(app: &mut OpenPtlApp, ui: &mut egui::Ui) {
-    components::section(
-        ui,
-        "Perfis salvos",
-        "Selecione um perfil para editar ou iniciar uma sessão.",
-        |ui| {
-            if app.connections.is_empty() {
-                components::empty_state(
-                    ui,
-                    "Nenhum perfil salvo",
-                    "Use o botão acima para adicionar uma conexão.",
-                );
-                return;
-            }
-            egui::ScrollArea::vertical()
-                .max_height(540.0)
-                .show(ui, |ui| {
-                    for profile in app.connections.clone() {
-                        profile_card(app, ui, &profile);
+            components::section(
+                ui,
+                "Perfis salvos",
+                "Selecione um perfil para conectar ou editar.",
+                |ui| {
+                    if app.connections.is_empty() {
+                        components::empty_state(
+                            ui,
+                            "Nenhum perfil salvo",
+                            "Crie seu primeiro perfil para iniciar uma sessão remota.",
+                        );
+                        return;
                     }
-                });
-        },
-    );
+                    egui::ScrollArea::vertical()
+                        .max_height(620.0)
+                        .show(ui, |ui| {
+                            for profile in app.connections.clone() {
+                                profile_card(app, ui, &profile);
+                            }
+                        });
+                },
+            );
+        });
+    render_editor_modal(app, context);
 }
 
 fn profile_card(app: &mut OpenPtlApp, ui: &mut egui::Ui, profile: &ConnectionProfile) {
-    let selected = app.editing_connection_id.as_deref() == Some(profile.id.as_str());
-    let fill = if selected {
-        theme::ACCENT_DARK
-    } else {
-        theme::PANEL_RAISED
-    };
-    let border = if selected {
-        theme::ACCENT
-    } else {
-        theme::BORDER
-    };
     egui::Frame::new()
-        .fill(fill)
-        .stroke(Stroke::new(1.0_f32, border))
-        .corner_radius(egui::CornerRadius::same(9))
-        .inner_margin(egui::Margin::same(12))
+        .fill(theme::PANEL_RAISED)
+        .stroke(Stroke::new(1.0_f32, theme::BORDER))
+        .corner_radius(egui::CornerRadius::same(10))
+        .inner_margin(egui::Margin::same(14))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
-                    ui.label(RichText::new(&profile.name).strong());
+                    ui.label(RichText::new(&profile.name).size(16.0).strong());
                     ui.label(
                         RichText::new(format!(
                             "{}@{}:{}",
                             profile.username, profile.host, profile.port
                         ))
-                        .small()
                         .color(theme::TEXT_MUTED),
                     );
-                    ui.add_space(4.0);
+                    ui.add_space(5.0);
                     ui.horizontal(|ui| {
                         for protocol in &profile.protocols {
                             let (label, color) = match protocol {
@@ -101,7 +83,7 @@ fn profile_card(app: &mut OpenPtlApp, ui: &mut egui::Ui, profile: &ConnectionPro
                     }
                 });
             });
-            ui.add_space(10.0);
+            ui.add_space(12.0);
             ui.horizontal(|ui| {
                 if has_protocol(profile, ConnectionProtocol::Ssh)
                     && components::primary_button(ui, "Conectar via SSH").clicked()
@@ -118,44 +100,69 @@ fn profile_card(app: &mut OpenPtlApp, ui: &mut egui::Ui, profile: &ConnectionPro
     ui.add_space(8.0);
 }
 
-fn render_editor(app: &mut OpenPtlApp, ui: &mut egui::Ui) {
+fn render_editor_modal(app: &mut OpenPtlApp, context: &egui::Context) {
+    if !app.show_connection_editor {
+        return;
+    }
+    let mut close = false;
     let title = if app.editing_connection_id.is_some() {
         "Editar conexão"
     } else {
         "Nova conexão"
     };
-    components::section(
-        ui,
-        title,
-        "Os dados são armazenados somente após salvar no vault.",
-        |ui| {
-            egui::ScrollArea::vertical()
-                .max_height(540.0)
-                .show(ui, |ui| {
-                    app.connection_form.render(ui);
-                    ui.add_space(14.0);
-                    ui.horizontal(|ui| {
-                        if components::primary_button(ui, "Salvar conexão").clicked() {
-                            app.save_connection();
-                        }
-                        if let Some(id) = app.editing_connection_id.clone() {
-                            if components::danger_button(ui, "Excluir").clicked() {
-                                app.request_delete_connection(&id);
-                            }
-                        }
-                        if components::secondary_button(ui, "Workspace").clicked() {
-                            app.screen = Screen::Workspace;
-                        }
-                    });
+    let modal_response = egui::Modal::new(Id::new("connection_editor_modal"))
+        .backdrop_color(egui::Color32::from_black_alpha(165))
+        .frame(
+            egui::Frame::new()
+                .fill(theme::PANEL)
+                .stroke(Stroke::new(1.0_f32, theme::BORDER))
+                .corner_radius(egui::CornerRadius::same(12))
+                .inner_margin(egui::Margin::same(20)),
+        )
+        .show(context, |ui| {
+            ui.set_min_width(720.0);
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new(title).size(21.0).strong());
+                    ui.label(
+                        RichText::new("As alterações serão gravadas no vault criptografado.")
+                            .small()
+                            .color(theme::TEXT_MUTED),
+                    );
                 });
-        },
-    );
+                ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                    if ui
+                        .button(RichText::new("×").size(20.0).color(theme::TEXT_MUTED))
+                        .clicked()
+                    {
+                        close = true;
+                    }
+                });
+            });
+            ui.add_space(16.0);
+            app.connection_form.render(ui);
+            ui.add_space(16.0);
+            ui.horizontal(|ui| {
+                if components::secondary_button(ui, "Cancelar").clicked() {
+                    close = true;
+                }
+                if components::primary_button(ui, "Salvar conexão").clicked() {
+                    app.save_connection();
+                }
+            });
+        });
+    if close
+        || modal_response.backdrop_response.clicked()
+        || context.input(|input| input.key_pressed(egui::Key::Escape))
+    {
+        app.show_connection_editor = false;
+    }
 }
 
 fn reset_editor(app: &mut OpenPtlApp) {
     app.connection_form = super::connection_form::ConnectionForm::default();
     app.editing_connection_id = None;
-    app.screen = Screen::Connections;
+    app.show_connection_editor = true;
 }
 
 fn has_protocol(profile: &ConnectionProfile, target: ConnectionProtocol) -> bool {
