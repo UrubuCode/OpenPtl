@@ -1,6 +1,8 @@
-use eframe::egui;
+use eframe::egui::{self, RichText};
 
 use crate::libs::models::{ConnectionProfile, ConnectionProtocol};
+
+use super::{components, theme};
 
 #[derive(Clone)]
 pub struct ConnectionForm {
@@ -73,49 +75,115 @@ impl ConnectionForm {
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        egui::Grid::new("connection_form_grid")
-            .num_columns(2)
-            .spacing([14.0, 10.0])
-            .show(ui, |ui| {
-                field(ui, "Nome", &mut self.name);
-                field(ui, "Host", &mut self.host);
-                field(ui, "Porta", &mut self.port);
-                field(ui, "Usuário", &mut self.username);
-                secret_field(ui, "Senha", &mut self.password);
-                multiline_field(ui, "Chave privada", &mut self.private_key);
-                field(ui, "Caminho remoto", &mut self.remote_path);
-                ui.label("Protocolos");
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.enable_ssh, "SSH");
-                    ui.checkbox(&mut self.enable_sftp, "SFTP");
-                });
-                ui.end_row();
+        components::card(ui, |ui| {
+            ui.label(RichText::new("Identificação").strong());
+            ui.label(
+                RichText::new("Dê um nome ao perfil e informe o destino remoto.")
+                    .small()
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(10.0);
+            ui.columns(2, |columns| {
+                text_field(
+                    &mut columns[0],
+                    "Nome do perfil",
+                    "Ex.: Produção",
+                    &mut self.name,
+                );
+                text_field(
+                    &mut columns[1],
+                    "Host",
+                    "Ex.: server.example.com",
+                    &mut self.host,
+                );
             });
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                text_field(
+                    &mut columns[0],
+                    "Usuário",
+                    "Ex.: ubuntu",
+                    &mut self.username,
+                );
+                text_field(&mut columns[1], "Porta", "22", &mut self.port);
+            });
+        });
+        ui.add_space(10.0);
+        components::card(ui, |ui| {
+            ui.label(RichText::new("Autenticação e destino").strong());
+            ui.label(
+                RichText::new("Use senha, chave privada ou ambos como fallback.")
+                    .small()
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(10.0);
+            ui.columns(2, |columns| {
+                secret_field(&mut columns[0], "Senha", &mut self.password);
+                text_field(
+                    &mut columns[1],
+                    "Caminho remoto",
+                    "Ex.: /home/ubuntu",
+                    &mut self.remote_path,
+                );
+            });
+            ui.add_space(8.0);
+            components::field_label(
+                ui,
+                "Chave privada",
+                "Cole o conteúdo PEM. O valor será protegido pelo vault.",
+            );
+            ui.add(
+                egui::TextEdit::multiline(&mut self.private_key)
+                    .desired_rows(5)
+                    .desired_width(f32::INFINITY),
+            );
+        });
+        ui.add_space(10.0);
+        components::card(ui, |ui| {
+            ui.label(RichText::new("Protocolos habilitados").strong());
+            ui.label(
+                RichText::new("Escolha quais recursos devem aparecer para este perfil.")
+                    .small()
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                protocol_toggle(ui, "SSH", "Terminal interativo", &mut self.enable_ssh);
+                protocol_toggle(ui, "SFTP", "Arquivos remotos", &mut self.enable_sftp);
+            });
+        });
     }
 }
 
-fn field(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.label(label);
-    ui.add(egui::TextEdit::singleline(value).desired_width(310.0));
-    ui.end_row();
+fn text_field(ui: &mut egui::Ui, label: &str, hint: &str, value: &mut String) {
+    ui.vertical(|ui| {
+        components::field_label(ui, label, hint);
+        ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
+    });
 }
 
 fn secret_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.label(label);
-    ui.add(
-        egui::TextEdit::singleline(value)
-            .password(true)
-            .desired_width(310.0),
-    );
-    ui.end_row();
+    ui.vertical(|ui| {
+        components::field_label(ui, label, "Opcional");
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .password(true)
+                .desired_width(f32::INFINITY),
+        );
+    });
 }
 
-fn multiline_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.label(label);
-    ui.add(
-        egui::TextEdit::multiline(value)
-            .desired_rows(3)
-            .desired_width(310.0),
-    );
-    ui.end_row();
+fn protocol_toggle(ui: &mut egui::Ui, name: &str, description: &str, enabled: &mut bool) {
+    egui::Frame::new()
+        .fill(if *enabled {
+            theme::ACCENT_DARK
+        } else {
+            theme::PANEL_RAISED
+        })
+        .corner_radius(egui::CornerRadius::same(8))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.checkbox(enabled, RichText::new(name).strong());
+            ui.label(RichText::new(description).small().color(theme::TEXT_MUTED));
+        });
 }

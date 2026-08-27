@@ -32,6 +32,12 @@ impl Screen {
 }
 
 #[derive(Debug, Clone)]
+pub enum Dialog {
+    DeleteConnection(String),
+    DeleteKeychain(String),
+}
+
+#[derive(Debug, Clone)]
 pub struct HostChallenge {
     pub profile_id: String,
     pub purpose: SshConnectPurpose,
@@ -61,6 +67,7 @@ pub struct OpenPtlApp {
     pub terminal_input: String,
     pub terminal_output: String,
     pub host_challenge: Option<HostChallenge>,
+    pub dialog: Option<Dialog>,
     pub message: Option<String>,
     pub message_is_error: bool,
 }
@@ -95,6 +102,7 @@ impl OpenPtlApp {
                     terminal_input: String::new(),
                     terminal_output: String::new(),
                     host_challenge: None,
+                    dialog: None,
                     message: None,
                     message_is_error: false,
                 }
@@ -124,6 +132,7 @@ impl OpenPtlApp {
                 terminal_input: String::new(),
                 terminal_output: String::new(),
                 host_challenge: None,
+                dialog: None,
                 message: None,
                 message_is_error: false,
             },
@@ -184,6 +193,7 @@ impl OpenPtlApp {
                 self.connections.clear();
                 self.keychain.clear();
                 self.settings_loaded = false;
+                self.dialog = None;
                 self.sessions.clear();
                 self.selected_session = None;
                 self.screen = Screen::Home;
@@ -205,6 +215,35 @@ impl OpenPtlApp {
                 self.editing_connection_id = Some(saved.id.clone());
                 self.connection_form = ConnectionForm::from_profile(&saved);
                 self.set_message("Conexão salva no vault criptografado.");
+                self.refresh();
+            }
+            Err(error) => self.set_error(error.to_string()),
+        }
+    }
+
+    pub fn request_delete_connection(&mut self, id: &str) {
+        self.dialog = Some(Dialog::DeleteConnection(id.to_string()));
+    }
+
+    pub fn request_delete_keychain(&mut self, id: &str) {
+        self.dialog = Some(Dialog::DeleteKeychain(id.to_string()));
+    }
+
+    pub fn confirm_dialog(&mut self) {
+        match self.dialog.take() {
+            Some(Dialog::DeleteConnection(id)) => self.delete_connection(&id),
+            Some(Dialog::DeleteKeychain(id)) => self.delete_keychain(&id),
+            None => {}
+        }
+    }
+
+    pub fn delete_keychain(&mut self, id: &str) {
+        let Some(backend) = &mut self.backend else {
+            return;
+        };
+        match backend.delete_keychain(id) {
+            Ok(()) => {
+                self.set_message("Credencial excluída.");
                 self.refresh();
             }
             Err(error) => self.set_error(error.to_string()),

@@ -1,11 +1,14 @@
 pub mod about;
 pub mod challenges;
+pub mod components;
 pub mod connection_form;
 pub mod connections;
+pub mod dialogs;
 pub mod home;
 pub mod keychain;
 pub mod layout;
 pub mod settings;
+pub mod theme;
 pub mod vault_gate;
 pub mod workspace;
 
@@ -14,7 +17,7 @@ use eframe::egui;
 use crate::app::OpenPtlApp;
 
 pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
-    context.set_visuals(egui::Visuals::dark());
+    theme::apply(context);
     if app.startup_error.is_some() || app.status.locked {
         vault_gate::render(app, context);
         return;
@@ -30,4 +33,5 @@ pub fn render(app: &mut OpenPtlApp, context: &egui::Context) {
         crate::app::Screen::About => about::render(app, context),
     }
     challenges::render(app, context);
+    dialogs::render(app, context);
 }
