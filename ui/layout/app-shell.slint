@@ -14,6 +14,8 @@ import { SettingsPage } from "../pages/settings.slint";
 import { AboutPage } from "../pages/about.slint";
 import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
+import { FileRow } from "../models/file.slint";
+import { FilesPage } from "../pages/files.slint";
 
 export { Section }
 
@@ -30,6 +32,9 @@ export component AppShell inherits HorizontalLayout {
     in property <string> version;
     in property <string> storage-path;
     in property <[NoteRow]> notes;
+    in property <[FileRow]> files;
+    in property <string> files-path;
+    in property <string> files-message;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -49,6 +54,11 @@ export component AppShell inherits HorizontalLayout {
     callback note-edit-requested(string);
     callback note-pin-toggled(string);
     callback note-delete-requested(string);
+    callback file-path-requested(string);
+    callback file-parent-requested();
+    callback file-reload-requested();
+    callback file-folder-created(string);
+    callback file-delete-requested(string, bool);
 
     Sidebar {
         active: root.section;
@@ -73,6 +83,17 @@ export component AppShell inherits HorizontalLayout {
             session-selected(id) => { root.session-selected(id); }
             session-closed(id) => { root.session-closed(id); }
             input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
+        }
+        if root.section == Section.files: FilesPage {
+            sessions: root.sessions;
+            entries: root.files;
+            path: root.files-path;
+            message: root.files-message;
+            path-requested(path) => { root.file-path-requested(path); }
+            parent-requested => { root.file-parent-requested(); }
+            reload-requested => { root.file-reload-requested(); }
+            folder-created(name) => { root.file-folder-created(name); }
+            delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
         }
         if root.section == Section.keychain: KeychainPage {
             rows: root.keychain;

@@ -1,0 +1,157 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { FileRow } from "../models/file.slint";
+import { SessionRow } from "../models/session.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiCard } from "../components/card.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+import { ListPanel } from "../patterns/list-panel.slint";
+
+component FileEntry inherits Rectangle {
+    in property <FileRow> data;
+    callback opened(FileRow);
+    callback delete-requested(FileRow);
+
+    height: 34px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover ? Theme.surface-inset : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-sm;
+        padding-right: Theme.space-sm;
+        spacing: Theme.space-md;
+
+        Text {
+            width: 18px;
+            text: root.data.is-dir ? "▸" : "·";
+            vertical-alignment: center;
+            font-size: Type.body;
+            color: root.data.is-dir ? Theme.accent-bright : Theme.text-muted;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.data.name;
+            vertical-alignment: center;
+            font-size: Type.body;
+            color: Theme.text-primary;
+            overflow: elide;
+        }
+        Text {
+            width: 90px;
+            text: root.data.size;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            font-size: Type.caption;
+            color: Theme.text-muted;
+        }
+        Text {
+            width: 130px;
+            text: root.data.modified-at;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            font-size: Type.caption;
+            color: Theme.text-muted;
+        }
+        UiButton {
+            width: 76px;
+            height: 24px;
+            y: 5px;
+            label: "Excluir";
+            tone: ButtonTone.danger;
+            clicked => { root.delete-requested(root.data); }
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.data.is-dir ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            if (root.data.is-dir) {
+                root.opened(root.data);
+            }
+        }
+    }
+}
+
+export component FilesPage inherits VerticalLayout {
+    in property <[SessionRow]> sessions;
+    in property <[FileRow]> entries;
+    in property <string> path;
+    in property <string> message;
+    in-out property <string> new-folder;
+    callback path-requested(string);
+    callback parent-requested();
+    callback reload-requested();
+    callback folder-created(string);
+    callback delete-requested(string, bool);
+
+    // Limpa o campo aqui, na propria pagina, para nao precisar expor o
+    // rascunho da nova pasta ate a janela raiz.
+    function create-folder() {
+        root.folder-created(root.new-folder);
+        root.new-folder = "";
+    }
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-md;
+
+    if root.sessions.length == 0: PageHeader {
+        title: "Arquivos";
+        subtitle: "Abra uma conexão SFTP na aba Conexões para navegar no servidor.";
+    }
+
+    if root.sessions.length > 0: PageHeader {
+        title: "Arquivos";
+        subtitle: root.path;
+    }
+
+    if root.sessions.length > 0: HorizontalLayout {
+        spacing: Theme.space-sm;
+
+        UiButton { label: "Acima"; tone: ButtonTone.ghost; clicked => { root.parent-requested(); } }
+        UiButton { label: "Recarregar"; tone: ButtonTone.ghost; clicked => { root.reload-requested(); } }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        UiField {
+            width: 220px;
+            label: "";
+            placeholder: "Nova pasta";
+            value <=> root.new-folder;
+            accepted => { root.create-folder(); }
+        }
+        UiButton {
+            label: "Criar";
+            tone: ButtonTone.primary;
+            y: 18px;
+            enabled: root.new-folder != "";
+            clicked => { root.create-folder(); }
+        }
+    }
+
+    if root.message != "": Text {
+        text: root.message;
+        font-size: Type.label;
+        color: Theme.text-muted;
+    }
+
+    if root.sessions.length > 0: UiCard {
+        vertical-stretch: 1;
+
+        ListPanel {
+            x: Theme.space-sm;
+            y: Theme.space-sm;
+            width: parent.width - 2 * Theme.space-sm;
+            height: parent.height - 2 * Theme.space-sm;
+            empty: root.entries.length == 0;
+            empty-message: "Pasta vazia.";
+
+            for entry in root.entries: FileEntry {
+                data: entry;
+                opened(row) => { root.path-requested(row.path); }
+                delete-requested(row) => { root.delete-requested(row.path, row.is-dir); }
+            }
+        }
+    }
+}

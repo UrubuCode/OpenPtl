@@ -14,7 +14,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use crate::libs::models::{
     AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, Note,
-    SshConnectPurpose, SshConnectResult, VaultStatus,
+    SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
 };
 use crate::libs::vault::VaultManager;
 use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
@@ -193,6 +193,64 @@ impl Backend {
         let path = self.vault()?.known_hosts_path();
         known_hosts_remove(Some(&path.to_string_lossy()), line_raw)?;
         self.capture_known_hosts()
+    }
+
+    /// Lista um diretório remoto fora da thread da interface.
+    pub fn sftp_list<F>(&self, session_id: &str, path: &str, on_result: F)
+    where
+        F: FnOnce(Result<Vec<SftpEntry>>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let path = path.to_owned();
+        self.runtime.spawn(async move {
+            let listing = ssh.lock().await.sftp_list(&session_id, &path).await;
+            on_result(listing);
+        });
+    }
+
+    pub fn sftp_mkdir<F>(&self, session_id: &str, path: &str, on_result: F)
+    where
+        F: FnOnce(Result<()>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let path = path.to_owned();
+        self.runtime.spawn(async move {
+            let outcome = ssh.lock().await.sftp_mkdir(&session_id, &path).await;
+            on_result(outcome);
+        });
+    }
+
+    pub fn sftp_delete<F>(&self, session_id: &str, path: &str, is_dir: bool, on_result: F)
+    where
+        F: FnOnce(Result<()>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let path = path.to_owned();
+        self.runtime.spawn(async move {
+            let outcome = ssh
+                .lock()
+                .await
+                .sftp_delete(&session_id, &path, is_dir)
+                .await;
+            on_result(outcome);
+        });
+    }
+
+    pub fn sftp_rename<F>(&self, session_id: &str, from: &str, to: &str, on_result: F)
+    where
+        F: FnOnce(Result<()>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let from = from.to_owned();
+        let to = to.to_owned();
+        self.runtime.spawn(async move {
+            let outcome = ssh.lock().await.sftp_rename(&session_id, &from, &to).await;
+            on_result(outcome);
+        });
     }
 
     /// Recaptura o known_hosts de trabalho para o armazenamento protegido.

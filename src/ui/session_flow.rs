@@ -10,7 +10,7 @@ use slint::ComponentHandle;
 
 use super::{AppWindow, HostChallenge, Section, SessionRow};
 use crate::backend::Backend;
-use crate::libs::models::{SshConnectResult, SshSessionInfo};
+use crate::libs::models::{ConnectionProtocol, SshConnectResult, SshSessionInfo};
 
 pub fn bind(window: &AppWindow, backend: Arc<Backend>) {
     let handle = window.as_weak();
@@ -63,7 +63,7 @@ fn start(handle: &slint::Weak<AppWindow>, backend: &Arc<Backend>, id: &str, acce
     }
 }
 
-fn apply(window: &AppWindow, backend: &Backend, profile_id: &str, result: SshConnectResult) {
+fn apply(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str, result: SshConnectResult) {
     match result {
         SshConnectResult::Connected { session } => {
             // O aceite de um host novo só vira parte do cofre depois que a
@@ -73,10 +73,10 @@ fn apply(window: &AppWindow, backend: &Backend, profile_id: &str, result: SshCon
                 return;
             }
             push_session(window, &session);
-            // Um host recem-aceito ja entrou no cofre; a lista precisa refletir.
-            super::known_hosts_flow::refresh(window, backend);
             window.set_active_session(session.session_id.as_str().into());
-            window.set_section(Section::Terminal);
+            // Um host recém-aceito já entrou no cofre; a lista precisa refletir.
+            super::known_hosts_flow::refresh(window, backend);
+            open_workspace(window, backend, profile_id);
             window.set_status_message("Sessão aberta.".into());
         }
         SshConnectResult::UnknownHostChallenge {
@@ -120,4 +120,20 @@ fn push_session(window: &AppWindow, session: &SshSessionInfo) {
 
 fn clear_challenge(window: &AppWindow) {
     window.set_challenge(HostChallenge::default());
+}
+
+/// Um perfil só de SFTP não tem shell: a navegação de arquivos é o destino
+/// natural depois de conectar, e não uma aba de terminal vazia.
+fn open_workspace(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str) {
+    let has_shell = backend
+        .connection(profile_id)
+        .map(|profile| profile.supports(ConnectionProtocol::Ssh))
+        .unwrap_or(true);
+
+    if has_shell {
+        window.set_section(Section::Terminal);
+    } else {
+        window.set_section(Section::Files);
+        super::files_flow::open_root(window, backend);
+    }
 }

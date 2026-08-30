@@ -1,7 +1,7 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 
-export enum Section { home, terminal, keychain, known-hosts, notes, settings, about }
+export enum Section { home, terminal, files, keychain, known-hosts, notes, settings, about }
 
 component SidebarItem inherits Rectangle {
     in property <string> label;
@@ -63,6 +63,7 @@ export component Sidebar inherits Rectangle {
 
         SidebarItem { label: "Conexões"; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
         SidebarItem { label: "Terminal"; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
+        SidebarItem { label: "Arquivos"; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
         SidebarItem { label: "Chaveiro"; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
         SidebarItem { label: "Hosts conhecidos"; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
         SidebarItem { label: "Notas"; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }

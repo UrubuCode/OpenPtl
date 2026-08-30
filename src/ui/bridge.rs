@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
+use super::files_flow;
 use super::keychain_flow;
 use super::known_hosts_flow;
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
@@ -37,6 +38,7 @@ pub fn run() -> Result<()> {
     known_hosts_flow::bind(&window, Arc::clone(&backend));
     settings_flow::bind(&window, Arc::clone(&backend));
     notes_flow::bind(&window, Arc::clone(&backend));
+    files_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;
