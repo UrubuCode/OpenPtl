@@ -1,0 +1,15 @@
+//! Modelos serializados do domínio, divididos por área.
+//!
+//! A ordem dos campos e das variantes de enum define o formato binário do
+//! vault: alterá-la invalida vaults existentes.
+
+pub mod base;
+pub mod settings;
+pub mod storage;
+
+pub use base::*;
+pub use settings::*;
+pub use storage::*;
+
+#[cfg(test)]
+mod tests;
