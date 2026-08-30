@@ -22,7 +22,7 @@ export component AppShell inherits HorizontalLayout {
     callback connection-delete-requested(string);
     callback session-selected(string);
     callback session-closed(string);
-    callback terminal-input-sent(string);
+    callback terminal-input-sent(string, bool, bool);
 
     Sidebar {
         active: root.section;
@@ -46,7 +46,7 @@ export component AppShell inherits HorizontalLayout {
             active-session: root.active-session;
             session-selected(id) => { root.session-selected(id); }
             session-closed(id) => { root.session-closed(id); }
-            input-sent(text) => { root.terminal-input-sent(text); }
+            input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
         }
         if root.section == Section.keychain: PendingPage { title: "Chaveiro"; }
         if root.section == Section.known-hosts: PendingPage { title: "Hosts conhecidos"; }

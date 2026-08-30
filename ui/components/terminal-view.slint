@@ -9,7 +9,7 @@ import { TermLine } from "../models/terminal.slint";
 export component TerminalView inherits Rectangle {
     in property <[TermLine]> lines;
     in property <bool> focused: false;
-    callback key-pressed(string);
+    callback key-pressed(string, bool, bool);
 
     background: Theme.overlay;
     border-radius: Theme.radius-md;
@@ -25,13 +25,13 @@ export component TerminalView inherits Rectangle {
             for line in root.lines: HorizontalLayout {
                 alignment: start;
                 for span in line.spans: Rectangle {
-                    background: Palette.background(span.background);
+                    background: span.inverse ? Palette.foreground(span.foreground) : Palette.background(span.background);
                     Text {
                         text: span.text;
                         font-family: Type.mono-family;
                         font-size: Type.body;
                         font-weight: span.bold ? Type.weight-bold : Type.weight-regular;
-                        color: Palette.foreground(span.foreground);
+                        color: span.inverse ? Theme.overlay : Palette.foreground(span.foreground);
                     }
                 }
             }
@@ -40,7 +40,7 @@ export component TerminalView inherits Rectangle {
 
     input := FocusScope {
         key-pressed(event) => {
-            root.key-pressed(event.text);
+            root.key-pressed(event.text, event.modifiers.control, event.modifiers.alt);
             return accept;
         }
     }

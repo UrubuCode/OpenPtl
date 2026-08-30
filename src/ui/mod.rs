@@ -1,4 +1,5 @@
 mod bridge;
+mod keymap;
 mod mappers;
 mod session_flow;
 mod terminal_view;

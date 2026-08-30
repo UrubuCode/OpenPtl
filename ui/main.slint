@@ -46,7 +46,7 @@ export component AppWindow inherits Window {
     callback challenge-rejected();
     callback session-selected(string);
     callback session-closed(string);
-    callback terminal-input-sent(string);
+    callback terminal-input-sent(string, bool, bool);
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -67,7 +67,7 @@ export component AppWindow inherits Window {
         connection-delete-requested(id) => { root.connection-delete-requested(id); }
         session-selected(id) => { root.session-selected(id); }
         session-closed(id) => { root.session-closed(id); }
-        terminal-input-sent(text) => { root.terminal-input-sent(text); }
+        terminal-input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
     }
 
     ConnectionForm {

@@ -106,8 +106,11 @@ impl Terminal {
         Point::new(point.line.0.max(0) as usize, point.column)
     }
 
-    /// Linhas visíveis da janela, cada uma já agrupada por estilo.
+    /// Linhas visíveis da janela, cada uma já agrupada por estilo. A célula do
+    /// cursor sai invertida: é assim que um terminal desenha o bloco, e evita
+    /// que a interface precise medir a fonte para posicionar um retângulo.
     pub fn visible_spans(&self) -> Vec<Vec<Span>> {
+        let cursor = self.term.grid().cursor.point;
         let mut lines: Vec<Vec<Span>> = Vec::with_capacity(self.size.rows);
         let mut current_line = None;
 
@@ -121,7 +124,10 @@ impl Terminal {
                 continue;
             }
 
-            let style = style_of(indexed.cell);
+            let mut style = style_of(indexed.cell);
+            if indexed.point == cursor {
+                style.inverse = !style.inverse;
+            }
             let spans = lines.last_mut().expect("uma linha foi aberta acima");
             match spans.last_mut() {
                 Some(last) if last.style == style => last.text.push(indexed.cell.c),
@@ -176,6 +182,19 @@ mod tests {
                     .to_owned()
             })
             .collect()
+    }
+
+    #[test]
+    fn cursor_cell_is_marked_inverse() {
+        let mut terminal = Terminal::new();
+        terminal.feed(b"ab");
+
+        let line = terminal.visible_spans().remove(0);
+        let cursor = line
+            .iter()
+            .find(|span| span.style.inverse)
+            .expect("a célula do cursor deve sair invertida");
+        assert_eq!(cursor.text.chars().count(), 1);
     }
 
     #[test]

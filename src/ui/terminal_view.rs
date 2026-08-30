@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
 
+use super::keymap::{self, Modifiers};
 use super::{AppWindow, SessionRow, TermLine, TermSpan};
 use crate::backend::Backend;
 use crate::libs::terminal::{Color, Span, Terminal};
@@ -65,13 +66,18 @@ fn bind_selection(window: &AppWindow, sessions: Arc<Mutex<Sessions>>, backend: A
 
 fn bind_input(window: &AppWindow, backend: Arc<Backend>) {
     let handle = window.as_weak();
-    window.on_terminal_input_sent(move |text| {
+    window.on_terminal_input_sent(move |text, control, alt| {
         let Some(window) = handle.upgrade() else {
             return;
         };
         let session = window.get_active_session();
-        if !session.is_empty() && !text.is_empty() {
-            backend.send_input(&session, text.as_bytes().to_vec());
+        if session.is_empty() {
+            return;
+        }
+
+        let bytes = keymap::to_bytes(&text, Modifiers { control, alt });
+        if !bytes.is_empty() {
+            backend.send_input(&session, bytes);
         }
     });
 }
@@ -138,6 +144,7 @@ fn to_span(span: &Span) -> TermSpan {
         foreground: to_index(span.style.foreground),
         background: to_index(span.style.background),
         bold: span.style.bold,
+        inverse: span.style.inverse,
     }
 }
 
