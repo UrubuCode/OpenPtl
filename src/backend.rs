@@ -13,8 +13,8 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::libs::models::{
-    ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, SshConnectPurpose,
-    SshConnectResult, VaultStatus,
+    AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry,
+    SshConnectPurpose, SshConnectResult, VaultStatus,
 };
 use crate::libs::vault::VaultManager;
 use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
@@ -64,6 +64,14 @@ impl Backend {
 
     pub fn connection_delete(&self, id: &str) -> Result<()> {
         self.vault()?.connection_delete(id)
+    }
+
+    pub fn settings(&self) -> Result<AppSettings> {
+        self.vault()?.settings_get()
+    }
+
+    pub fn settings_update(&self, settings: AppSettings) -> Result<AppSettings> {
+        self.vault()?.settings_update(settings)
     }
 
     pub fn keychain(&self) -> Result<Vec<KeychainEntry>> {
@@ -151,6 +159,10 @@ impl Backend {
     }
 
     /// Hosts confiaveis materializados no arquivo de trabalho do cofre.
+    pub fn storage_path(&self) -> Result<String> {
+        Ok(self.vault()?.storage_path().to_string_lossy().to_string())
+    }
+
     pub fn known_hosts(&self) -> Result<Vec<KnownHostEntry>> {
         let path = self.vault()?.known_hosts_path();
         known_hosts_list(Some(&path.to_string_lossy()))

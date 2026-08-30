@@ -10,6 +10,9 @@ import { KeychainRow } from "../models/keychain.slint";
 import { KeychainPage } from "../pages/keychain.slint";
 import { KnownHostRow } from "../models/session.slint";
 import { KnownHostsPage } from "../pages/known-hosts.slint";
+import { SettingsDraft } from "../models/settings.slint";
+import { SettingsPage } from "../pages/settings.slint";
+import { AboutPage } from "../pages/about.slint";
 
 export { Section }
 
@@ -21,6 +24,10 @@ export component AppShell inherits HorizontalLayout {
     in property <[KeychainRow]> keychain;
     in property <[KnownHostRow]> known-hosts;
     in property <string> known-hosts-path;
+    in property <SettingsDraft> settings;
+    in property <string> settings-message;
+    in property <string> version;
+    in property <string> storage-path;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -34,6 +41,8 @@ export component AppShell inherits HorizontalLayout {
     callback keychain-edit-requested(string);
     callback keychain-delete-requested(string);
     callback known-host-remove-requested(string);
+    callback settings-saved(SettingsDraft);
+    callback vault-lock-requested();
 
     Sidebar {
         active: root.section;
@@ -71,7 +80,15 @@ export component AppShell inherits HorizontalLayout {
             remove-requested(line) => { root.known-host-remove-requested(line); }
         }
         if root.section == Section.notes: PendingPage { title: "Notas"; }
-        if root.section == Section.settings: PendingPage { title: "Configurações"; }
-        if root.section == Section.about: PendingPage { title: "Sobre"; }
+        if root.section == Section.settings: SettingsPage {
+            settings: root.settings;
+            message: root.settings-message;
+            saved(draft) => { root.settings-saved(draft); }
+            vault-lock-requested => { root.vault-lock-requested(); }
+        }
+        if root.section == Section.about: AboutPage {
+            version: root.version;
+            storage-path: root.storage-path;
+        }
     }
 }

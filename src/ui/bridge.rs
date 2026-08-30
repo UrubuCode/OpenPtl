@@ -13,6 +13,7 @@ use super::keychain_flow;
 use super::known_hosts_flow;
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
 use super::session_flow;
+use super::settings_flow;
 use super::terminal_view;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
@@ -25,6 +26,7 @@ pub fn run() -> Result<()> {
     let window = AppWindow::new()?;
 
     apply_vault_status(&window, backend.status()?);
+    apply_environment(&window, &backend);
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));
@@ -32,6 +34,7 @@ pub fn run() -> Result<()> {
     // O temporizador de drenagem vive enquanto a janela viver.
     keychain_flow::bind(&window, Arc::clone(&backend));
     known_hosts_flow::bind(&window, Arc::clone(&backend));
+    settings_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;
@@ -68,6 +71,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
                 refresh_connections(&window, &backend);
                 keychain_flow::refresh(&window, &backend);
                 known_hosts_flow::refresh(&window, &backend);
+                settings_flow::refresh(&window, &backend);
             }
             Err(error) => window.set_vault_error(report(&error)),
         }
@@ -155,7 +159,7 @@ fn close_form(window: &AppWindow) {
     window.set_form_error(SharedString::new());
 }
 
-fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
+pub fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
     window.set_vault(VaultState {
         initialized: status.initialized,
         locked: status.locked,
@@ -170,6 +174,15 @@ fn refresh_connections(window: &AppWindow, backend: &Backend) {
             window.set_connections(ModelRc::new(VecModel::from(rows)));
         }
         Err(error) => window.set_form_error(report(&error)),
+    }
+}
+
+/// Dados que não mudam durante a execução: versão do binário e onde o cofre
+/// guarda seus arquivos.
+fn apply_environment(window: &AppWindow, backend: &Backend) {
+    window.set_version(env!("CARGO_PKG_VERSION").into());
+    if let Ok(path) = backend.storage_path() {
+        window.set_storage_path(path.into());
     }
 }
 

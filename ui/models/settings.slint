@@ -1,0 +1,10 @@
+// Só os campos cujo comportamento já existe no binário nativo. Sync, editor
+// externo e SFTP entram junto com as suas fases.
+export struct SettingsDraft {
+    inactivity-lock-minutes: string,
+    auto-reconnect-enabled: bool,
+    reconnect-delay-seconds: string,
+    terminal-copy-on-select: bool,
+    terminal-right-click-paste: bool,
+    terminal-ctrl-shift-shortcuts: bool,
+}

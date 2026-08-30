@@ -1,0 +1,112 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { SettingsDraft } from "../models/settings.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiToggle } from "../components/toggle.slint";
+import { UiCard } from "../components/card.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+component SettingsGroup inherits UiCard {
+    in property <string> title;
+
+    height: body.preferred-height + 2 * Theme.space-lg;
+
+    body := VerticalLayout {
+        padding: Theme.space-lg;
+        spacing: Theme.space-md;
+
+        Text {
+            text: root.title;
+            font-size: Type.title;
+            font-weight: Type.weight-medium;
+            color: Theme.text-primary;
+        }
+
+        @children
+    }
+}
+
+export component SettingsPage inherits VerticalLayout {
+    in property <SettingsDraft> settings;
+    in property <string> message;
+    callback saved(SettingsDraft);
+    callback vault-lock-requested();
+
+    property <SettingsDraft> edited: root.settings;
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-lg;
+
+    PageHeader {
+        title: "Configurações";
+        subtitle: "Preferências de sessão e de terminal.";
+    }
+
+    SettingsGroup {
+        title: "Segurança";
+
+        UiField {
+            label: "Bloquear o cofre após inatividade (minutos)";
+            placeholder: "0 desativa";
+            value <=> root.edited.inactivity-lock-minutes;
+        }
+        HorizontalLayout {
+            alignment: start;
+            UiButton {
+                label: "Bloquear agora";
+                tone: ButtonTone.danger;
+                clicked => { root.vault-lock-requested(); }
+            }
+        }
+    }
+
+    SettingsGroup {
+        title: "Conexão";
+
+        UiToggle {
+            label: "Reconectar automaticamente ao perder a sessão";
+            checked <=> root.edited.auto-reconnect-enabled;
+        }
+        UiField {
+            label: "Espera antes de reconectar (segundos)";
+            placeholder: "5";
+            enabled: root.edited.auto-reconnect-enabled;
+            value <=> root.edited.reconnect-delay-seconds;
+        }
+    }
+
+    SettingsGroup {
+        title: "Terminal";
+
+        UiToggle {
+            label: "Copiar ao selecionar";
+            checked <=> root.edited.terminal-copy-on-select;
+        }
+        UiToggle {
+            label: "Colar com o botão direito";
+            checked <=> root.edited.terminal-right-click-paste;
+        }
+        UiToggle {
+            label: "Atalhos com Ctrl+Shift";
+            checked <=> root.edited.terminal-ctrl-shift-shortcuts;
+        }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-md;
+        alignment: end;
+
+        if root.message != "": Text {
+            text: root.message;
+            vertical-alignment: center;
+            font-size: Type.label;
+            color: Theme.text-muted;
+        }
+        UiButton {
+            label: "Salvar";
+            tone: ButtonTone.primary;
+            clicked => { root.saved(root.edited); }
+        }
+    }
+}

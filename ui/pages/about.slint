@@ -1,0 +1,52 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiCard } from "../components/card.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+component AboutRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: Theme.space-md;
+
+    Text {
+        width: 140px;
+        text: root.label;
+        font-size: Type.body;
+        color: Theme.text-muted;
+    }
+    Text {
+        text: root.value;
+        font-size: Type.body;
+        color: Theme.text-primary;
+        overflow: elide;
+    }
+}
+
+export component AboutPage inherits VerticalLayout {
+    in property <string> version;
+    in property <string> storage-path;
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-lg;
+    alignment: start;
+
+    PageHeader {
+        title: "Sobre";
+        subtitle: "Gerenciador nativo de conexões SSH e SFTP.";
+    }
+
+    UiCard {
+        height: rows.preferred-height + 2 * Theme.space-lg;
+
+        rows := VerticalLayout {
+            padding: Theme.space-lg;
+            spacing: Theme.space-md;
+
+            AboutRow { label: "Versão"; value: root.version; }
+            AboutRow { label: "Interface"; value: "Slint"; }
+            AboutRow { label: "Protocolos"; value: "SSH · SFTP"; }
+            AboutRow { label: "Armazenamento"; value: root.storage-path; }
+        }
+    }
+}

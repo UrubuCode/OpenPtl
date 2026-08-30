@@ -108,6 +108,11 @@ impl VaultManager {
         })
     }
 
+    /// Pasta onde os arquivos criptografados do cofre vivem.
+    pub fn storage_path(&self) -> PathBuf {
+        self.storage_root.clone()
+    }
+
     pub fn status(&self) -> Result<VaultStatus> {
         let initialized = self.vault_initialized();
         let recoverable = self.openptl_exists() && !initialized;
