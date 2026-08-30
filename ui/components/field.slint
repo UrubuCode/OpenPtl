@@ -1,0 +1,38 @@
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export component UiField inherits VerticalLayout {
+    in property <string> label;
+    in property <string> placeholder;
+    in property <bool> secret: false;
+    in property <bool> enabled: true;
+    in-out property <string> value;
+    callback accepted();
+
+    spacing: Theme.space-xs;
+
+    Text {
+        text: root.label;
+        font-size: Type.caption;
+        color: Theme.text-muted;
+    }
+
+    Rectangle {
+        height: Theme.control-height;
+        background: Theme.surface-inset;
+        border-radius: Theme.radius-sm;
+        border-width: 1px;
+        border-color: Theme.border;
+
+        LineEdit {
+            width: parent.width - 2 * Theme.space-md;
+            font-size: Type.body;
+            enabled: root.enabled;
+            placeholder-text: root.placeholder;
+            input-type: root.secret ? InputType.password : InputType.text;
+            text <=> root.value;
+            accepted => { root.accepted(); }
+        }
+    }
+}

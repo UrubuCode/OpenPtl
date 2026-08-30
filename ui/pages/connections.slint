@@ -1,0 +1,90 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { ConnectionRow } from "../models/connection.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiCard } from "../components/card.slint";
+import { UiBadge, BadgeTone } from "../components/badge.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+import { ListPanel } from "../patterns/list-panel.slint";
+
+component ConnectionCard inherits UiCard {
+    in property <ConnectionRow> data;
+    callback connect-requested(string);
+    callback edit-requested(string);
+    callback delete-requested(string);
+
+    height: 84px;
+
+    HorizontalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-md;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.space-xs;
+            alignment: center;
+
+            Text {
+                text: root.data.name;
+                font-size: Type.body;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+            }
+            Text {
+                text: root.data.username + "@" + root.data.host + ":" + root.data.port;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+            HorizontalLayout {
+                spacing: Theme.space-xs;
+                alignment: start;
+                if root.data.has-ssh: UiBadge { label: "SSH"; tone: BadgeTone.positive; }
+                if root.data.has-sftp: UiBadge { label: "SFTP"; tone: BadgeTone.neutral; }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.space-sm;
+            alignment: center;
+            UiButton { label: "Conectar"; tone: ButtonTone.primary; clicked => { root.connect-requested(root.data.id); } }
+            UiButton { label: "Editar"; tone: ButtonTone.ghost; clicked => { root.edit-requested(root.data.id); } }
+            UiButton { label: "Excluir"; tone: ButtonTone.danger; clicked => { root.delete-requested(root.data.id); } }
+        }
+    }
+}
+
+export component ConnectionsPage inherits VerticalLayout {
+    in property <[ConnectionRow]> rows;
+    callback create-requested();
+    callback connect-requested(string);
+    callback edit-requested(string);
+    callback delete-requested(string);
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-lg;
+
+    HorizontalLayout {
+        PageHeader {
+            horizontal-stretch: 1;
+            title: "Conexões";
+            subtitle: "Perfis SSH e SFTP guardados no cofre.";
+        }
+        UiButton {
+            label: "Nova conexão";
+            tone: ButtonTone.primary;
+            clicked => { root.create-requested(); }
+        }
+    }
+
+    ListPanel {
+        empty: root.rows.length == 0;
+        empty-message: "Nenhuma conexão cadastrada. Crie a primeira.";
+
+        for row in root.rows: ConnectionCard {
+            data: row;
+            connect-requested(id) => { root.connect-requested(id); }
+            edit-requested(id) => { root.edit-requested(id); }
+            delete-requested(id) => { root.delete-requested(id); }
+        }
+    }
+}

@@ -1,0 +1,43 @@
+import { Theme } from "theme/tokens.slint";
+import { VaultState } from "models/vault.slint";
+import { ConnectionRow } from "models/connection.slint";
+import { AppShell } from "layout/app-shell.slint";
+import { VaultPage } from "pages/vault.slint";
+
+export { Section } from "layout/sidebar.slint";
+export { ConnectionRow, VaultState }
+
+export component AppWindow inherits Window {
+    title: "OpenPtl";
+    preferred-width: 1180px;
+    preferred-height: 760px;
+    min-width: 880px;
+    min-height: 560px;
+    background: Theme.canvas;
+
+    in property <VaultState> vault;
+    in property <bool> vault-busy: false;
+    in property <string> vault-error;
+    in property <[ConnectionRow]> connections;
+
+    callback vault-submitted(string, string);
+    callback connection-create-requested();
+    callback connection-connect-requested(string);
+    callback connection-edit-requested(string);
+    callback connection-delete-requested(string);
+
+    if root.vault.locked || !root.vault.initialized: VaultPage {
+        state: root.vault;
+        busy: root.vault-busy;
+        error: root.vault-error;
+        submitted(password, confirmation) => { root.vault-submitted(password, confirmation); }
+    }
+
+    if root.vault.initialized && !root.vault.locked: AppShell {
+        connections: root.connections;
+        connection-create-requested => { root.connection-create-requested(); }
+        connection-connect-requested(id) => { root.connection-connect-requested(id); }
+        connection-edit-requested(id) => { root.connection-edit-requested(id); }
+        connection-delete-requested(id) => { root.connection-delete-requested(id); }
+    }
+}

@@ -1,0 +1,39 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiCard } from "../components/card.slint";
+
+export component Modal inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> title;
+    in property <length> panel-width: 460px;
+    callback dismissed();
+
+    visible: root.open;
+    background: Theme.overlay.with-alpha(0.72);
+
+    TouchArea {
+        clicked => { root.dismissed(); }
+    }
+
+    UiCard {
+        raised: true;
+        width: root.panel-width;
+        height: content.preferred-height + 2 * Theme.space-lg;
+
+        TouchArea { }
+
+        content := VerticalLayout {
+            padding: Theme.space-lg;
+            spacing: Theme.space-md;
+
+            Text {
+                text: root.title;
+                font-size: Type.title;
+                font-weight: Type.weight-bold;
+                color: Theme.text-primary;
+            }
+
+            @children
+        }
+    }
+}

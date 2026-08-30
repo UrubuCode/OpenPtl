@@ -1,0 +1,45 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export enum ButtonTone { neutral, primary, danger, ghost }
+
+export component UiButton inherits Rectangle {
+    in property <string> label;
+    in property <ButtonTone> tone: ButtonTone.neutral;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: Theme.control-height;
+    min-width: 96px;
+    border-radius: Theme.radius-md;
+    border-width: root.tone == ButtonTone.ghost ? 0px : 1px;
+    opacity: root.enabled ? 1.0 : 0.52;
+
+    border-color: root.tone == ButtonTone.primary ? Theme.accent-bright
+        : root.tone == ButtonTone.danger ? Theme.danger
+        : Theme.border-strong;
+
+    background: !root.enabled ? Theme.surface-inset
+        : touch.pressed ? Theme.accent-pressed
+        : root.tone == ButtonTone.primary ? Theme.accent
+        : root.tone == ButtonTone.danger ? Theme.danger-surface
+        : root.tone == ButtonTone.ghost ? transparent
+        : Theme.surface-raised;
+
+    animate background { duration: Theme.motion-fast; }
+
+    Text {
+        text: root.label;
+        font-size: Type.label;
+        font-weight: Type.weight-medium;
+        color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
+            ? Theme.text-on-accent
+            : Theme.text-secondary;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}

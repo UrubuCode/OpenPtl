@@ -1,0 +1,25 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export component ListPanel inherits Rectangle {
+    in property <string> empty-message: "Nada por aqui ainda.";
+    in property <bool> empty: false;
+
+    if root.empty: Text {
+        text: root.empty-message;
+        font-size: Type.body;
+        color: Theme.text-muted;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ScrollView {
+        visible: !root.empty;
+        VerticalLayout {
+            spacing: Theme.space-sm;
+            alignment: start;
+            @children
+        }
+    }
+}

@@ -1,0 +1,40 @@
+import { Theme } from "../theme/tokens.slint";
+import { Sidebar, Section } from "sidebar.slint";
+import { ConnectionRow } from "../models/connection.slint";
+import { ConnectionsPage } from "../pages/connections.slint";
+import { PendingPage } from "../pages/pending.slint";
+
+export { Section }
+
+export component AppShell inherits HorizontalLayout {
+    in property <[ConnectionRow]> connections;
+    in-out property <Section> section: Section.home;
+
+    callback connection-create-requested();
+    callback connection-connect-requested(string);
+    callback connection-edit-requested(string);
+    callback connection-delete-requested(string);
+
+    Sidebar {
+        active: root.section;
+        selected(next) => { root.section = next; }
+    }
+
+    Rectangle {
+        horizontal-stretch: 1;
+        background: Theme.canvas;
+
+        if root.section == Section.home: ConnectionsPage {
+            rows: root.connections;
+            create-requested => { root.connection-create-requested(); }
+            connect-requested(id) => { root.connection-connect-requested(id); }
+            edit-requested(id) => { root.connection-edit-requested(id); }
+            delete-requested(id) => { root.connection-delete-requested(id); }
+        }
+        if root.section == Section.keychain: PendingPage { title: "Chaveiro"; }
+        if root.section == Section.known-hosts: PendingPage { title: "Hosts conhecidos"; }
+        if root.section == Section.notes: PendingPage { title: "Notas"; }
+        if root.section == Section.settings: PendingPage { title: "Configurações"; }
+        if root.section == Section.about: PendingPage { title: "Sobre"; }
+    }
+}

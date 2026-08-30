@@ -1,0 +1,71 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export enum Section { home, keychain, known-hosts, notes, settings, about }
+
+component SidebarItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 36px;
+    border-radius: Theme.radius-sm;
+    background: root.active ? Theme.surface-raised
+        : touch.has-hover ? Theme.surface-inset
+        : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-md;
+        padding-right: Theme.space-md;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            font-size: Type.body;
+            font-weight: root.active ? Type.weight-medium : Type.weight-regular;
+            color: root.active ? Theme.text-primary : Theme.text-secondary;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Sidebar inherits Rectangle {
+    in property <Section> active;
+    callback selected(Section);
+
+    width: Theme.sidebar-width;
+    background: Theme.surface;
+
+    Rectangle {
+        width: 1px;
+        x: parent.width - 1px;
+        background: Theme.border;
+    }
+
+    VerticalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-xs;
+        alignment: start;
+
+        Text {
+            text: "OpenPtl";
+            font-size: Type.title;
+            font-weight: Type.weight-bold;
+            color: Theme.text-primary;
+            height: Theme.header-height;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+
+        SidebarItem { label: "Conexões"; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
+        SidebarItem { label: "Chaveiro"; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
+        SidebarItem { label: "Hosts conhecidos"; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
+        SidebarItem { label: "Notas"; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
+        SidebarItem { label: "Configurações"; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
+        SidebarItem { label: "Sobre"; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
+    }
+}

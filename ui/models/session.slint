@@ -1,0 +1,24 @@
+export struct SessionRow {
+    id: string,
+    profile-id: string,
+    kind: string,
+    label: string,
+    connected-at: string,
+}
+
+export struct KnownHostRow {
+    host: string,
+    port: string,
+    key-type: string,
+    fingerprint: string,
+    path: string,
+}
+
+export struct HostChallenge {
+    active: bool,
+    host: string,
+    port: string,
+    key-type: string,
+    fingerprint: string,
+    known-hosts-path: string,
+}

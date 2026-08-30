@@ -1,0 +1,23 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export component PageHeader inherits VerticalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+
+    spacing: Theme.space-xs;
+
+    Text {
+        text: root.title;
+        font-size: Type.display;
+        font-weight: Type.weight-bold;
+        color: Theme.text-primary;
+    }
+
+    if root.subtitle != "": Text {
+        text: root.subtitle;
+        font-size: Type.body;
+        color: Theme.text-muted;
+        wrap: word-wrap;
+    }
+}

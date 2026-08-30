@@ -1,0 +1,25 @@
+export struct ConnectionRow {
+    id: string,
+    name: string,
+    host: string,
+    port: string,
+    username: string,
+    protocols: string,
+    remote-path: string,
+    has-ssh: bool,
+    has-sftp: bool,
+}
+
+export struct ConnectionDraft {
+    id: string,
+    name: string,
+    host: string,
+    port: string,
+    username: string,
+    password: string,
+    private-key: string,
+    keychain-id: string,
+    remote-path: string,
+    use-ssh: bool,
+    use-sftp: bool,
+}

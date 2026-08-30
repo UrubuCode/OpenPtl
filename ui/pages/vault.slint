@@ -1,0 +1,75 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { VaultState } from "../models/vault.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiCard } from "../components/card.slint";
+
+export component VaultPage inherits Rectangle {
+    in property <VaultState> state;
+    in property <bool> busy: false;
+    in property <string> error;
+    callback submitted(string, string);
+
+    property <string> password;
+    property <string> confirmation;
+
+    background: Theme.canvas;
+
+    UiCard {
+        raised: true;
+        width: 400px;
+        height: form.preferred-height + 2 * Theme.space-xl;
+
+        form := VerticalLayout {
+            padding: Theme.space-xl;
+            spacing: Theme.space-md;
+
+            Text {
+                text: root.state.initialized ? "Desbloquear cofre" : "Criar cofre";
+                font-size: Type.display;
+                font-weight: Type.weight-bold;
+                color: Theme.text-primary;
+            }
+
+            Text {
+                text: root.state.initialized
+                    ? "Informe a senha mestre para acessar seus perfis."
+                    : "Escolha uma senha mestre. Ela não pode ser recuperada.";
+                font-size: Type.body;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+
+            UiField {
+                label: "Senha mestre";
+                placeholder: "Mínimo de 6 caracteres";
+                secret: true;
+                enabled: !root.busy;
+                value <=> root.password;
+            }
+
+            if !root.state.initialized: UiField {
+                label: "Confirmar senha";
+                placeholder: "Repita a senha mestre";
+                secret: true;
+                enabled: !root.busy;
+                value <=> root.confirmation;
+            }
+
+            if root.error != "": Text {
+                text: root.error;
+                font-size: Type.label;
+                color: Theme.danger;
+                wrap: word-wrap;
+            }
+
+            UiButton {
+                label: root.state.initialized ? "Desbloquear" : "Criar cofre";
+                tone: ButtonTone.primary;
+                enabled: !root.busy && root.password != "";
+                clicked => { root.submitted(root.password, root.confirmation); }
+            }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export enum BadgeTone { neutral, positive, warning, danger }
+
+export component UiBadge inherits Rectangle {
+    in property <string> label;
+    in property <BadgeTone> tone: BadgeTone.neutral;
+
+    height: 20px;
+    border-radius: Theme.radius-sm;
+    background: Theme.surface-inset;
+    border-width: 1px;
+    border-color: root.tone == BadgeTone.positive ? Theme.positive
+        : root.tone == BadgeTone.warning ? Theme.warning
+        : root.tone == BadgeTone.danger ? Theme.danger
+        : Theme.border-strong;
+
+    HorizontalLayout {
+        padding-left: Theme.space-sm;
+        padding-right: Theme.space-sm;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            font-size: Type.caption;
+            color: root.tone == BadgeTone.positive ? Theme.positive
+                : root.tone == BadgeTone.warning ? Theme.warning
+                : root.tone == BadgeTone.danger ? Theme.danger
+                : Theme.text-secondary;
+        }
+    }
+}

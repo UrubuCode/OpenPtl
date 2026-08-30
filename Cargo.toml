@@ -1,0 +1,39 @@
+[package]
+name = "openptl"
+version = "0.1.0"
+description = "Gerenciador nativo de conexões SSH e SFTP"
+edition = "2021"
+
+[build-dependencies]
+slint-build = "1.17"
+
+[dependencies]
+slint = "1.17"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bincode = { version = "2", features = ["serde"] }
+anyhow = "1"
+argon2 = "0.5"
+base64 = "0.22"
+chacha20poly1305 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+directories = "6"
+rand = "0.8"
+sha2 = "0.10"
+futures-util = "0.3"
+russh = "0.52.0"
+russh-sftp = "2.1.1"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "net", "io-util", "macros", "sync"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+zeroize = "1"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+keyring = "2.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

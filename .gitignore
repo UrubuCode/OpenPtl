@@ -26,3 +26,4 @@ dist-ssr
 /.claude
 bun.lock
 .modernstyle/
+target/
