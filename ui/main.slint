@@ -2,13 +2,16 @@ import { Theme } from "theme/tokens.slint";
 import { VaultState } from "models/vault.slint";
 import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
+import { Section } from "layout/sidebar.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
 import { HostChallenge, SessionRow } from "models/session.slint";
+import { TermLine } from "models/terminal.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
+export { TermLine, TermSpan } from "models/terminal.slint";
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -18,6 +21,7 @@ export component AppWindow inherits Window {
     min-height: 560px;
     background: Theme.canvas;
 
+    in-out property <Section> section: Section.home;
     in property <VaultState> vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
@@ -28,6 +32,8 @@ export component AppWindow inherits Window {
     in property <HostChallenge> challenge;
     in property <[SessionRow]> sessions;
     in property <string> status-message;
+    in property <[TermLine]> terminal-lines;
+    in property <string> active-session;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -38,6 +44,9 @@ export component AppWindow inherits Window {
     callback connection-form-dismissed();
     callback challenge-accepted();
     callback challenge-rejected();
+    callback session-selected(string);
+    callback session-closed(string);
+    callback terminal-input-sent(string);
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -47,11 +56,18 @@ export component AppWindow inherits Window {
     }
 
     if root.vault.initialized && !root.vault.locked: AppShell {
+        section <=> root.section;
         connections: root.connections;
+        sessions: root.sessions;
+        terminal-lines: root.terminal-lines;
+        active-session: root.active-session;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
         connection-delete-requested(id) => { root.connection-delete-requested(id); }
+        session-selected(id) => { root.session-selected(id); }
+        session-closed(id) => { root.session-closed(id); }
+        terminal-input-sent(text) => { root.terminal-input-sent(text); }
     }
 
     ConnectionForm {

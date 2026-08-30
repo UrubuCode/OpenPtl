@@ -27,6 +27,7 @@ tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "net", "io-util", "macros", "sync"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 zeroize = "1"
+alacritty_terminal = "0.26"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 keyring = "2.3"

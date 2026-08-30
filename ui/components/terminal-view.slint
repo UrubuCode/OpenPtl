@@ -1,0 +1,47 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { Palette } from "../theme/palette.slint";
+import { TermLine } from "../models/terminal.slint";
+
+// Superfície de saída do terminal. Um nó de texto por trecho de mesmo estilo,
+// não por célula: uma linha de 120 colunas costuma render poucos nós.
+export component TerminalView inherits Rectangle {
+    in property <[TermLine]> lines;
+    in property <bool> focused: false;
+    callback key-pressed(string);
+
+    background: Theme.overlay;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: root.focused ? Theme.accent : Theme.border;
+    forward-focus: input;
+
+    ScrollView {
+        VerticalLayout {
+            padding: Theme.space-md;
+            alignment: start;
+
+            for line in root.lines: HorizontalLayout {
+                alignment: start;
+                for span in line.spans: Rectangle {
+                    background: Palette.background(span.background);
+                    Text {
+                        text: span.text;
+                        font-family: Type.mono-family;
+                        font-size: Type.body;
+                        font-weight: span.bold ? Type.weight-bold : Type.weight-regular;
+                        color: Palette.foreground(span.foreground);
+                    }
+                }
+            }
+        }
+    }
+
+    input := FocusScope {
+        key-pressed(event) => {
+            root.key-pressed(event.text);
+            return accept;
+        }
+    }
+}

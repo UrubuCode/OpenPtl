@@ -7,4 +7,5 @@
 
 pub mod models;
 pub mod secret_store;
+pub mod terminal;
 pub mod vault;

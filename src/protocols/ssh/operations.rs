@@ -1,6 +1,27 @@
 use super::*;
 
 impl SshManager {
+    /// Consome a saida acumulada pela task leitora, sem escrever nada. E o que
+    /// um terminal interativo precisa: `run_command` escreve e espera, este
+    /// apenas entrega o que chegou desde a ultima chamada.
+    pub fn drain_output(&mut self, session_id: &str) -> Result<String> {
+        if let Some(managed) = self.sessions.get_mut(session_id) {
+            let terminal = managed
+                .terminal
+                .as_ref()
+                .ok_or_else(|| anyhow!("Sessao {} nao suporta shell interativo", session_id))?;
+            let output = drain_remote_output(&terminal.output);
+            update_mouse_sgr_mode(&output, &mut managed.mouse_sgr_enabled);
+            return Ok(output);
+        }
+
+        let local = self
+            .local_sessions
+            .get_mut(session_id)
+            .ok_or_else(|| anyhow!("Sessao {} nao encontrada", session_id))?;
+        Ok(drain_local_output(&local.output))
+    }
+
     pub async fn run_command(&mut self, session_id: &str, command: &str) -> Result<String> {
         if let Some(managed) = self.sessions.get_mut(session_id) {
             let terminal = managed

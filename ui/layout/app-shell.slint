@@ -3,17 +3,26 @@ import { Sidebar, Section } from "sidebar.slint";
 import { ConnectionRow } from "../models/connection.slint";
 import { ConnectionsPage } from "../pages/connections.slint";
 import { PendingPage } from "../pages/pending.slint";
+import { TerminalPage } from "../pages/terminal.slint";
+import { SessionRow } from "../models/session.slint";
+import { TermLine } from "../models/terminal.slint";
 
 export { Section }
 
 export component AppShell inherits HorizontalLayout {
     in property <[ConnectionRow]> connections;
+    in property <[SessionRow]> sessions;
+    in property <[TermLine]> terminal-lines;
+    in property <string> active-session;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
+    callback session-selected(string);
+    callback session-closed(string);
+    callback terminal-input-sent(string);
 
     Sidebar {
         active: root.section;
@@ -30,6 +39,14 @@ export component AppShell inherits HorizontalLayout {
             connect-requested(id) => { root.connection-connect-requested(id); }
             edit-requested(id) => { root.connection-edit-requested(id); }
             delete-requested(id) => { root.connection-delete-requested(id); }
+        }
+        if root.section == Section.terminal: TerminalPage {
+            sessions: root.sessions;
+            lines: root.terminal-lines;
+            active-session: root.active-session;
+            session-selected(id) => { root.session-selected(id); }
+            session-closed(id) => { root.session-closed(id); }
+            input-sent(text) => { root.terminal-input-sent(text); }
         }
         if root.section == Section.keychain: PendingPage { title: "Chaveiro"; }
         if root.section == Section.known-hosts: PendingPage { title: "Hosts conhecidos"; }

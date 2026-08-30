@@ -1,0 +1,11 @@
+export struct TermSpan {
+    text: string,
+    // Índice na paleta ANSI de 16 cores, ou -1 para a cor padrão do tema.
+    foreground: int,
+    background: int,
+    bold: bool,
+}
+
+export struct TermLine {
+    spans: [TermSpan],
+}

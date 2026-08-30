@@ -1,0 +1,78 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { TermLine } from "../models/terminal.slint";
+import { SessionRow } from "../models/session.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { TerminalView } from "../components/terminal-view.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+component SessionTab inherits Rectangle {
+    in property <SessionRow> session;
+    in property <bool> active: false;
+    callback selected();
+    callback closed();
+
+    height: 30px;
+    border-radius: Theme.radius-sm;
+    background: root.active ? Theme.surface-raised : transparent;
+
+    HorizontalLayout {
+        padding-left: Theme.space-md;
+        padding-right: Theme.space-sm;
+        spacing: Theme.space-sm;
+
+        Text {
+            text: root.session.label;
+            vertical-alignment: center;
+            font-size: Type.label;
+            color: root.active ? Theme.text-primary : Theme.text-secondary;
+        }
+        UiButton {
+            width: 24px;
+            height: 22px;
+            y: 4px;
+            label: "×";
+            tone: ButtonTone.ghost;
+            clicked => { root.closed(); }
+        }
+    }
+
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.selected(); }
+    }
+}
+
+export component TerminalPage inherits VerticalLayout {
+    in property <[SessionRow]> sessions;
+    in property <[TermLine]> lines;
+    in property <string> active-session;
+    callback session-selected(string);
+    callback session-closed(string);
+    callback input-sent(string);
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-md;
+
+    if root.sessions.length == 0: PageHeader {
+        title: "Terminal";
+        subtitle: "Abra uma conexão na aba Conexões para iniciar uma sessão.";
+    }
+
+    if root.sessions.length > 0: HorizontalLayout {
+        spacing: Theme.space-xs;
+        alignment: start;
+        for session in root.sessions: SessionTab {
+            session: session;
+            active: session.id == root.active-session;
+            selected => { root.session-selected(session.id); }
+            closed => { root.session-closed(session.id); }
+        }
+    }
+
+    if root.sessions.length > 0: TerminalView {
+        lines: root.lines;
+        focused: true;
+        key-pressed(text) => { root.input-sent(text); }
+    }
+}

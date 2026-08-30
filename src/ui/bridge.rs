@@ -11,6 +11,7 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
 use super::session_flow;
+use super::terminal_view;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
 use crate::libs::models::VaultStatus;
@@ -25,7 +26,9 @@ pub fn run() -> Result<()> {
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));
-    session_flow::bind(&window, backend);
+    session_flow::bind(&window, Arc::clone(&backend));
+    // O temporizador de drenagem vive enquanto a janela viver.
+    let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;
     Ok(())

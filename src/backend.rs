@@ -106,6 +106,38 @@ impl Backend {
         Ok(())
     }
 
+    /// Drena a saida pendente da sessao e devolve pelo callback. A interface
+    /// chama isto num temporizador; nada bloqueia a thread de desenho.
+    pub fn poll_output<F>(&self, session_id: &str, on_output: F)
+    where
+        F: FnOnce(Result<String>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        self.runtime.spawn(async move {
+            let output = ssh.lock().await.drain_output(&session_id);
+            on_output(output);
+        });
+    }
+
+    /// Envia bytes crus para o shell da sessao, sem interpretacao.
+    pub fn send_input(&self, session_id: &str, bytes: Vec<u8>) {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        self.runtime.spawn(async move {
+            let _ = ssh.lock().await.write_raw_input(&session_id, &bytes).await;
+        });
+    }
+
+    /// Encerra a sessao e libera o canal remoto.
+    pub fn disconnect(&self, session_id: &str) {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        self.runtime.spawn(async move {
+            ssh.lock().await.disconnect(&session_id).await;
+        });
+    }
+
     /// Recaptura o known_hosts de trabalho para o armazenamento protegido.
     /// Precisa rodar depois de qualquer aceite de host novo.
     pub fn capture_known_hosts(&self) -> Result<()> {

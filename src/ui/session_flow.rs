@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use super::{AppWindow, HostChallenge, SessionRow};
+use super::{AppWindow, HostChallenge, Section, SessionRow};
 use crate::backend::Backend;
 use crate::libs::models::{SshConnectResult, SshSessionInfo};
 
@@ -73,6 +73,8 @@ fn apply(window: &AppWindow, backend: &Backend, profile_id: &str, result: SshCon
                 return;
             }
             push_session(window, &session);
+            window.set_active_session(session.session_id.as_str().into());
+            window.set_section(Section::Terminal);
             window.set_status_message("Sessão aberta.".into());
         }
         SshConnectResult::UnknownHostChallenge {

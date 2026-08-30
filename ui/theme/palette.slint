@@ -1,0 +1,20 @@
+import { Theme } from "tokens.slint";
+
+// Paleta ANSI de 16 cores. Índice -1 significa "usar a cor do tema", o que
+// mantém o terminal coerente com o resto da interface.
+export global Palette {
+    out property <[color]> ansi: [
+        #1c2837, #ff969f, #86dfae, #ffd782,
+        #84bbff, #d7a3ff, #7fdbd4, #c3cedd,
+        #4a5a6f, #ffb3ba, #a8ecc6, #ffe6ae,
+        #a9d1ff, #e6c6ff, #a5e8e2, #edf3fa,
+    ];
+
+    pure public function foreground(index: int) -> color {
+        return index < 0 ? Theme.text-primary : self.ansi[index];
+    }
+
+    pure public function background(index: int) -> color {
+        return index < 0 ? transparent : self.ansi[index];
+    }
+}
