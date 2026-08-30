@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
+use super::editor_flow;
 use super::files_flow;
 use super::keychain_flow;
 use super::known_hosts_flow;
@@ -41,6 +42,7 @@ pub fn run() -> Result<()> {
     notes_flow::bind(&window, Arc::clone(&backend));
     files_flow::bind(&window, Arc::clone(&backend));
     let _transfers_refresh = transfers_flow::bind(&window, Arc::clone(&backend));
+    editor_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;

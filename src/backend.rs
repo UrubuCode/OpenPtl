@@ -260,6 +260,46 @@ impl Backend {
         });
     }
 
+    /// Lê um arquivo remoto como texto para edição.
+    pub fn sftp_read<F>(&self, session_id: &str, path: &str, on_result: F)
+    where
+        F: FnOnce(Result<String>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let path = path.to_owned();
+        let chunk_size = self.chunk_size();
+
+        self.runtime.spawn(async move {
+            let content = ssh
+                .lock()
+                .await
+                .sftp_read(&session_id, &path, chunk_size)
+                .await;
+            on_result(content);
+        });
+    }
+
+    /// Grava o conteúdo editado de volta no servidor.
+    pub fn sftp_write<F>(&self, session_id: &str, path: &str, content: String, on_result: F)
+    where
+        F: FnOnce(Result<()>) + Send + 'static,
+    {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        let path = path.to_owned();
+        let chunk_size = self.chunk_size();
+
+        self.runtime.spawn(async move {
+            let outcome = ssh
+                .lock()
+                .await
+                .sftp_write(&session_id, &path, &content, chunk_size)
+                .await;
+            on_result(outcome);
+        });
+    }
+
     /// Fila de transferências, compartilhada com a interface.
     pub fn transfers(&self) -> Transfers {
         self.transfers.clone()

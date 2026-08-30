@@ -1,0 +1,93 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+// A superfície é uma imagem: o texto vem rasterizado pelo cosmic-text, porque
+// o TextEdit do Slint não aplica estilo por trecho e realce seria impossível.
+export component EditorPage inherits VerticalLayout {
+    in property <string> path;
+    in property <image> surface;
+    in property <bool> dirty: false;
+    in property <string> message;
+    callback key-pressed(string, bool, bool);
+    callback clicked(int, int);
+    callback surface-resized(int, int);
+    callback save-requested();
+    callback close-requested();
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-md;
+
+    if root.path == "": PageHeader {
+        title: "Editor";
+        subtitle: "Abra um arquivo pela aba Arquivos para editá-lo aqui.";
+    }
+
+    if root.path != "": HorizontalLayout {
+        spacing: Theme.space-md;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.space-xs;
+            alignment: center;
+            Text {
+                text: root.dirty ? root.path + " •" : root.path;
+                font-size: Type.body;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            if root.message != "": Text {
+                text: root.message;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+        }
+
+        UiButton { label: "Fechar"; tone: ButtonTone.ghost; clicked => { root.close-requested(); } }
+        UiButton {
+            label: "Salvar";
+            tone: ButtonTone.primary;
+            enabled: root.dirty;
+            clicked => { root.save-requested(); }
+        }
+    }
+
+    if root.path != "": Rectangle {
+        vertical-stretch: 1;
+        background: Theme.overlay;
+        border-radius: Theme.radius-md;
+        border-width: 1px;
+        border-color: focus.has-focus ? Theme.accent : Theme.border;
+        forward-focus: focus;
+
+        // Reporta o tamanho útil para o Rust rasterizar exatamente essa área.
+        changed width => { root.surface-resized(self.width / 1px, self.height / 1px); }
+        changed height => { root.surface-resized(self.width / 1px, self.height / 1px); }
+
+        Image {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            source: root.surface;
+            image-rendering: pixelated;
+        }
+
+        TouchArea {
+            mouse-cursor: MouseCursor.text;
+            clicked => {
+                focus.focus();
+                root.clicked(self.mouse-x / 1px, self.mouse-y / 1px);
+            }
+        }
+
+        focus := FocusScope {
+            key-pressed(event) => {
+                root.key-pressed(event.text, event.modifiers.control, event.modifiers.shift);
+                return accept;
+            }
+        }
+    }
+}

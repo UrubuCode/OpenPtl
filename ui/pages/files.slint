@@ -14,6 +14,7 @@ component FileEntry inherits Rectangle {
     in property <FileRow> data;
     callback opened(FileRow);
     callback download-requested(FileRow);
+    callback edit-requested(FileRow);
     callback delete-requested(FileRow);
 
     height: 34px;
@@ -90,6 +91,7 @@ export component FilesPage inherits VerticalLayout {
     callback folder-created(string);
     callback delete-requested(string, bool);
     callback download-requested(string);
+    callback edit-requested(string);
     callback upload-requested();
     callback transfers-cleared();
 
@@ -164,6 +166,7 @@ export component FilesPage inherits VerticalLayout {
                 data: entry;
                 opened(row) => { root.path-requested(row.path); }
                 download-requested(row) => { root.download-requested(row.path); }
+                edit-requested(row) => { root.edit-requested(row.path); }
                 delete-requested(row) => { root.delete-requested(row.path, row.is-dir); }
             }
         }

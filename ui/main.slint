@@ -62,6 +62,10 @@ export component AppWindow inherits Window {
     in property <string> files-path;
     in property <string> files-message;
     in property <[TransferRow]> transfers;
+    in property <string> editor-path;
+    in property <image> editor-surface;
+    in property <bool> editor-dirty;
+    in property <string> editor-message;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -97,6 +101,12 @@ export component AppWindow inherits Window {
     callback download-requested(string);
     callback upload-requested();
     callback transfers-cleared();
+    callback editor-open-requested(string);
+    callback editor-key-pressed(string, bool, bool);
+    callback editor-clicked(int, int);
+    callback editor-resized(int, int);
+    callback editor-save-requested();
+    callback editor-close-requested();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -123,6 +133,10 @@ export component AppWindow inherits Window {
         files-path: root.files-path;
         files-message: root.files-message;
         transfers: root.transfers;
+        editor-path: root.editor-path;
+        editor-surface: root.editor-surface;
+        editor-dirty: root.editor-dirty;
+        editor-message: root.editor-message;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -148,6 +162,12 @@ export component AppWindow inherits Window {
         download-requested(path) => { root.download-requested(path); }
         upload-requested => { root.upload-requested(); }
         transfers-cleared => { root.transfers-cleared(); }
+        editor-open-requested(path) => { root.editor-open-requested(path); }
+        editor-key-pressed(text, ctrl, shift) => { root.editor-key-pressed(text, ctrl, shift); }
+        editor-clicked(x, y) => { root.editor-clicked(x, y); }
+        editor-resized(w, h) => { root.editor-resized(w, h); }
+        editor-save-requested => { root.editor-save-requested(); }
+        editor-close-requested => { root.editor-close-requested(); }
     }
 
     ConnectionForm {

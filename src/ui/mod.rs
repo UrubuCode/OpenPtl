@@ -1,4 +1,5 @@
 mod bridge;
+mod editor_flow;
 mod files_flow;
 mod keychain_flow;
 mod keymap;

@@ -17,6 +17,7 @@ import { NotesPage } from "../pages/notes.slint";
 import { FileRow } from "../models/file.slint";
 import { FilesPage } from "../pages/files.slint";
 import { TransferRow } from "../models/transfer.slint";
+import { EditorPage } from "../pages/editor.slint";
 
 export { Section }
 
@@ -37,6 +38,10 @@ export component AppShell inherits HorizontalLayout {
     in property <string> files-path;
     in property <string> files-message;
     in property <[TransferRow]> transfers;
+    in property <string> editor-path;
+    in property <image> editor-surface;
+    in property <bool> editor-dirty;
+    in property <string> editor-message;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -64,6 +69,12 @@ export component AppShell inherits HorizontalLayout {
     callback download-requested(string);
     callback upload-requested();
     callback transfers-cleared();
+    callback editor-open-requested(string);
+    callback editor-key-pressed(string, bool, bool);
+    callback editor-clicked(int, int);
+    callback editor-resized(int, int);
+    callback editor-save-requested();
+    callback editor-close-requested();
 
     Sidebar {
         active: root.section;
@@ -101,8 +112,20 @@ export component AppShell inherits HorizontalLayout {
             folder-created(name) => { root.file-folder-created(name); }
             delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
             download-requested(path) => { root.download-requested(path); }
+            edit-requested(path) => { root.editor-open-requested(path); }
             upload-requested => { root.upload-requested(); }
             transfers-cleared => { root.transfers-cleared(); }
+        }
+        if root.section == Section.editor: EditorPage {
+            path: root.editor-path;
+            surface: root.editor-surface;
+            dirty: root.editor-dirty;
+            message: root.editor-message;
+            key-pressed(text, ctrl, shift) => { root.editor-key-pressed(text, ctrl, shift); }
+            clicked(x, y) => { root.editor-clicked(x, y); }
+            surface-resized(w, h) => { root.editor-resized(w, h); }
+            save-requested => { root.editor-save-requested(); }
+            close-requested => { root.editor-close-requested(); }
         }
         if root.section == Section.keychain: KeychainPage {
             rows: root.keychain;
