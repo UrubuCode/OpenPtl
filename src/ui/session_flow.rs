@@ -73,6 +73,8 @@ fn apply(window: &AppWindow, backend: &Backend, profile_id: &str, result: SshCon
                 return;
             }
             push_session(window, &session);
+            // Um host recem-aceito ja entrou no cofre; a lista precisa refletir.
+            super::known_hosts_flow::refresh(window, backend);
             window.set_active_session(session.session_id.as_str().into());
             window.set_section(Section::Terminal);
             window.set_status_message("Sessão aberta.".into());

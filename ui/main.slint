@@ -10,11 +10,12 @@ import { HostChallenge, SessionRow } from "models/session.slint";
 import { TermLine } from "models/terminal.slint";
 import { KeychainRow, KeychainDraft } from "models/keychain.slint";
 import { KeychainForm } from "pages/keychain-form.slint";
+import { KnownHostRow } from "models/session.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
-export { KeychainRow, KeychainDraft }
+export { KeychainRow, KeychainDraft, KnownHostRow }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -41,6 +42,8 @@ export component AppWindow inherits Window {
     in property <bool> keychain-form-open: false;
     in property <KeychainDraft> keychain-draft;
     in property <string> keychain-error;
+    in property <[KnownHostRow]> known-hosts;
+    in property <string> known-hosts-path;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -59,6 +62,7 @@ export component AppWindow inherits Window {
     callback keychain-delete-requested(string);
     callback keychain-saved(KeychainDraft);
     callback keychain-form-dismissed();
+    callback known-host-remove-requested(string);
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -74,6 +78,8 @@ export component AppWindow inherits Window {
         terminal-lines: root.terminal-lines;
         active-session: root.active-session;
         keychain: root.keychain;
+        known-hosts: root.known-hosts;
+        known-hosts-path: root.known-hosts-path;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -84,6 +90,7 @@ export component AppWindow inherits Window {
         keychain-create-requested => { root.keychain-create-requested(); }
         keychain-edit-requested(id) => { root.keychain-edit-requested(id); }
         keychain-delete-requested(id) => { root.keychain-delete-requested(id); }
+        known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
     }
 
     ConnectionForm {

@@ -13,11 +13,11 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::libs::models::{
-    ConnectionProfile, ConnectionProtocol, KeychainEntry, SshConnectPurpose, SshConnectResult,
-    VaultStatus,
+    ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, SshConnectPurpose,
+    SshConnectResult, VaultStatus,
 };
 use crate::libs::vault::VaultManager;
-use crate::protocols::ssh::SshManager;
+use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
 
 pub struct Backend {
     vault: Mutex<VaultManager>,
@@ -148,6 +148,20 @@ impl Backend {
         self.runtime.spawn(async move {
             ssh.lock().await.disconnect(&session_id).await;
         });
+    }
+
+    /// Hosts confiaveis materializados no arquivo de trabalho do cofre.
+    pub fn known_hosts(&self) -> Result<Vec<KnownHostEntry>> {
+        let path = self.vault()?.known_hosts_path();
+        known_hosts_list(Some(&path.to_string_lossy()))
+    }
+
+    /// Remove um host e devolve o arquivo ao armazenamento protegido, para que
+    /// a revogacao sobreviva ao proximo desbloqueio.
+    pub fn known_host_remove(&self, line_raw: &str) -> Result<()> {
+        let path = self.vault()?.known_hosts_path();
+        known_hosts_remove(Some(&path.to_string_lossy()), line_raw)?;
+        self.capture_known_hosts()
     }
 
     /// Recaptura o known_hosts de trabalho para o armazenamento protegido.

@@ -8,6 +8,8 @@ import { SessionRow } from "../models/session.slint";
 import { TermLine } from "../models/terminal.slint";
 import { KeychainRow } from "../models/keychain.slint";
 import { KeychainPage } from "../pages/keychain.slint";
+import { KnownHostRow } from "../models/session.slint";
+import { KnownHostsPage } from "../pages/known-hosts.slint";
 
 export { Section }
 
@@ -17,6 +19,8 @@ export component AppShell inherits HorizontalLayout {
     in property <[TermLine]> terminal-lines;
     in property <string> active-session;
     in property <[KeychainRow]> keychain;
+    in property <[KnownHostRow]> known-hosts;
+    in property <string> known-hosts-path;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -29,6 +33,7 @@ export component AppShell inherits HorizontalLayout {
     callback keychain-create-requested();
     callback keychain-edit-requested(string);
     callback keychain-delete-requested(string);
+    callback known-host-remove-requested(string);
 
     Sidebar {
         active: root.section;
@@ -60,7 +65,11 @@ export component AppShell inherits HorizontalLayout {
             edit-requested(id) => { root.keychain-edit-requested(id); }
             delete-requested(id) => { root.keychain-delete-requested(id); }
         }
-        if root.section == Section.known-hosts: PendingPage { title: "Hosts conhecidos"; }
+        if root.section == Section.known-hosts: KnownHostsPage {
+            rows: root.known-hosts;
+            path: root.known-hosts-path;
+            remove-requested(line) => { root.known-host-remove-requested(line); }
+        }
         if root.section == Section.notes: PendingPage { title: "Notas"; }
         if root.section == Section.settings: PendingPage { title: "Configurações"; }
         if root.section == Section.about: PendingPage { title: "Sobre"; }
