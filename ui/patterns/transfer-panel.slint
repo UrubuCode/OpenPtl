@@ -1,0 +1,78 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { TransferRow } from "../models/transfer.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+
+component ProgressBar inherits Rectangle {
+    in property <int> percent;
+    in property <bool> failed: false;
+
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.surface-inset;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * min(root.percent, 100) / 100;
+        height: parent.height;
+        border-radius: parent.border-radius;
+        background: root.failed ? Theme.danger : Theme.accent;
+        animate width { duration: Theme.motion-base; }
+    }
+}
+
+export component TransferPanel inherits Rectangle {
+    in property <[TransferRow]> rows;
+    callback cleared();
+
+    visible: root.rows.length > 0;
+    height: root.rows.length > 0 ? body.preferred-height + 2 * Theme.space-md : 0px;
+    background: Theme.surface;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    body := VerticalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-sm;
+
+        HorizontalLayout {
+            Text {
+                horizontal-stretch: 1;
+                text: "Transferências";
+                vertical-alignment: center;
+                font-size: Type.label;
+                font-weight: Type.weight-medium;
+                color: Theme.text-secondary;
+            }
+            UiButton {
+                width: 100px;
+                height: 24px;
+                label: "Limpar";
+                tone: ButtonTone.ghost;
+                clicked => { root.cleared(); }
+            }
+        }
+
+        for row in root.rows: VerticalLayout {
+            spacing: Theme.space-xs;
+
+            HorizontalLayout {
+                spacing: Theme.space-sm;
+                Text {
+                    horizontal-stretch: 1;
+                    text: row.direction + " " + row.name;
+                    font-size: Type.caption;
+                    color: row.failed ? Theme.danger : Theme.text-primary;
+                    overflow: elide;
+                }
+                Text {
+                    text: row.detail;
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                }
+            }
+            ProgressBar { percent: row.progress; failed: row.failed; }
+        }
+    }
+}

@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use anyhow::{anyhow, Result};
@@ -16,13 +17,18 @@ use crate::libs::models::{
     AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, Note,
     SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
 };
+use crate::libs::transfer::{Direction, Registry as Transfers};
 use crate::libs::vault::VaultManager;
 use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
+
+/// Bloco padrão de transferência quando a preferência não pode ser lida.
+const DEFAULT_CHUNK_BYTES: usize = 1024 * 1024;
 
 pub struct Backend {
     vault: Mutex<VaultManager>,
     ssh: Arc<AsyncMutex<SshManager>>,
     runtime: Runtime,
+    transfers: Transfers,
 }
 
 impl Backend {
@@ -31,6 +37,7 @@ impl Backend {
             vault: Mutex::new(VaultManager::new()?),
             ssh: Arc::new(AsyncMutex::new(SshManager::new())),
             runtime: Runtime::new()?,
+            transfers: Transfers::new(),
         })
     }
 
@@ -253,6 +260,92 @@ impl Backend {
         });
     }
 
+    /// Fila de transferências, compartilhada com a interface.
+    pub fn transfers(&self) -> Transfers {
+        self.transfers.clone()
+    }
+
+    /// Baixa um arquivo remoto para o disco local. O progresso é publicado na
+    /// fila; a interface lê de lá em vez de receber um evento por bloco.
+    pub fn sftp_download(&self, session_id: &str, remote: &str, local: PathBuf) {
+        let ssh = Arc::clone(&self.ssh);
+        let transfers = self.transfers.clone();
+        let session_id = session_id.to_owned();
+        let remote = remote.to_owned();
+        let chunk_size = self.chunk_size();
+
+        self.runtime.spawn(async move {
+            let name = file_name_of(&remote);
+            let mut manager = ssh.lock().await;
+
+            let total = manager
+                .sftp_file_size(&session_id, &remote)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or(0);
+            let id = transfers.start(&name, Direction::Download, total);
+
+            let outcome = match std::fs::File::create(&local) {
+                Ok(file) => {
+                    let mut writer = std::io::BufWriter::new(file);
+                    let progress = transfers.clone();
+                    let ticket = id.clone();
+                    manager
+                        .sftp_download_to_writer(&session_id, &remote, &mut writer, chunk_size, {
+                            move |bytes| progress.advance(&ticket, bytes)
+                        })
+                        .await
+                }
+                Err(error) => Err(anyhow!("Falha ao criar {}: {error}", local.display())),
+            };
+
+            transfers.finish(&id, outcome.map_err(|error| format!("{error}")));
+        });
+    }
+
+    /// Envia um arquivo local para o servidor.
+    pub fn sftp_upload(&self, session_id: &str, local: PathBuf, remote: &str) {
+        let ssh = Arc::clone(&self.ssh);
+        let transfers = self.transfers.clone();
+        let session_id = session_id.to_owned();
+        let remote = remote.to_owned();
+        let chunk_size = self.chunk_size();
+
+        self.runtime.spawn(async move {
+            let name = file_name_of(&remote);
+            let total = std::fs::metadata(&local)
+                .map(|meta| meta.len())
+                .unwrap_or(0);
+            let id = transfers.start(&name, Direction::Upload, total);
+
+            let outcome = match std::fs::File::open(&local) {
+                Ok(file) => {
+                    let mut reader = std::io::BufReader::new(file);
+                    let progress = transfers.clone();
+                    let ticket = id.clone();
+                    ssh.lock()
+                        .await
+                        .sftp_upload_from_reader(&session_id, &remote, &mut reader, chunk_size, {
+                            move |bytes| progress.advance(&ticket, bytes)
+                        })
+                        .await
+                }
+                Err(error) => Err(anyhow!("Falha ao abrir {}: {error}", local.display())),
+            };
+
+            transfers.finish(&id, outcome.map_err(|error| format!("{error}")));
+        });
+    }
+
+    /// Tamanho de bloco configurado no cofre; o padrão vale se o cofre estiver
+    /// indisponível, para não travar uma transferência por causa disso.
+    fn chunk_size(&self) -> usize {
+        self.settings()
+            .map(|settings| settings.sftp_chunk_size_kb as usize * 1024)
+            .unwrap_or(DEFAULT_CHUNK_BYTES)
+    }
+
     /// Recaptura o known_hosts de trabalho para o armazenamento protegido.
     /// Precisa rodar depois de qualquer aceite de host novo.
     pub fn capture_known_hosts(&self) -> Result<()> {
@@ -264,4 +357,12 @@ impl Backend {
             .lock()
             .map_err(|_| anyhow!("Estado do cofre ficou inconsistente"))
     }
+}
+
+/// Nome exibido na fila: só o último segmento do caminho remoto.
+fn file_name_of(path: &str) -> String {
+    path.rsplit('/')
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
+        .to_owned()
 }

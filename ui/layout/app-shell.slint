@@ -16,6 +16,7 @@ import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
 import { FileRow } from "../models/file.slint";
 import { FilesPage } from "../pages/files.slint";
+import { TransferRow } from "../models/transfer.slint";
 
 export { Section }
 
@@ -35,6 +36,7 @@ export component AppShell inherits HorizontalLayout {
     in property <[FileRow]> files;
     in property <string> files-path;
     in property <string> files-message;
+    in property <[TransferRow]> transfers;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -59,6 +61,9 @@ export component AppShell inherits HorizontalLayout {
     callback file-reload-requested();
     callback file-folder-created(string);
     callback file-delete-requested(string, bool);
+    callback download-requested(string);
+    callback upload-requested();
+    callback transfers-cleared();
 
     Sidebar {
         active: root.section;
@@ -89,11 +94,15 @@ export component AppShell inherits HorizontalLayout {
             entries: root.files;
             path: root.files-path;
             message: root.files-message;
+            transfers: root.transfers;
             path-requested(path) => { root.file-path-requested(path); }
             parent-requested => { root.file-parent-requested(); }
             reload-requested => { root.file-reload-requested(); }
             folder-created(name) => { root.file-folder-created(name); }
             delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
+            download-requested(path) => { root.download-requested(path); }
+            upload-requested => { root.upload-requested(); }
+            transfers-cleared => { root.transfers-cleared(); }
         }
         if root.section == Section.keychain: KeychainPage {
             rows: root.keychain;

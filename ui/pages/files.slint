@@ -7,10 +7,13 @@ import { UiField } from "../components/field.slint";
 import { UiCard } from "../components/card.slint";
 import { PageHeader } from "../patterns/page-header.slint";
 import { ListPanel } from "../patterns/list-panel.slint";
+import { TransferRow } from "../models/transfer.slint";
+import { TransferPanel } from "../patterns/transfer-panel.slint";
 
 component FileEntry inherits Rectangle {
     in property <FileRow> data;
     callback opened(FileRow);
+    callback download-requested(FileRow);
     callback delete-requested(FileRow);
 
     height: 34px;
@@ -79,12 +82,16 @@ export component FilesPage inherits VerticalLayout {
     in property <[FileRow]> entries;
     in property <string> path;
     in property <string> message;
+    in property <[TransferRow]> transfers;
     in-out property <string> new-folder;
     callback path-requested(string);
     callback parent-requested();
     callback reload-requested();
     callback folder-created(string);
     callback delete-requested(string, bool);
+    callback download-requested(string);
+    callback upload-requested();
+    callback transfers-cleared();
 
     // Limpa o campo aqui, na propria pagina, para nao precisar expor o
     // rascunho da nova pasta ate a janela raiz.
@@ -111,6 +118,7 @@ export component FilesPage inherits VerticalLayout {
 
         UiButton { label: "Acima"; tone: ButtonTone.ghost; clicked => { root.parent-requested(); } }
         UiButton { label: "Recarregar"; tone: ButtonTone.ghost; clicked => { root.reload-requested(); } }
+        UiButton { label: "Enviar arquivo"; tone: ButtonTone.ghost; clicked => { root.upload-requested(); } }
 
         Rectangle { horizontal-stretch: 1; }
 
@@ -136,6 +144,11 @@ export component FilesPage inherits VerticalLayout {
         color: Theme.text-muted;
     }
 
+    TransferPanel {
+        rows: root.transfers;
+        cleared => { root.transfers-cleared(); }
+    }
+
     if root.sessions.length > 0: UiCard {
         vertical-stretch: 1;
 
@@ -150,6 +163,7 @@ export component FilesPage inherits VerticalLayout {
             for entry in root.entries: FileEntry {
                 data: entry;
                 opened(row) => { root.path-requested(row.path); }
+                download-requested(row) => { root.download-requested(row.path); }
                 delete-requested(row) => { root.delete-requested(row.path, row.is-dir); }
             }
         }

@@ -8,4 +8,5 @@
 pub mod models;
 pub mod secret_store;
 pub mod terminal;
+pub mod transfer;
 pub mod vault;

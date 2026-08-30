@@ -15,11 +15,13 @@ import { SettingsDraft } from "models/settings.slint";
 import { NoteRow, NoteDraft } from "models/note.slint";
 import { NoteForm } from "pages/note-form.slint";
 import { FileRow } from "models/file.slint";
+import { TransferRow } from "models/transfer.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
+export { TransferRow }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -59,6 +61,7 @@ export component AppWindow inherits Window {
     in property <[FileRow]> files;
     in property <string> files-path;
     in property <string> files-message;
+    in property <[TransferRow]> transfers;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -91,6 +94,9 @@ export component AppWindow inherits Window {
     callback file-reload-requested();
     callback file-folder-created(string);
     callback file-delete-requested(string, bool);
+    callback download-requested(string);
+    callback upload-requested();
+    callback transfers-cleared();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -116,6 +122,7 @@ export component AppWindow inherits Window {
         files: root.files;
         files-path: root.files-path;
         files-message: root.files-message;
+        transfers: root.transfers;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -138,6 +145,9 @@ export component AppWindow inherits Window {
         file-reload-requested => { root.file-reload-requested(); }
         file-folder-created(name) => { root.file-folder-created(name); }
         file-delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
+        download-requested(path) => { root.download-requested(path); }
+        upload-requested => { root.upload-requested(); }
+        transfers-cleared => { root.transfers-cleared(); }
     }
 
     ConnectionForm {

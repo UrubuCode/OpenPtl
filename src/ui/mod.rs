@@ -8,6 +8,7 @@ mod notes_flow;
 mod session_flow;
 mod settings_flow;
 mod terminal_view;
+mod transfers_flow;
 
 slint::include_modules!();
 
