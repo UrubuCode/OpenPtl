@@ -1,0 +1,17 @@
+export struct NoteRow {
+    id: string,
+    title: string,
+    preview: string,
+    // Índice na paleta de notas; 0 é a cor neutra.
+    color: int,
+    pinned: bool,
+    updated-at: string,
+}
+
+export struct NoteDraft {
+    id: string,
+    title: string,
+    content: string,
+    color: int,
+    pinned: bool,
+}

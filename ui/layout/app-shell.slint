@@ -2,7 +2,6 @@ import { Theme } from "../theme/tokens.slint";
 import { Sidebar, Section } from "sidebar.slint";
 import { ConnectionRow } from "../models/connection.slint";
 import { ConnectionsPage } from "../pages/connections.slint";
-import { PendingPage } from "../pages/pending.slint";
 import { TerminalPage } from "../pages/terminal.slint";
 import { SessionRow } from "../models/session.slint";
 import { TermLine } from "../models/terminal.slint";
@@ -13,6 +12,8 @@ import { KnownHostsPage } from "../pages/known-hosts.slint";
 import { SettingsDraft } from "../models/settings.slint";
 import { SettingsPage } from "../pages/settings.slint";
 import { AboutPage } from "../pages/about.slint";
+import { NoteRow } from "../models/note.slint";
+import { NotesPage } from "../pages/notes.slint";
 
 export { Section }
 
@@ -28,6 +29,7 @@ export component AppShell inherits HorizontalLayout {
     in property <string> settings-message;
     in property <string> version;
     in property <string> storage-path;
+    in property <[NoteRow]> notes;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -43,6 +45,10 @@ export component AppShell inherits HorizontalLayout {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback note-create-requested();
+    callback note-edit-requested(string);
+    callback note-pin-toggled(string);
+    callback note-delete-requested(string);
 
     Sidebar {
         active: root.section;
@@ -79,7 +85,13 @@ export component AppShell inherits HorizontalLayout {
             path: root.known-hosts-path;
             remove-requested(line) => { root.known-host-remove-requested(line); }
         }
-        if root.section == Section.notes: PendingPage { title: "Notas"; }
+        if root.section == Section.notes: NotesPage {
+            rows: root.notes;
+            create-requested => { root.note-create-requested(); }
+            edit-requested(id) => { root.note-edit-requested(id); }
+            pin-toggled(id) => { root.note-pin-toggled(id); }
+            delete-requested(id) => { root.note-delete-requested(id); }
+        }
         if root.section == Section.settings: SettingsPage {
             settings: root.settings;
             message: root.settings-message;

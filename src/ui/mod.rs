@@ -3,6 +3,7 @@ mod keychain_flow;
 mod keymap;
 mod known_hosts_flow;
 mod mappers;
+mod notes_flow;
 mod session_flow;
 mod settings_flow;
 mod terminal_view;

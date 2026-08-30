@@ -4,11 +4,13 @@
 //! vault: alterá-la invalida vaults existentes.
 
 pub mod base;
+pub mod notes;
 pub mod runtime;
 pub mod settings;
 pub mod storage;
 
 pub use base::*;
+pub use notes::*;
 pub use runtime::*;
 pub use settings::*;
 pub use storage::*;

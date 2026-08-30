@@ -12,11 +12,13 @@ import { KeychainRow, KeychainDraft } from "models/keychain.slint";
 import { KeychainForm } from "pages/keychain-form.slint";
 import { KnownHostRow } from "models/session.slint";
 import { SettingsDraft } from "models/settings.slint";
+import { NoteRow, NoteDraft } from "models/note.slint";
+import { NoteForm } from "pages/note-form.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
-export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft }
+export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -49,6 +51,10 @@ export component AppWindow inherits Window {
     in property <string> settings-message;
     in property <string> version;
     in property <string> storage-path;
+    in property <[NoteRow]> notes;
+    in property <bool> note-form-open: false;
+    in property <NoteDraft> note-draft;
+    in property <string> note-error;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -70,6 +76,12 @@ export component AppWindow inherits Window {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback note-create-requested();
+    callback note-edit-requested(string);
+    callback note-pin-toggled(string);
+    callback note-delete-requested(string);
+    callback note-saved(NoteDraft);
+    callback note-form-dismissed();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -91,6 +103,7 @@ export component AppWindow inherits Window {
         settings-message: root.settings-message;
         version: root.version;
         storage-path: root.storage-path;
+        notes: root.notes;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -104,6 +117,10 @@ export component AppWindow inherits Window {
         known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
         settings-saved(draft) => { root.settings-saved(draft); }
         vault-lock-requested => { root.vault-lock-requested(); }
+        note-create-requested => { root.note-create-requested(); }
+        note-edit-requested(id) => { root.note-edit-requested(id); }
+        note-pin-toggled(id) => { root.note-pin-toggled(id); }
+        note-delete-requested(id) => { root.note-delete-requested(id); }
     }
 
     ConnectionForm {
@@ -125,5 +142,12 @@ export component AppWindow inherits Window {
         error: root.keychain-error;
         saved(draft) => { root.keychain-saved(draft); }
         cancelled => { root.keychain-form-dismissed(); }
+    }
+    NoteForm {
+        open: root.note-form-open;
+        draft: root.note-draft;
+        error: root.note-error;
+        saved(draft) => { root.note-saved(draft); }
+        cancelled => { root.note-form-dismissed(); }
     }
 }

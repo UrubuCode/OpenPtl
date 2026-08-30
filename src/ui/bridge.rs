@@ -12,6 +12,7 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use super::keychain_flow;
 use super::known_hosts_flow;
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
+use super::notes_flow;
 use super::session_flow;
 use super::settings_flow;
 use super::terminal_view;
@@ -35,6 +36,7 @@ pub fn run() -> Result<()> {
     keychain_flow::bind(&window, Arc::clone(&backend));
     known_hosts_flow::bind(&window, Arc::clone(&backend));
     settings_flow::bind(&window, Arc::clone(&backend));
+    notes_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;
@@ -72,6 +74,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
                 keychain_flow::refresh(&window, &backend);
                 known_hosts_flow::refresh(&window, &backend);
                 settings_flow::refresh(&window, &backend);
+                notes_flow::refresh(&window, &backend);
             }
             Err(error) => window.set_vault_error(report(&error)),
         }

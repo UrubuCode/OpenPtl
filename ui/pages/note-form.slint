@@ -1,0 +1,103 @@
+import { TextEdit } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { Palette } from "../theme/palette.slint";
+import { NoteDraft } from "../models/note.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiToggle } from "../components/toggle.slint";
+import { Modal } from "../patterns/modal.slint";
+
+component ColorSwatch inherits Rectangle {
+    in property <int> index;
+    in property <bool> selected: false;
+    callback picked(int);
+
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background: Palette.note[root.index];
+    border-width: root.selected ? 2px : 0px;
+    border-color: Theme.text-primary;
+
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(root.index); }
+    }
+}
+
+export component NoteForm inherits Modal {
+    in property <NoteDraft> draft;
+    in property <string> error;
+    callback saved(NoteDraft);
+    callback cancelled();
+
+    panel-width: 560px;
+    title: root.draft.id == "" ? "Nova nota" : "Editar nota";
+    dismissed => { root.cancelled(); }
+
+    property <NoteDraft> edited: root.draft;
+
+    UiField {
+        label: "Título";
+        placeholder: "Ex.: Rotina de deploy";
+        value <=> root.edited.title;
+    }
+
+    VerticalLayout {
+        spacing: Theme.space-xs;
+        Text {
+            text: "Conteúdo";
+            font-size: Type.caption;
+            color: Theme.text-muted;
+        }
+        Rectangle {
+            height: 220px;
+            background: Theme.surface-inset;
+            border-radius: Theme.radius-sm;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            TextEdit {
+                width: parent.width - 2 * Theme.space-sm;
+                height: parent.height - 2 * Theme.space-sm;
+                font-size: Type.body;
+                wrap: word-wrap;
+                text <=> root.edited.content;
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+        alignment: start;
+        for index in 9: ColorSwatch {
+            index: index;
+            selected: index == root.edited.color;
+            picked(value) => { root.edited.color = value; }
+        }
+    }
+
+    UiToggle {
+        label: "Fixar no topo";
+        checked <=> root.edited.pinned;
+    }
+
+    if root.error != "": Text {
+        text: root.error;
+        color: Theme.danger;
+        wrap: word-wrap;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+        alignment: end;
+        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.cancelled(); } }
+        UiButton {
+            label: "Salvar";
+            tone: ButtonTone.primary;
+            enabled: root.edited.title != "";
+            clicked => { root.saved(root.edited); }
+        }
+    }
+}

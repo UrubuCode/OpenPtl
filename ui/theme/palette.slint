@@ -3,6 +3,13 @@ import { Theme } from "tokens.slint";
 // Paleta ANSI de 16 cores. Índice -1 significa "usar a cor do tema", o que
 // mantém o terminal coerente com o resto da interface.
 export global Palette {
+    // Cores de destaque das notas, na mesma ordem do enum NoteColor.
+    out property <[color]> note: [
+        #29384a, #ffd782, #84bbff, #86dfae,
+        #ff9fd0, #c79bff, #ff969f, #ffb17a,
+        #7fdbd4,
+    ];
+
     out property <[color]> ansi: [
         #1c2837, #ff969f, #86dfae, #ffd782,
         #84bbff, #d7a3ff, #7fdbd4, #c3cedd,

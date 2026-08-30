@@ -13,7 +13,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::libs::models::{
-    AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry,
+    AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, Note,
     SshConnectPurpose, SshConnectResult, VaultStatus,
 };
 use crate::libs::vault::VaultManager;
@@ -159,6 +159,25 @@ impl Backend {
     }
 
     /// Hosts confiaveis materializados no arquivo de trabalho do cofre.
+    pub fn notes(&self) -> Result<Vec<Note>> {
+        self.vault()?.notes_list()
+    }
+
+    pub fn note(&self, id: &str) -> Result<Note> {
+        self.notes()?
+            .into_iter()
+            .find(|note| note.id == id)
+            .ok_or_else(|| anyhow!("Nota nao encontrada"))
+    }
+
+    pub fn note_save(&self, note: Note) -> Result<Note> {
+        self.vault()?.note_save(note)
+    }
+
+    pub fn note_delete(&self, id: &str) -> Result<()> {
+        self.vault()?.note_delete(id)
+    }
+
     pub fn storage_path(&self) -> Result<String> {
         Ok(self.vault()?.storage_path().to_string_lossy().to_string())
     }

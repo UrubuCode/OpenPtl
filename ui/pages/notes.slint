@@ -1,0 +1,101 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { Palette } from "../theme/palette.slint";
+import { NoteRow } from "../models/note.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiCard } from "../components/card.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+import { ListPanel } from "../patterns/list-panel.slint";
+
+component NoteCard inherits UiCard {
+    in property <NoteRow> data;
+    callback edit-requested(string);
+    callback pin-toggled(string);
+    callback delete-requested(string);
+
+    height: 82px;
+
+    HorizontalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-md;
+
+        Rectangle {
+            width: 4px;
+            border-radius: 2px;
+            background: Palette.note[root.data.color];
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.space-xs;
+            alignment: center;
+
+            Text {
+                text: root.data.title;
+                font-size: Type.body;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.preview;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.updated-at;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.space-sm;
+            alignment: center;
+            UiButton {
+                label: root.data.pinned ? "Desafixar" : "Fixar";
+                tone: ButtonTone.ghost;
+                clicked => { root.pin-toggled(root.data.id); }
+            }
+            UiButton { label: "Editar"; tone: ButtonTone.ghost; clicked => { root.edit-requested(root.data.id); } }
+            UiButton { label: "Excluir"; tone: ButtonTone.danger; clicked => { root.delete-requested(root.data.id); } }
+        }
+    }
+}
+
+export component NotesPage inherits VerticalLayout {
+    in property <[NoteRow]> rows;
+    callback create-requested();
+    callback edit-requested(string);
+    callback pin-toggled(string);
+    callback delete-requested(string);
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-lg;
+
+    HorizontalLayout {
+        PageHeader {
+            horizontal-stretch: 1;
+            title: "Notas";
+            subtitle: "Anotações guardadas criptografadas no cofre, junto com os perfis.";
+        }
+        UiButton {
+            label: "Nova nota";
+            tone: ButtonTone.primary;
+            clicked => { root.create-requested(); }
+        }
+    }
+
+    ListPanel {
+        empty: root.rows.length == 0;
+        empty-message: "Nenhuma nota ainda.";
+
+        for row in root.rows: NoteCard {
+            data: row;
+            edit-requested(id) => { root.edit-requested(id); }
+            pin-toggled(id) => { root.pin-toggled(id); }
+            delete-requested(id) => { root.delete-requested(id); }
+        }
+    }
+}

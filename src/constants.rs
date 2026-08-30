@@ -16,6 +16,9 @@ pub const MANIFEST_FILE_NAME: &str = "manifest.bin";
 /// Store criptografado de known_hosts. Fica num .bin separado para não alterar
 /// o layout posicional de profile.bin, o que quebraria vaults existentes.
 pub const KNOWN_HOSTS_FILE_NAME: &str = "known_hosts.bin";
+/// Notas do usuário, em arquivo próprio pelo mesmo motivo do known_hosts.
+pub const NOTES_FILE_NAME: &str = "notes.bin";
+
 /// Extensão esperada nos arquivos de payload criptografado.
 pub const STORAGE_FILE_EXTENSION: &str = "bin";
 

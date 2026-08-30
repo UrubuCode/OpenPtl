@@ -1,5 +1,6 @@
 use super::*;
-use crate::libs::models::{ConnectionKind, ConnectionProtocol};
+use crate::constants::NOTES_FILE_NAME;
+use crate::libs::models::{ConnectionKind, ConnectionProtocol, Note, NoteColor};
 use std::path::Path;
 use tempfile::tempdir;
 
@@ -12,6 +13,7 @@ pub(super) fn test_vault_manager(storage_root: &Path) -> VaultManager {
         manifest_path: storage_root.join(MANIFEST_FILE_NAME),
         known_hosts_path: storage_root.join("known_hosts"),
         known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
+        notes_path: storage_root.join(NOTES_FILE_NAME),
         runtime: VaultRuntime::default(),
     }
 }
@@ -164,4 +166,77 @@ pub(super) fn should_keep_password_valid_for_snapshot_x_even_after_snapshot_y_ch
         .unlock(Some(password.to_string()))
         .expect("unlock with same password should succeed for snapshot X");
     assert!(!status.locked, "vault should be unlocked after restoring X");
+}
+
+#[test]
+fn notes_round_trip_through_encrypted_store() {
+    let storage = tempdir().expect("temp dir");
+    let mut vault = test_vault_manager(storage.path());
+    vault.init(Some("senha-mestra".into())).expect("init");
+
+    let saved = vault
+        .note_save(Note {
+            title: "Rotina de deploy".into(),
+            content: "1. build\n2. publicar".into(),
+            color: NoteColor::Blue,
+            pinned: true,
+            ..Default::default()
+        })
+        .expect("save");
+
+    assert!(!saved.id.is_empty(), "uma nota nova recebe UUID");
+    assert!(saved.created_at > 0);
+
+    vault.lock();
+    vault.unlock(Some("senha-mestra".into())).expect("unlock");
+
+    let notes = vault.notes_list().expect("list");
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].title, "Rotina de deploy");
+    assert_eq!(notes[0].color, NoteColor::Blue);
+    assert!(notes[0].pinned);
+}
+
+#[test]
+fn notes_file_never_stores_content_in_clear() {
+    let storage = tempdir().expect("temp dir");
+    let mut vault = test_vault_manager(storage.path());
+    vault.init(Some("senha-mestra".into())).expect("init");
+
+    vault
+        .note_save(Note {
+            title: "credencial".into(),
+            content: "segredo-em-texto-claro".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let raw = fs::read(storage.path().join(NOTES_FILE_NAME)).expect("notes.bin");
+    let haystack = String::from_utf8_lossy(&raw);
+    assert!(!haystack.contains("segredo-em-texto-claro"));
+    assert!(!haystack.contains("credencial"));
+}
+
+#[test]
+fn pinned_notes_come_first() {
+    let storage = tempdir().expect("temp dir");
+    let mut vault = test_vault_manager(storage.path());
+    vault.init(Some("senha-mestra".into())).expect("init");
+
+    vault
+        .note_save(Note {
+            title: "comum".into(),
+            ..Default::default()
+        })
+        .expect("save");
+    vault
+        .note_save(Note {
+            title: "fixada".into(),
+            pinned: true,
+            ..Default::default()
+        })
+        .expect("save");
+
+    let notes = vault.notes_list().expect("list");
+    assert_eq!(notes[0].title, "fixada");
 }

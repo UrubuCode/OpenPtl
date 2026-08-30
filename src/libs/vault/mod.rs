@@ -20,18 +20,19 @@ use sha2::{Digest, Sha256};
 
 use crate::constants::{
     APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, KEYRING_VAULT_KEY,
-    KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, OPENPTL_FILE_NAME, PROFILE_FILE_NAME,
-    STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
+    KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, NOTES_FILE_NAME, OPENPTL_FILE_NAME,
+    PROFILE_FILE_NAME, STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
 };
 use crate::libs::models::{
-    AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry, ManifestBinPayload,
-    ProfileBinPayload, SyncMetadata, VaultPayload, VaultStatus, WindowState,
+    AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry, ManifestBinPayload, Note,
+    NotesBinPayload, ProfileBinPayload, SyncMetadata, VaultPayload, VaultStatus, WindowState,
 };
 
 mod crypto;
 mod files;
 mod known_hosts;
 mod lifecycle;
+mod notes;
 mod persistence;
 mod records;
 
@@ -54,6 +55,7 @@ pub struct VaultManager {
     manifest_path: PathBuf,
     known_hosts_path: PathBuf,
     known_hosts_bin_path: PathBuf,
+    notes_path: PathBuf,
     runtime: VaultRuntime,
 }
 
@@ -103,6 +105,7 @@ impl VaultManager {
             manifest_path: storage_root.join(MANIFEST_FILE_NAME),
             known_hosts_path: storage_root.join("known_hosts"),
             known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
+            notes_path: storage_root.join(NOTES_FILE_NAME),
             storage_root,
             runtime: VaultRuntime::default(),
         })
