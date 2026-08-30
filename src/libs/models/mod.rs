@@ -8,12 +8,14 @@ pub mod notes;
 pub mod runtime;
 pub mod settings;
 pub mod storage;
+pub mod sync;
 
 pub use base::*;
 pub use notes::*;
 pub use runtime::*;
 pub use settings::*;
 pub use storage::*;
+pub use sync::*;
 
 #[cfg(test)]
 mod tests;

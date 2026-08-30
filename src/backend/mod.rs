@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+mod sync;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -17,6 +19,7 @@ use crate::libs::models::{
     AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, Note,
     SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
 };
+use crate::libs::sync::{Reporter as SyncReporter, SyncManager};
 use crate::libs::transfer::{Direction, Registry as Transfers};
 use crate::libs::vault::VaultManager;
 use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
@@ -25,19 +28,23 @@ use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
 const DEFAULT_CHUNK_BYTES: usize = 1024 * 1024;
 
 pub struct Backend {
-    vault: Mutex<VaultManager>,
+    vault: Arc<Mutex<VaultManager>>,
     ssh: Arc<AsyncMutex<SshManager>>,
     runtime: Runtime,
     transfers: Transfers,
+    sync: Arc<AsyncMutex<SyncManager>>,
+    sync_reporter: SyncReporter,
 }
 
 impl Backend {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            vault: Mutex::new(VaultManager::new()?),
+            vault: Arc::new(Mutex::new(VaultManager::new()?)),
             ssh: Arc::new(AsyncMutex::new(SshManager::new())),
             runtime: Runtime::new()?,
             transfers: Transfers::new(),
+            sync: Arc::new(AsyncMutex::new(SyncManager::new())),
+            sync_reporter: SyncReporter::new(),
         })
     }
 

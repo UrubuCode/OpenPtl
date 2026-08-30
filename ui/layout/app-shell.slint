@@ -14,6 +14,7 @@ import { SettingsPage } from "../pages/settings.slint";
 import { AboutPage } from "../pages/about.slint";
 import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
+import { SyncPage } from "../pages/sync.slint";
 import { FileRow } from "../models/file.slint";
 import { FilesPage } from "../pages/files.slint";
 import { TransferRow } from "../models/transfer.slint";
@@ -42,6 +43,11 @@ export component AppShell inherits HorizontalLayout {
     in property <image> editor-surface;
     in property <bool> editor-dirty;
     in property <string> editor-message;
+    in property <bool> sync-connected;
+    in property <bool> sync-busy;
+    in property <string> sync-account;
+    in property <string> sync-message;
+    in property <int> sync-progress;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -75,6 +81,11 @@ export component AppShell inherits HorizontalLayout {
     callback editor-resized(int, int);
     callback editor-save-requested();
     callback editor-close-requested();
+    callback sync-login-requested();
+    callback sync-logout-requested();
+    callback sync-push-requested();
+    callback sync-pull-requested();
+    callback sync-cancel-requested();
 
     Sidebar {
         active: root.section;
@@ -144,6 +155,18 @@ export component AppShell inherits HorizontalLayout {
             edit-requested(id) => { root.note-edit-requested(id); }
             pin-toggled(id) => { root.note-pin-toggled(id); }
             delete-requested(id) => { root.note-delete-requested(id); }
+        }
+        if root.section == Section.sync: SyncPage {
+            connected: root.sync-connected;
+            busy: root.sync-busy;
+            account: root.sync-account;
+            message: root.sync-message;
+            progress: root.sync-progress;
+            login-requested => { root.sync-login-requested(); }
+            logout-requested => { root.sync-logout-requested(); }
+            push-requested => { root.sync-push-requested(); }
+            pull-requested => { root.sync-pull-requested(); }
+            cancel-requested => { root.sync-cancel-requested(); }
         }
         if root.section == Section.settings: SettingsPage {
             settings: root.settings;

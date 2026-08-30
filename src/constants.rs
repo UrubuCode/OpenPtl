@@ -26,3 +26,17 @@ pub const STORAGE_FILE_EXTENSION: &str = "bin";
 pub const CURRENT_STORAGE_VERSION: u32 = 1;
 /// Versão atual do esquema do payload criptografado.
 pub const CURRENT_PAYLOAD_VERSION: u32 = 1;
+
+/// Chaves auxiliares do keychain usadas pela sincronização.
+pub const KEYRING_REFRESH_TOKEN: &str = "google-drive-refresh-token";
+pub const KEYRING_USER_EMAIL: &str = "google-user-email";
+pub const KEYRING_USER_NAME: &str = "google-user-name";
+pub const KEYRING_USER_PICTURE: &str = "google-user-picture";
+
+/// Identificadores do Google Drive usados pelo armazenamento remoto.
+pub const DRIVE_FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
+pub const DRIVE_ROOT_FOLDER_NAME: &str = "OpenPtl";
+pub const DRIVE_TOP_PARENT_ID: &str = "root";
+
+/// Tempo máximo de espera pelo retorno do navegador durante o login.
+pub const AUTH_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);

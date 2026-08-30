@@ -17,6 +17,7 @@ use super::mappers::{empty_draft, from_draft, to_draft, to_row};
 use super::notes_flow;
 use super::session_flow;
 use super::settings_flow;
+use super::sync_flow;
 use super::terminal_view;
 use super::transfers_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
@@ -43,6 +44,7 @@ pub fn run() -> Result<()> {
     files_flow::bind(&window, Arc::clone(&backend));
     let _transfers_refresh = transfers_flow::bind(&window, Arc::clone(&backend));
     editor_flow::bind(&window, Arc::clone(&backend));
+    let _sync_refresh = sync_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;

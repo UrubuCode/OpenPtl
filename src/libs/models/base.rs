@@ -5,7 +5,7 @@ fn default_ssh_port() -> u16 {
     22
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct BackendMessage {
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

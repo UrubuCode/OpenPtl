@@ -66,6 +66,11 @@ export component AppWindow inherits Window {
     in property <image> editor-surface;
     in property <bool> editor-dirty;
     in property <string> editor-message;
+    in property <bool> sync-connected;
+    in property <bool> sync-busy;
+    in property <string> sync-account;
+    in property <string> sync-message;
+    in property <int> sync-progress;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -107,6 +112,11 @@ export component AppWindow inherits Window {
     callback editor-resized(int, int);
     callback editor-save-requested();
     callback editor-close-requested();
+    callback sync-login-requested();
+    callback sync-logout-requested();
+    callback sync-push-requested();
+    callback sync-pull-requested();
+    callback sync-cancel-requested();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -137,6 +147,11 @@ export component AppWindow inherits Window {
         editor-surface: root.editor-surface;
         editor-dirty: root.editor-dirty;
         editor-message: root.editor-message;
+        sync-connected: root.sync-connected;
+        sync-busy: root.sync-busy;
+        sync-account: root.sync-account;
+        sync-message: root.sync-message;
+        sync-progress: root.sync-progress;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -168,6 +183,11 @@ export component AppWindow inherits Window {
         editor-resized(w, h) => { root.editor-resized(w, h); }
         editor-save-requested => { root.editor-save-requested(); }
         editor-close-requested => { root.editor-close-requested(); }
+        sync-login-requested => { root.sync-login-requested(); }
+        sync-logout-requested => { root.sync-logout-requested(); }
+        sync-push-requested => { root.sync-push-requested(); }
+        sync-pull-requested => { root.sync-pull-requested(); }
+        sync-cancel-requested => { root.sync-cancel-requested(); }
     }
 
     ConnectionForm {
