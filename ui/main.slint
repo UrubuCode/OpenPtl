@@ -1,11 +1,12 @@
 import { Theme } from "theme/tokens.slint";
 import { VaultState } from "models/vault.slint";
-import { ConnectionRow } from "models/connection.slint";
+import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { VaultPage } from "pages/vault.slint";
+import { ConnectionForm } from "pages/connection-form.slint";
 
 export { Section } from "layout/sidebar.slint";
-export { ConnectionRow, VaultState }
+export { ConnectionRow, ConnectionDraft, VaultState }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -19,12 +20,17 @@ export component AppWindow inherits Window {
     in property <bool> vault-busy: false;
     in property <string> vault-error;
     in property <[ConnectionRow]> connections;
+    in property <bool> form-open: false;
+    in property <ConnectionDraft> form-draft;
+    in property <string> form-error;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
+    callback connection-saved(ConnectionDraft);
+    callback connection-form-dismissed();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -39,5 +45,13 @@ export component AppWindow inherits Window {
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
         connection-delete-requested(id) => { root.connection-delete-requested(id); }
+    }
+
+    ConnectionForm {
+        open: root.form-open;
+        draft: root.form-draft;
+        error: root.form-error;
+        saved(draft) => { root.connection-saved(draft); }
+        cancelled => { root.connection-form-dismissed(); }
     }
 }

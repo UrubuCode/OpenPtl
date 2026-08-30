@@ -1,4 +1,5 @@
 mod bridge;
+mod mappers;
 
 slint::include_modules!();
 

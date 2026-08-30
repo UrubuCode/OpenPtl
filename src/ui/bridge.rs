@@ -9,9 +9,10 @@ use std::rc::Rc;
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
-use super::{AppWindow, ConnectionRow, VaultState};
+use super::mappers::{empty_draft, from_draft, to_draft, to_row};
+use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
-use crate::libs::models::{ConnectionProfile, ConnectionProtocol, VaultStatus};
+use crate::libs::models::VaultStatus;
 
 const MIN_PASSWORD_LEN: usize = 6;
 
@@ -21,7 +22,8 @@ pub fn run() -> Result<()> {
 
     apply_vault_status(&window, backend.status()?);
     bind_vault(&window, Rc::clone(&backend));
-    bind_connections(&window, backend);
+    bind_connections(&window, Rc::clone(&backend));
+    bind_connection_form(&window, backend);
 
     window.run()?;
     Ok(())
@@ -56,7 +58,7 @@ fn bind_vault(window: &AppWindow, backend: Rc<Backend>) {
                 apply_vault_status(&window, status);
                 refresh_connections(&window, &backend);
             }
-            Err(error) => window.set_vault_error(format!("{error}").into()),
+            Err(error) => window.set_vault_error(report(&error)),
         }
     });
 }
@@ -69,7 +71,49 @@ fn bind_connections(window: &AppWindow, backend: Rc<Backend>) {
         };
         match backend.connection_delete(&id) {
             Ok(()) => refresh_connections(&window, &backend),
-            Err(error) => window.set_vault_error(format!("{error}").into()),
+            Err(error) => window.set_form_error(report(&error)),
+        }
+    });
+}
+
+fn bind_connection_form(window: &AppWindow, backend: Rc<Backend>) {
+    let handle = window.as_weak();
+    window.on_connection_create_requested(move || {
+        if let Some(window) = handle.upgrade() {
+            open_form(&window, empty_draft());
+        }
+    });
+
+    let handle = window.as_weak();
+    let editing = Rc::clone(&backend);
+    window.on_connection_edit_requested(move |id| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        match editing.connection(&id) {
+            Ok(profile) => open_form(&window, to_draft(&profile)),
+            Err(error) => window.set_form_error(report(&error)),
+        }
+    });
+
+    let handle = window.as_weak();
+    window.on_connection_form_dismissed(move || {
+        if let Some(window) = handle.upgrade() {
+            close_form(&window);
+        }
+    });
+
+    let handle = window.as_weak();
+    window.on_connection_saved(move |draft| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        match backend.connection_save(from_draft(&draft)) {
+            Ok(_) => {
+                close_form(&window);
+                refresh_connections(&window, &backend);
+            }
+            Err(error) => window.set_form_error(report(&error)),
         }
     });
 }
@@ -88,6 +132,18 @@ fn validate_password(password: &str, confirmation: &str, initialized: bool) -> O
     None
 }
 
+fn open_form(window: &AppWindow, draft: ConnectionDraft) {
+    window.set_form_draft(draft);
+    window.set_form_error(SharedString::new());
+    window.set_form_open(true);
+}
+
+fn close_form(window: &AppWindow) {
+    window.set_form_open(false);
+    window.set_form_draft(empty_draft());
+    window.set_form_error(SharedString::new());
+}
+
 fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
     window.set_vault(VaultState {
         initialized: status.initialized,
@@ -99,23 +155,14 @@ fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
 fn refresh_connections(window: &AppWindow, backend: &Backend) {
     match backend.connections() {
         Ok(profiles) => {
-            let rows: Vec<ConnectionRow> = profiles.iter().map(to_row).collect();
+            let rows = profiles.iter().map(to_row).collect::<Vec<_>>();
             window.set_connections(ModelRc::new(VecModel::from(rows)));
         }
-        Err(error) => window.set_vault_error(format!("{error}").into()),
+        Err(error) => window.set_form_error(report(&error)),
     }
 }
 
-fn to_row(profile: &ConnectionProfile) -> ConnectionRow {
-    ConnectionRow {
-        id: profile.id.as_str().into(),
-        name: profile.name.as_str().into(),
-        host: profile.host.as_str().into(),
-        port: profile.port.to_string().into(),
-        username: profile.username.as_str().into(),
-        protocols: SharedString::new(),
-        remote_path: profile.remote_path.clone().unwrap_or_default().into(),
-        has_ssh: profile.supports(ConnectionProtocol::Ssh),
-        has_sftp: profile.supports(ConnectionProtocol::Sftp),
-    }
+/// Erros do domínio já vêm com contexto e sem segredos; a UI só os formata.
+fn report(error: &anyhow::Error) -> SharedString {
+    format!("{error}").into()
 }

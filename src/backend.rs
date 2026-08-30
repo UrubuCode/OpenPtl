@@ -52,6 +52,10 @@ impl Backend {
         self.vault()?.connection_delete(id)
     }
 
+    pub fn connection(&self, id: &str) -> Result<ConnectionProfile> {
+        self.vault()?.profile_by_id(id)
+    }
+
     pub fn keychain(&self) -> Result<Vec<KeychainEntry>> {
         self.vault()?.keychain_list()
     }

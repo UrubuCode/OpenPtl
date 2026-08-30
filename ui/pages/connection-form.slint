@@ -1,0 +1,95 @@
+import { Theme } from "../theme/tokens.slint";
+import { ConnectionDraft } from "../models/connection.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiToggle } from "../components/toggle.slint";
+import { Modal } from "../patterns/modal.slint";
+
+export component ConnectionForm inherits Modal {
+    in property <ConnectionDraft> draft;
+    in property <string> error;
+    callback saved(ConnectionDraft);
+    callback cancelled();
+
+    panel-width: 520px;
+    title: root.draft.id == "" ? "Nova conexão" : "Editar conexão";
+    dismissed => { root.cancelled(); }
+
+    property <ConnectionDraft> edited: root.draft;
+
+    UiField {
+        label: "Nome do perfil";
+        placeholder: "Ex.: Produção";
+        value <=> root.edited.name;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-md;
+        UiField {
+            horizontal-stretch: 3;
+            label: "Host ou IP";
+            placeholder: "servidor.exemplo.com";
+            value <=> root.edited.host;
+        }
+        UiField {
+            horizontal-stretch: 1;
+            label: "Porta";
+            placeholder: "22";
+            value <=> root.edited.port;
+        }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-md;
+        UiField {
+            horizontal-stretch: 1;
+            label: "Usuário";
+            placeholder: "usuario";
+            value <=> root.edited.username;
+        }
+        UiField {
+            horizontal-stretch: 1;
+            label: "Caminho remoto";
+            placeholder: "/";
+            value <=> root.edited.remote-path;
+        }
+    }
+
+    UiField {
+        label: "Senha";
+        placeholder: "Opcional quando houver chave";
+        secret: true;
+        value <=> root.edited.password;
+    }
+
+    UiField {
+        label: "Chave privada";
+        placeholder: "Conteúdo PEM ou caminho do arquivo";
+        secret: true;
+        value <=> root.edited.private-key;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-lg;
+        UiToggle { label: "SSH"; checked <=> root.edited.use-ssh; }
+        UiToggle { label: "SFTP"; checked <=> root.edited.use-sftp; }
+    }
+
+    if root.error != "": Text {
+        text: root.error;
+        color: Theme.danger;
+        wrap: word-wrap;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+        alignment: end;
+        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.cancelled(); } }
+        UiButton {
+            label: "Salvar";
+            tone: ButtonTone.primary;
+            enabled: root.edited.name != "" && root.edited.host != "" && root.edited.username != "";
+            clicked => { root.saved(root.edited); }
+        }
+    }
+}

@@ -1,0 +1,39 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export component UiToggle inherits HorizontalLayout {
+    in property <string> label;
+    in-out property <bool> checked;
+
+    spacing: Theme.space-sm;
+
+    Rectangle {
+        width: 18px;
+        height: 18px;
+        y: (parent.height - self.height) / 2;
+        border-radius: Theme.radius-sm;
+        border-width: 1px;
+        border-color: root.checked ? Theme.accent-bright : Theme.border-strong;
+        background: root.checked ? Theme.accent : Theme.surface-inset;
+        animate background { duration: Theme.motion-fast; }
+
+        Text {
+            text: "✓";
+            visible: root.checked;
+            font-size: Type.caption;
+            color: Theme.text-on-accent;
+        }
+    }
+
+    Text {
+        text: root.label;
+        vertical-alignment: center;
+        font-size: Type.body;
+        color: Theme.text-secondary;
+    }
+
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.checked = !root.checked; }
+    }
+}
