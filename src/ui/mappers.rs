@@ -6,6 +6,7 @@
 use slint::SharedString;
 
 use super::{ConnectionDraft, ConnectionRow};
+use crate::libs::deeplink::DeepLink;
 use crate::libs::models::{ConnectionProfile, ConnectionProtocol};
 
 const DEFAULT_SSH_PORT: u16 = 22;
@@ -90,4 +91,56 @@ fn protocol_summary(profile: &ConnectionProfile) -> String {
 fn optional(value: &SharedString) -> Option<String> {
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// Rascunho pré-preenchido a partir de um endereço externo.
+///
+/// O link só sugere: nada é gravado no cofre e nenhuma conexão é aberta até o
+/// usuário confirmar. Um endereço vindo de fora não deve conseguir fazer o
+/// aplicativo conectar sozinho a um servidor arbitrário.
+pub fn draft_from_link(link: &DeepLink) -> ConnectionDraft {
+    ConnectionDraft {
+        name: link.host.as_str().into(),
+        host: link.host.as_str().into(),
+        port: link.port.to_string().into(),
+        username: link.username.clone().unwrap_or_default().into(),
+        use_ssh: link.protocol == ConnectionProtocol::Ssh,
+        use_sftp: link.protocol == ConnectionProtocol::Sftp,
+        ..empty_draft()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn link(protocol: ConnectionProtocol, username: Option<&str>) -> DeepLink {
+        DeepLink {
+            protocol,
+            host: "host.local".to_owned(),
+            port: 2200,
+            username: username.map(|value| value.to_owned()),
+        }
+    }
+
+    #[test]
+    fn a_link_fills_the_form_without_touching_the_vault() {
+        let draft = draft_from_link(&link(ConnectionProtocol::Ssh, Some("deploy")));
+
+        assert_eq!(draft.host, "host.local");
+        assert_eq!(draft.port, "2200");
+        assert_eq!(draft.username, "deploy");
+        assert!(
+            draft.id.is_empty(),
+            "o rascunho nao aponta para um perfil salvo"
+        );
+        assert!(draft.password.is_empty(), "um link nunca traz segredo");
+    }
+
+    #[test]
+    fn the_protocol_of_the_link_is_the_one_selected() {
+        let sftp = draft_from_link(&link(ConnectionProtocol::Sftp, None));
+        assert!(sftp.use_sftp);
+        assert!(!sftp.use_ssh);
+    }
 }

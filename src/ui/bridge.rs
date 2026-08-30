@@ -13,7 +13,7 @@ use super::editor_flow;
 use super::files_flow;
 use super::keychain_flow;
 use super::known_hosts_flow;
-use super::mappers::{empty_draft, from_draft, to_draft, to_row};
+use super::mappers::{draft_from_link, empty_draft, from_draft, to_draft, to_row};
 use super::notes_flow;
 use super::session_flow;
 use super::settings_flow;
@@ -22,6 +22,7 @@ use super::terminal_view;
 use super::transfers_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
+use crate::libs::deeplink;
 use crate::libs::models::VaultStatus;
 
 const MIN_PASSWORD_LEN: usize = 6;
@@ -83,6 +84,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
                 known_hosts_flow::refresh(&window, &backend);
                 settings_flow::refresh(&window, &backend);
                 notes_flow::refresh(&window, &backend);
+                apply_startup_link(&window);
             }
             Err(error) => window.set_vault_error(report(&error)),
         }
@@ -200,4 +202,18 @@ fn apply_environment(window: &AppWindow, backend: &Backend) {
 /// Erros do domínio já vêm com contexto e sem segredos; a UI só os formata.
 fn report(error: &anyhow::Error) -> SharedString {
     format!("{error}").into()
+}
+
+/// Um endereço passado na linha de comando — inclusive o que o sistema entrega
+/// ao abrir um link `openptl://` — abre o formulário já preenchido. Ele nunca
+/// conecta sozinho: um link de terceiros não deve conseguir apontar o
+/// aplicativo para um servidor arbitrário sem o usuário ver e confirmar.
+fn apply_startup_link(window: &AppWindow) {
+    let Some(link) = deeplink::from_arguments(std::env::args()) else {
+        return;
+    };
+
+    window.set_form_draft(draft_from_link(&link));
+    window.set_form_error(SharedString::new());
+    window.set_form_open(true);
 }

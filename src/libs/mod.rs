@@ -5,6 +5,7 @@
 //! e sai quando a última seção deixar de exibir `PendingPage`.
 #![allow(dead_code)]
 
+pub mod deeplink;
 pub mod editor;
 pub mod models;
 pub mod secret_store;
