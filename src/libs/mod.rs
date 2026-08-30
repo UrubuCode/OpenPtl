@@ -12,4 +12,5 @@ pub mod secret_store;
 pub mod sync;
 pub mod terminal;
 pub mod transfer;
+pub mod updater;
 pub mod vault;

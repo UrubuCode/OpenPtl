@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 mod sync;
+mod update;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};

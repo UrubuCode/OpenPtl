@@ -32,6 +32,9 @@ export component AppShell inherits HorizontalLayout {
     in property <string> known-hosts-path;
     in property <SettingsDraft> settings;
     in property <string> settings-message;
+    in property <bool> update-canary;
+    in property <string> update-status;
+    in property <bool> update-ready;
     in property <string> version;
     in property <string> storage-path;
     in property <[NoteRow]> notes;
@@ -63,6 +66,10 @@ export component AppShell inherits HorizontalLayout {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback update-check-requested();
+    callback update-download-requested();
+    callback update-install-requested();
+    callback update-channel-changed(bool);
     callback note-create-requested();
     callback note-edit-requested(string);
     callback note-pin-toggled(string);
@@ -171,8 +178,16 @@ export component AppShell inherits HorizontalLayout {
         if root.section == Section.settings: SettingsPage {
             settings: root.settings;
             message: root.settings-message;
+            version: root.version;
+            canary: root.update-canary;
+            update-status: root.update-status;
+            update-ready: root.update-ready;
             saved(draft) => { root.settings-saved(draft); }
             vault-lock-requested => { root.vault-lock-requested(); }
+            update-check-requested => { root.update-check-requested(); }
+            update-download-requested => { root.update-download-requested(); }
+            update-install-requested => { root.update-install-requested(); }
+            update-channel-changed(canary) => { root.update-channel-changed(canary); }
         }
         if root.section == Section.about: AboutPage {
             version: root.version;

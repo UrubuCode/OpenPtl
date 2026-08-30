@@ -20,6 +20,7 @@ use super::settings_flow;
 use super::sync_flow;
 use super::terminal_view;
 use super::transfers_flow;
+use super::update_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
 use crate::libs::deeplink;
@@ -46,6 +47,7 @@ pub fn run() -> Result<()> {
     let _transfers_refresh = transfers_flow::bind(&window, Arc::clone(&backend));
     editor_flow::bind(&window, Arc::clone(&backend));
     let _sync_refresh = sync_flow::bind(&window, Arc::clone(&backend));
+    update_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;

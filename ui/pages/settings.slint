@@ -30,8 +30,16 @@ component SettingsGroup inherits UiCard {
 export component SettingsPage inherits VerticalLayout {
     in property <SettingsDraft> settings;
     in property <string> message;
+    in property <string> version;
+    in property <bool> canary: false;
+    in property <string> update-status;
+    in property <bool> update-ready: false;
     callback saved(SettingsDraft);
     callback vault-lock-requested();
+    callback update-check-requested();
+    callback update-download-requested();
+    callback update-install-requested();
+    callback update-channel-changed(bool);
 
     property <SettingsDraft> edited: root.settings;
 
@@ -73,6 +81,46 @@ export component SettingsPage inherits VerticalLayout {
             placeholder: "5";
             enabled: root.edited.auto-reconnect-enabled;
             value <=> root.edited.reconnect-delay-seconds;
+        }
+    }
+
+    SettingsGroup {
+        title: "Atualizações";
+
+        Text {
+            text: "Versão instalada: " + root.version;
+            font-size: Type.body;
+            color: Theme.text-secondary;
+        }
+        UiToggle {
+            label: "Receber versões de teste (canary)";
+            checked: root.canary;
+            toggled => { root.update-channel-changed(!root.canary); }
+        }
+        if root.update-status != "": Text {
+            text: root.update-status;
+            font-size: Type.caption;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: Theme.space-sm;
+            alignment: start;
+            UiButton {
+                label: "Procurar atualização";
+                tone: ButtonTone.neutral;
+                clicked => { root.update-check-requested(); }
+            }
+            UiButton {
+                label: "Baixar";
+                tone: ButtonTone.primary;
+                clicked => { root.update-download-requested(); }
+            }
+            if root.update-ready: UiButton {
+                label: "Abrir instalador";
+                tone: ButtonTone.primary;
+                clicked => { root.update-install-requested(); }
+            }
         }
     }
 

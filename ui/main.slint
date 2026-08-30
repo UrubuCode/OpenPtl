@@ -52,6 +52,9 @@ export component AppWindow inherits Window {
     in property <string> known-hosts-path;
     in property <SettingsDraft> settings;
     in property <string> settings-message;
+    in property <bool> update-canary;
+    in property <string> update-status;
+    in property <bool> update-ready;
     in property <string> version;
     in property <string> storage-path;
     in property <[NoteRow]> notes;
@@ -92,6 +95,10 @@ export component AppWindow inherits Window {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback update-check-requested();
+    callback update-download-requested();
+    callback update-install-requested();
+    callback update-channel-changed(bool);
     callback note-create-requested();
     callback note-edit-requested(string);
     callback note-pin-toggled(string);
@@ -136,6 +143,9 @@ export component AppWindow inherits Window {
         known-hosts-path: root.known-hosts-path;
         settings: root.settings;
         settings-message: root.settings-message;
+        update-canary: root.update-canary;
+        update-status: root.update-status;
+        update-ready: root.update-ready;
         version: root.version;
         storage-path: root.storage-path;
         notes: root.notes;
@@ -165,6 +175,10 @@ export component AppWindow inherits Window {
         known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
         settings-saved(draft) => { root.settings-saved(draft); }
         vault-lock-requested => { root.vault-lock-requested(); }
+        update-check-requested => { root.update-check-requested(); }
+        update-download-requested => { root.update-download-requested(); }
+        update-install-requested => { root.update-install-requested(); }
+        update-channel-changed(canary) => { root.update-channel-changed(canary); }
         note-create-requested => { root.note-create-requested(); }
         note-edit-requested(id) => { root.note-edit-requested(id); }
         note-pin-toggled(id) => { root.note-pin-toggled(id); }

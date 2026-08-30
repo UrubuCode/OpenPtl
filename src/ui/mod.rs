@@ -11,6 +11,7 @@ mod settings_flow;
 mod sync_flow;
 mod terminal_view;
 mod transfers_flow;
+mod update_flow;
 
 slint::include_modules!();
 

@@ -40,3 +40,17 @@ pub const DRIVE_TOP_PARENT_ID: &str = "root";
 
 /// Tempo máximo de espera pelo retorno do navegador durante o login.
 pub const AUTH_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Manifestos de versão publicados junto com cada release.
+pub const RELEASE_MANIFEST_STABLE_URL: &str =
+    "https://github.com/UrubuCode/OpenPtl/releases/latest/download/latest.json";
+pub const RELEASE_MANIFEST_CANARY_URL: &str =
+    "https://github.com/UrubuCode/OpenPtl/releases/download/canary-latest/latest.json";
+
+/// Chave pública minisign das releases. É a mesma que o instalador do Tauri
+/// usava: os artefatos já publicados continuam válidos.
+pub const RELEASE_PUBLIC_KEY: &str =
+    "untrusted comment: minisign public key: 6E304272803B7E81\nRWSBfjuAckIwbu3kj/A7fXPqRAm0U4Vdh6hB//vYmtuMTglvEJrhxqZx\n";
+
+/// Identificação enviada ao consultar as releases.
+pub const RELEASE_USER_AGENT: &str = "OpenPtl-Updater";
