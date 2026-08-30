@@ -1,4 +1,5 @@
 mod bridge;
+mod keychain_flow;
 mod keymap;
 mod mappers;
 mod session_flow;

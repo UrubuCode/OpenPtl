@@ -70,6 +70,18 @@ impl Backend {
         self.vault()?.keychain_list()
     }
 
+    pub fn keychain_entry(&self, id: &str) -> Result<KeychainEntry> {
+        self.vault()?.keychain_by_id(id)
+    }
+
+    pub fn keychain_save(&self, entry: KeychainEntry) -> Result<KeychainEntry> {
+        self.vault()?.keychain_save(entry)
+    }
+
+    pub fn keychain_delete(&self, id: &str) -> Result<()> {
+        self.vault()?.keychain_delete(id)
+    }
+
     /// Abre a sessão fora da thread da interface e devolve o desfecho pelo
     /// callback. Um host desconhecido volta como desafio, nunca como conexão
     /// aceita em silêncio.

@@ -4,6 +4,7 @@ import { Type } from "../theme/typography.slint";
 export component UiToggle inherits HorizontalLayout {
     in property <string> label;
     in-out property <bool> checked;
+    callback toggled();
 
     spacing: Theme.space-sm;
 
@@ -34,6 +35,9 @@ export component UiToggle inherits HorizontalLayout {
 
     TouchArea {
         mouse-cursor: MouseCursor.pointer;
-        clicked => { root.checked = !root.checked; }
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled();
+        }
     }
 }

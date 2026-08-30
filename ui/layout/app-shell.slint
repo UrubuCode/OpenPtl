@@ -6,6 +6,8 @@ import { PendingPage } from "../pages/pending.slint";
 import { TerminalPage } from "../pages/terminal.slint";
 import { SessionRow } from "../models/session.slint";
 import { TermLine } from "../models/terminal.slint";
+import { KeychainRow } from "../models/keychain.slint";
+import { KeychainPage } from "../pages/keychain.slint";
 
 export { Section }
 
@@ -14,6 +16,7 @@ export component AppShell inherits HorizontalLayout {
     in property <[SessionRow]> sessions;
     in property <[TermLine]> terminal-lines;
     in property <string> active-session;
+    in property <[KeychainRow]> keychain;
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
@@ -23,6 +26,9 @@ export component AppShell inherits HorizontalLayout {
     callback session-selected(string);
     callback session-closed(string);
     callback terminal-input-sent(string, bool, bool);
+    callback keychain-create-requested();
+    callback keychain-edit-requested(string);
+    callback keychain-delete-requested(string);
 
     Sidebar {
         active: root.section;
@@ -48,7 +54,12 @@ export component AppShell inherits HorizontalLayout {
             session-closed(id) => { root.session-closed(id); }
             input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
         }
-        if root.section == Section.keychain: PendingPage { title: "Chaveiro"; }
+        if root.section == Section.keychain: KeychainPage {
+            rows: root.keychain;
+            create-requested => { root.keychain-create-requested(); }
+            edit-requested(id) => { root.keychain-edit-requested(id); }
+            delete-requested(id) => { root.keychain-delete-requested(id); }
+        }
         if root.section == Section.known-hosts: PendingPage { title: "Hosts conhecidos"; }
         if root.section == Section.notes: PendingPage { title: "Notas"; }
         if root.section == Section.settings: PendingPage { title: "Configurações"; }

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
+use super::keychain_flow;
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
 use super::session_flow;
 use super::terminal_view;
@@ -28,6 +29,7 @@ pub fn run() -> Result<()> {
     bind_connection_form(&window, Arc::clone(&backend));
     session_flow::bind(&window, Arc::clone(&backend));
     // O temporizador de drenagem vive enquanto a janela viver.
+    keychain_flow::bind(&window, Arc::clone(&backend));
     let _terminal_poll = terminal_view::bind(&window, backend);
 
     window.run()?;
@@ -62,6 +64,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
             Ok(status) => {
                 apply_vault_status(&window, status);
                 refresh_connections(&window, &backend);
+                keychain_flow::refresh(&window, &backend);
             }
             Err(error) => window.set_vault_error(report(&error)),
         }

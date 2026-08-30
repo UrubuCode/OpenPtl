@@ -1,0 +1,77 @@
+import { Theme } from "../theme/tokens.slint";
+import { KeychainDraft } from "../models/keychain.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiField } from "../components/field.slint";
+import { UiToggle } from "../components/toggle.slint";
+import { Modal } from "../patterns/modal.slint";
+
+export component KeychainForm inherits Modal {
+    in property <KeychainDraft> draft;
+    in property <string> error;
+    callback saved(KeychainDraft);
+    callback cancelled();
+
+    panel-width: 520px;
+    title: root.draft.id == "" ? "Nova entrada" : "Editar entrada";
+    dismissed => { root.cancelled(); }
+
+    property <KeychainDraft> edited: root.draft;
+    property <bool> is-key: root.edited.kind == "ssh_key";
+
+    UiField {
+        label: "Nome";
+        placeholder: "Ex.: Chave de produção";
+        value <=> root.edited.name;
+    }
+
+    UiToggle {
+        label: "Entrada é uma chave SSH";
+        checked: root.is-key;
+        toggled => { root.edited.kind = root.is-key ? "password" : "ssh_key"; }
+    }
+
+    if !root.is-key: UiField {
+        label: "Senha ou segredo";
+        placeholder: "Valor protegido";
+        secret: true;
+        value <=> root.edited.password;
+    }
+
+    if root.is-key: UiField {
+        label: "Chave privada";
+        placeholder: "Conteúdo PEM";
+        secret: true;
+        value <=> root.edited.private-key;
+    }
+
+    if root.is-key: UiField {
+        label: "Chave pública";
+        placeholder: "Opcional";
+        value <=> root.edited.public-key;
+    }
+
+    if root.is-key: UiField {
+        label: "Frase secreta";
+        placeholder: "Opcional";
+        secret: true;
+        value <=> root.edited.passphrase;
+    }
+
+    if root.error != "": Text {
+        text: root.error;
+        color: Theme.danger;
+        wrap: word-wrap;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+        alignment: end;
+        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.cancelled(); } }
+        UiButton {
+            label: "Salvar";
+            tone: ButtonTone.primary;
+            enabled: root.edited.name != "";
+            clicked => { root.saved(root.edited); }
+        }
+    }
+}

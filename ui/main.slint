@@ -8,10 +8,13 @@ import { ConnectionForm } from "pages/connection-form.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
 import { HostChallenge, SessionRow } from "models/session.slint";
 import { TermLine } from "models/terminal.slint";
+import { KeychainRow, KeychainDraft } from "models/keychain.slint";
+import { KeychainForm } from "pages/keychain-form.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
+export { KeychainRow, KeychainDraft }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -34,6 +37,10 @@ export component AppWindow inherits Window {
     in property <string> status-message;
     in property <[TermLine]> terminal-lines;
     in property <string> active-session;
+    in property <[KeychainRow]> keychain;
+    in property <bool> keychain-form-open: false;
+    in property <KeychainDraft> keychain-draft;
+    in property <string> keychain-error;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -47,6 +54,11 @@ export component AppWindow inherits Window {
     callback session-selected(string);
     callback session-closed(string);
     callback terminal-input-sent(string, bool, bool);
+    callback keychain-create-requested();
+    callback keychain-edit-requested(string);
+    callback keychain-delete-requested(string);
+    callback keychain-saved(KeychainDraft);
+    callback keychain-form-dismissed();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -61,6 +73,7 @@ export component AppWindow inherits Window {
         sessions: root.sessions;
         terminal-lines: root.terminal-lines;
         active-session: root.active-session;
+        keychain: root.keychain;
         connection-create-requested => { root.connection-create-requested(); }
         connection-connect-requested(id) => { root.connection-connect-requested(id); }
         connection-edit-requested(id) => { root.connection-edit-requested(id); }
@@ -68,6 +81,9 @@ export component AppWindow inherits Window {
         session-selected(id) => { root.session-selected(id); }
         session-closed(id) => { root.session-closed(id); }
         terminal-input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
+        keychain-create-requested => { root.keychain-create-requested(); }
+        keychain-edit-requested(id) => { root.keychain-edit-requested(id); }
+        keychain-delete-requested(id) => { root.keychain-delete-requested(id); }
     }
 
     ConnectionForm {
@@ -82,5 +98,12 @@ export component AppWindow inherits Window {
         challenge: root.challenge;
         accepted => { root.challenge-accepted(); }
         rejected => { root.challenge-rejected(); }
+    }
+    KeychainForm {
+        open: root.keychain-form-open;
+        draft: root.keychain-draft;
+        error: root.keychain-error;
+        saved(draft) => { root.keychain-saved(draft); }
+        cancelled => { root.keychain-form-dismissed(); }
     }
 }
