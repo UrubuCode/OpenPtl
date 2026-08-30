@@ -3,6 +3,7 @@
 mod backend;
 mod constants;
 mod libs;
+mod protocols;
 mod ui;
 
 fn main() -> anyhow::Result<()> {

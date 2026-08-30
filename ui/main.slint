@@ -4,9 +4,11 @@ import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
+import { HostChallengeDialog } from "pages/host-challenge.slint";
+import { HostChallenge, SessionRow } from "models/session.slint";
 
 export { Section } from "layout/sidebar.slint";
-export { ConnectionRow, ConnectionDraft, VaultState }
+export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -23,6 +25,9 @@ export component AppWindow inherits Window {
     in property <bool> form-open: false;
     in property <ConnectionDraft> form-draft;
     in property <string> form-error;
+    in property <HostChallenge> challenge;
+    in property <[SessionRow]> sessions;
+    in property <string> status-message;
 
     callback vault-submitted(string, string);
     callback connection-create-requested();
@@ -31,6 +36,8 @@ export component AppWindow inherits Window {
     callback connection-delete-requested(string);
     callback connection-saved(ConnectionDraft);
     callback connection-form-dismissed();
+    callback challenge-accepted();
+    callback challenge-rejected();
 
     if root.vault.locked || !root.vault.initialized: VaultPage {
         state: root.vault;
@@ -53,5 +60,11 @@ export component AppWindow inherits Window {
         error: root.form-error;
         saved(draft) => { root.connection-saved(draft); }
         cancelled => { root.connection-form-dismissed(); }
+    }
+
+    HostChallengeDialog {
+        challenge: root.challenge;
+        accepted => { root.challenge-accepted(); }
+        rejected => { root.challenge-rejected(); }
     }
 }

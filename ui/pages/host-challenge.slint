@@ -1,0 +1,66 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { HostChallenge } from "../models/session.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { Modal } from "../patterns/modal.slint";
+
+// O aceite é sempre explícito: sem confirmação da impressão digital a conexão
+// não avança, para que um servidor trocado não passe despercebido.
+export component HostChallengeDialog inherits Modal {
+    in property <HostChallenge> challenge;
+    callback accepted();
+    callback rejected();
+
+    open: root.challenge.active;
+    title: "Host desconhecido";
+    panel-width: 520px;
+    dismissed => { root.rejected(); }
+
+    Text {
+        text: "O servidor " + root.challenge.host + ":" + root.challenge.port
+            + " ainda não está na sua lista de hosts conhecidos.";
+        font-size: Type.body;
+        color: Theme.text-secondary;
+        wrap: word-wrap;
+    }
+
+    Rectangle {
+        height: fingerprint.preferred-height + 2 * Theme.space-md;
+        background: Theme.surface-inset;
+        border-radius: Theme.radius-sm;
+        border-width: 1px;
+        border-color: Theme.border;
+
+        fingerprint := VerticalLayout {
+            padding: Theme.space-md;
+            spacing: Theme.space-xs;
+
+            Text {
+                text: root.challenge.key-type;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+            Text {
+                text: root.challenge.fingerprint;
+                font-family: Type.mono-family;
+                font-size: Type.body;
+                color: Theme.text-primary;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    Text {
+        text: "Confirme esta impressão digital pelo mesmo canal em que você confia no servidor. Aceitar grava o host em " + root.challenge.known-hosts-path + ".";
+        font-size: Type.caption;
+        color: Theme.text-muted;
+        wrap: word-wrap;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+        alignment: end;
+        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.rejected(); } }
+        UiButton { label: "Aceitar e conectar"; tone: ButtonTone.primary; clicked => { root.accepted(); } }
+    }
+}

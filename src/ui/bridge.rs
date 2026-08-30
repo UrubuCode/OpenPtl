@@ -4,12 +4,13 @@
 //! Cada callback é registrado uma vez em `run` e usa um handle fraco da janela
 //! para evitar o ciclo de referência que vazaria a `AppWindow`.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::mappers::{empty_draft, from_draft, to_draft, to_row};
+use super::session_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
 use crate::libs::models::VaultStatus;
@@ -17,19 +18,20 @@ use crate::libs::models::VaultStatus;
 const MIN_PASSWORD_LEN: usize = 6;
 
 pub fn run() -> Result<()> {
-    let backend = Rc::new(Backend::new()?);
+    let backend = Arc::new(Backend::new()?);
     let window = AppWindow::new()?;
 
     apply_vault_status(&window, backend.status()?);
-    bind_vault(&window, Rc::clone(&backend));
-    bind_connections(&window, Rc::clone(&backend));
-    bind_connection_form(&window, backend);
+    bind_vault(&window, Arc::clone(&backend));
+    bind_connections(&window, Arc::clone(&backend));
+    bind_connection_form(&window, Arc::clone(&backend));
+    session_flow::bind(&window, backend);
 
     window.run()?;
     Ok(())
 }
 
-fn bind_vault(window: &AppWindow, backend: Rc<Backend>) {
+fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
     let handle = window.as_weak();
     window.on_vault_submitted(move |password, confirmation| {
         let Some(window) = handle.upgrade() else {
@@ -63,7 +65,7 @@ fn bind_vault(window: &AppWindow, backend: Rc<Backend>) {
     });
 }
 
-fn bind_connections(window: &AppWindow, backend: Rc<Backend>) {
+fn bind_connections(window: &AppWindow, backend: Arc<Backend>) {
     let handle = window.as_weak();
     window.on_connection_delete_requested(move |id| {
         let Some(window) = handle.upgrade() else {
@@ -76,7 +78,7 @@ fn bind_connections(window: &AppWindow, backend: Rc<Backend>) {
     });
 }
 
-fn bind_connection_form(window: &AppWindow, backend: Rc<Backend>) {
+fn bind_connection_form(window: &AppWindow, backend: Arc<Backend>) {
     let handle = window.as_weak();
     window.on_connection_create_requested(move || {
         if let Some(window) = handle.upgrade() {
@@ -85,7 +87,7 @@ fn bind_connection_form(window: &AppWindow, backend: Rc<Backend>) {
     });
 
     let handle = window.as_weak();
-    let editing = Rc::clone(&backend);
+    let editing = Arc::clone(&backend);
     window.on_connection_edit_requested(move |id| {
         let Some(window) = handle.upgrade() else {
             return;
