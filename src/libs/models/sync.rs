@@ -99,11 +99,3 @@ pub struct RecoveryProbeResult {
     pub found: bool,
     pub message: BackendMessage,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReleaseCheckResult {
-    pub available: bool,
-    pub latest_version: Option<String>,
-    pub url: Option<String>,
-    pub message: BackendMessage,
-}

@@ -26,13 +26,6 @@ pub struct SftpEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum BinaryPreviewResult {
-    Ready { base64: String, size: u64 },
-    TooLarge { size: u64, limit: u64 },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnownHostEntry {
     pub host: String,
     pub port: u16,

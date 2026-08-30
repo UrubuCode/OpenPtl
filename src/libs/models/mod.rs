@@ -1,3 +1,7 @@
+// Resolução de conflitos e recuperação de cofre existem no domínio mas ainda
+// não têm tela: SyncConflict*, SyncKeepSide e RecoveryProbeResult.
+#![allow(dead_code)]
+
 //! Modelos serializados do domínio, divididos por área.
 //!
 //! A ordem dos campos e das variantes de enum define o formato binário do

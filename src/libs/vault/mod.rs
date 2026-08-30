@@ -1,3 +1,7 @@
+// Troca de senha mestre, reset do cofre e gestão de servidores de auth ainda
+// não têm tela.
+#![allow(dead_code)]
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs,
@@ -78,10 +82,8 @@ pub(crate) struct EncryptedBin {
 }
 
 impl VaultManager {
-    // Desktop resolves the data directory itself via ProjectDirs. On Android/iOS
-    // ProjectDirs returns None (no XDG/standard dirs), so the caller must supply
-    // the OS-provided app data dir from Tauri's path resolver via `new_in`.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    /// Resolve o diretório de dados pelo padrão do sistema. Quem precisar de
+    /// outro caminho — os testes, por exemplo — usa `new_in`.
     pub fn new() -> Result<Self> {
         let dirs = ProjectDirs::from("com", "urubucode", "openptl")
             .ok_or_else(|| anyhow!("Nao foi possivel resolver diretorio de dados do aplicativo"))?;

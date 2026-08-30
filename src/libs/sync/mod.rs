@@ -1,3 +1,9 @@
+//! Sincronização do cofre com o Google Drive.
+//!
+//! Conflitos e recuperação estão implementados aqui, mas nenhuma tela os
+//! aciona ainda.
+#![allow(dead_code)]
+
 use crate::libs::secret_store;
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -63,15 +69,6 @@ fn take_pending_client_id() -> Option<String> {
         .lock()
         .ok()
         .and_then(|guard| guard.clone())
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct SyncProgressPayload {
-    percent: u8,
-    stage: String,
-    current_file: Option<String>,
-    processed: u32,
-    total: u32,
 }
 
 fn sync_cancel_notify() -> &'static Notify {

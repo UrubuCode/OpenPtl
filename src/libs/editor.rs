@@ -6,6 +6,10 @@
 //! resultado num buffer de pixels. A apresentação só exibe esse buffer como
 //! imagem, sem conhecer cosmic-text.
 
+// Redimensionar e consultar o cursor são parte da API do editor; a tela usa
+// apenas parte dela por enquanto.
+#![allow(dead_code)]
+
 use std::sync::OnceLock;
 
 use cosmic_text::{

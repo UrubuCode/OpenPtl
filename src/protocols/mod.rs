@@ -1,7 +1,7 @@
 //! Adaptadores de protocolo.
 //!
-//! A superfície do `SshManager` é maior do que a interface consome hoje; o
-//! `allow` acompanha a migração e sai com a última seção portada.
+//! O `SshManager` implementa mais do que a interface alcança hoje: shell local,
+//! redimensionamento de PTY, renomear e copiar arquivos entre duas sessões.
 #![allow(dead_code)]
 
 pub mod sftp;

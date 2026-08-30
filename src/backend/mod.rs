@@ -3,7 +3,8 @@
 //! A camada de apresentação nunca toca `VaultManager`, `SshManager`, arquivos
 //! ou tokio diretamente: ela troca ações do usuário por chamadas deste módulo e
 //! recebe de volta apenas modelos de domínio.
-
+//!
+//! `sftp_rename` existe aqui mas ainda não tem gesto na tela de arquivos.
 #![allow(dead_code)]
 
 mod sync;

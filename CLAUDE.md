@@ -1,130 +1,96 @@
 # CLAUDE.md — OpenPtl
 
-## Overview
+## Visão geral
 
-Desktop application for managing remote connections (SSH, SFTP). Built with **Tauri 2 + React 19 + TypeScript** on the frontend and **Rust** on the backend.
+OpenPtl é uma aplicação nativa multiplataforma para gerenciamento de conexões SSH e SFTP. O backend é **Rust estável**, a interface é declarativa em **Slint** e as operações assíncronas usam Tokio. Não há WebView, Node, npm nem bundler: o binário desenha a própria interface.
 
-## Project structure
+## Estrutura do projeto
 
-```
-src/                        # Frontend React/TypeScript
-  App.tsx                   # Root: routing, global modals (sync auth, conflicts, etc.)
-  store/
-    app-store.ts            # Zustand store (global state)
-    app-store.types.ts      # Store types
-  functions/
-    vault-actions.ts        # bootstrap, vaultInit/Unlock/Lock, loadWorkspace, runSync
-    connection-actions.ts   # openSsh, openSftpWorkspace
-    session-actions.ts      # ensureSessionListeners, disconnectSession, sshWrite
-    sftp-editor-actions.ts  # openTab (editor), saveEditor
-  pages/
-    sections/               # Sidebar pages (home, keychain, known-hosts, notes, settings, etc.)
-    tabs/
-      workspace-tab-page.tsx  # Full workspace: SSH/SFTP/editor blocks, drag, transfers
-      workspace/
-        terminal.tsx          # TerminalBlockView (xterm.js)
-        sftp.tsx              # SftpBlockView (file browser)
-        editor.tsx            # EditorBlockView (Monaco)
-        types.ts              # WorkspaceBlock, ConnectStage, etc.
-  components/
-    layout/                 # AppSidebar, AppHeader, WorkTabs
-    workspace/              # WorkspaceBlockController (react-rnd)
-    drawers/                # HostFormDrawer, KeychainFormDrawer
-  langs/                    # i18n — see section below
-  types/                    # openptl.ts (types shared between frontend and backend)
-  lib/
-    tauri.ts                # Wrapper for all Tauri commands (api.*)
-
-src-tauri/src/              # Rust backend
-  lib.rs                    # All registered Tauri commands (>2000 lines)
+```text
+build.rs                      # Compila ui/main.slint para Rust
+ui/
+  main.slint                  # AppWindow: só propriedades, callbacks e composição
+  theme/{tokens,typography,palette}.slint
+  models/                     # Structs compartilhadas com o Rust
+  components/                 # Primitivos: UiButton, UiField, UiCard, UiBadge, UiToggle
+  patterns/                   # Modal, ListPanel, PageHeader, TransferPanel
+  layout/{sidebar,app-shell}.slint
+  pages/                      # Uma tela por arquivo
+src/
+  main.rs                     # Entrada do binário
+  constants.rs                # Limites, nomes de arquivo e URLs do domínio
+  backend/                    # Fachada única da UI para o domínio
+    mod.rs                    # Vault, conexões, SSH, SFTP, transferências
+    sync.rs                   # Sincronização com o Drive
+    update.rs                 # Consulta e download de atualizações
   libs/
-    vault.rs                # Encrypted vault (Argon2 + AES-GCM), profiles, keychains
-    sync.rs                 # Server sync (Google OAuth, push/pull)
-    remote_fs.rs            # SFTP — remote file operations
-    shared_fs.rs            # Unified local + remote file operations
-    transfer.rs             # File transfers between endpoints
-    key_actions.rs          # Global input capture (rdev) for SSH terminal
-    task.rs                 # Internal async task runner
-    models.rs               # Structs shared across libs
-
-server/src/index.js         # Cloudflare Worker — Google OAuth broker for sync
+    models/                   # Modelos serializados por domínio
+    vault/                    # Persistência criptografada e ciclo de vida
+    sync/                     # OAuth, Drive, operações e relator de progresso
+    terminal.rs               # Adaptador do alacritty_terminal
+    editor.rs                 # Adaptador do cosmic-text
+    transfer.rs               # Fila e métricas de transferência
+    deeplink.rs               # Endereços que abrem o aplicativo
+    updater.rs                # Manifesto e verificação minisign
+    secret_store.rs           # Keychain do sistema
+  protocols/
+    ssh/                      # Sessões, autenticação, terminal, known_hosts
+    sftp.rs                   # Adaptador SFTP
+  ui/
+    bridge.rs                 # Registro dos callbacks Slint
+    mappers.rs                # Tradução domínio <-> Slint
+    *_flow.rs                 # Um fluxo por área da interface
+server/                       # Worker Cloudflare: broker de OAuth do Google
 ```
 
-## Essential commands
+## Comandos essenciais
 
 ```bash
-# Development
-npm run tauri dev          # Start Tauri app with hot-reload
-
-# Build
-npm run build              # Build frontend (tsc + vite)
-npm run tauri build        # Full build (frontend + Rust + installer)
-
-# Type check
-npx tsc --noEmit           # Check TypeScript types without compiling
+cargo run
+cargo build --release
+cargo test
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-## i18n — translations
+## Convenções de código
 
-All user-facing strings must be added to **both** translation files:
+Cada arquivo Rust deve ficar abaixo de **500 linhas** e cada `.slint` abaixo de **250**. Separe tipos, persistência, transporte, aplicação e apresentação em módulos diferentes. Prefira funções pequenas, nomes explícitos, erros com contexto e interfaces orientadas ao domínio.
 
-- `src/langs/en_US/` — English strings
-- `src/langs/pt_BR/` — Portuguese (Brazil) strings
+A camada `backend` é a única fachada usada pela UI. A interface transforma ações do usuário em chamadas dessa fachada e mantém apenas estado de apresentação; regra de negócio pertence aos módulos de domínio. A UI nunca conhece tokio, russh, cosmic-text nem alacritty_terminal.
 
-The shared type lives in `src/langs/types.ts` (`AppDictionary`). Adding a new string requires:
-1. Add the key to the relevant interface in `types.ts`
-2. Add the English value in the corresponding `en_US/*.ts` file
-3. Add the Portuguese value in the corresponding `pt_BR/*.ts` file
+Nenhum trabalho bloqueante roda num callback do Slint. Operações longas vão para o runtime e voltam pelo event loop via `upgrade_in_event_loop`. Toda closure de callback usa `as_weak()`; capturar o handle forte cria ciclo e vaza a janela.
 
-**Never hardcode visible strings in Portuguese or English in component files.** Always use the `useT()` hook and reference a key from `AppDictionary`.
-
-## Workspace architecture
-
-The workspace uses floating blocks (react-rnd). Each block has:
-- `connectStage: ConnectStage` — `"connecting" | "ready" | "error" | "verifying_fingerprint" | "awaiting_password"`
-- `pendingProfileId` — profile pending connection
-- Auto-retry with countdown via `connectRetryTimersRef`
-- Cancel token via `connectCancelTokenRef` — incremented on cancel, checked after each `await`
-
-Key functions in `workspace-tab-page.tsx`:
-- `resolvePendingTerminalConnection` — connects SSH, manages stages, retry
-- `resolvePendingSftpConnection` — connects SFTP over SSH
+Para organização da camada Slint, veja a skill `slint-frontend`.
 
 ## Vault
 
-All sensitive data (profiles, keychains, settings) is stored in an AES-GCM encrypted binary file. The key derives from the master password via Argon2. The vault can sync with a server via Google OAuth (`sync.rs`).
+O vault guarda perfis, credenciais, notas e configurações em arquivos binários criptografados. A senha mestre deriva a chave com Argon2id e o conteúdo é protegido com XChaCha20-Poly1305.
 
-`bootstrap()` in `vault-actions.ts`:
-1. Calls `api.syncCancel()` to cancel any in-progress sync (prevents softlock on F5)
-2. Checks vault status
-3. If unlocked, calls `loadWorkspace()` (may perform a sync pull on startup)
+**O formato é posicional (bincode).** Acrescentar um campo a uma struct já persistida invalida todos os vaults existentes. Dado novo vai para um arquivo `.bin` próprio, como `known_hosts.bin` e `notes.bin` fazem. Alteração que toque o formato precisa preservar a ordem histórica dos enums e incluir teste de compatibilidade.
 
-## Code conventions
+Segredos não podem aparecer em logs, mensagens de erro, arquivos de configuração ou snapshots de interface. Listas na interface carregam resumo; o conteúdo completo só sai do cofre para preencher um formulário de edição.
 
-- **No comments** unless the WHY is non-obvious
-- Workspace callbacks passed as typed props (not context)
-- Block state mutated only via `setBlocks((current) => current.map(...))`
-- All backend calls via `api.*()` from `src/lib/tauri.ts`
-- Workspace snapshots stored in `workspaceSnapshotsByTab` — blocks with `connectStage: "connecting"` are reset to `"error"` on restore
+O fluxo de inicialização exige confirmação da senha. A conexão SSH bloqueia hosts desconhecidos até o usuário confirmar a impressão digital apresentada pelo servidor, e o `known_hosts` só é recapturado para o cofre depois que a sessão abre.
 
-## Sync / Auth
+## Protocolos e bibliotecas
 
-- Login via server selection modal → `runSync("login", address)` → Google OAuth
-- While logging in: `loginServerBusy = true`, but cancel is always allowed via `cancelLoginServer()`
-- F5 during login: `syncCancel()` in bootstrap releases the backend lock
+| Área | Biblioteca | Motivo |
+| --- | --- | --- |
+| SSH | `russh` | |
+| SFTP | `russh-sftp` | |
+| Terminal | `alacritty_terminal` | grade, histórico e escapes prontos e testados |
+| Editor | `cosmic-text` + `syntect` | `TextEdit` do Slint não aplica estilo por trecho |
+| Atualização | `minisign-verify` | mesma chave que assinava as releases do Tauri |
 
-## Supported protocols
+O editor rasteriza num `SharedPixelBuffer` exibido como `Image`. Slint também expõe `set_rendering_notifier` com `GraphicsAPI::NativeOpenGL` para desenho em GL cru, caso alguma superfície precise.
 
-| Protocol | Backend | UI |
-|----------|---------|-----|
-| SSH | russh | TerminalBlock (xterm.js) |
-| SFTP | russh-sftp | SftpBlock |
+## Segurança
 
-> RDP, VNC, FTP/FTPS, SMB, the SQL database feature, and the WebRTC streaming POC
-> were removed from `main` to focus the base product on SSH/SFTP. The full
-> multi-protocol + WebRTC work is preserved on the `features-plan` branch.
+Um deep link **preenche o formulário e para**: não grava no cofre e não conecta. Um endereço vindo de fora não deve apontar o aplicativo para um servidor arbitrário sem o usuário ver e confirmar.
 
-## Deep links
+A atualização só chega ao disco depois de a assinatura minisign conferir, e a instalação é sempre um clique explícito. Baixar do Drive só substitui o cofre local quando o remoto traz conteúdo.
 
-Format: `openptl://ssh/host:port` or direct `ssh://user@host:port`  
-Processed in `App.tsx` via `parseConnectionDeepLink()` → queued into `pendingDeepLinks`.
+## Antes de entregar
+
+Execute formatação, testes, Clippy com warnings como erro e uma compilação release. Revise com `git diff`, confirme que não há referências a Tauri, WebView, npm ou React, e valide manualmente inicialização, desbloqueio, criação de conexão, confirmação de host, terminal, navegação SFTP, bloqueio e reabertura do vault.

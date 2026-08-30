@@ -5,6 +5,10 @@
 //! traduzir a grade em trechos estilizados que a apresentação sabe desenhar, e
 //! para manter `vte` e `alacritty_terminal` fora do resto do código.
 
+// Redimensionar o terminal e consultar o cursor fazem parte da API do
+// emulador; a tela ainda usa tamanho fixo.
+#![allow(dead_code)]
+
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::Point;
