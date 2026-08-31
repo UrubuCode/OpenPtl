@@ -1,0 +1,18 @@
+/// Recebe o foco quando o usuário clica fora dos campos.
+///
+/// Sem isto, um `TextInput` continua com o anel de foco depois que o clique vai
+/// para o vazio: o Slint só tira o foco de um elemento quando outro o toma.
+/// Este componente é esse outro elemento, e não desenha nada.
+export component FocusSink inherits Rectangle {
+    background: transparent;
+
+    sink := FocusScope {
+        // Não trata teclas: só serve de destino para o foco.
+    }
+
+    TouchArea {
+        clicked => {
+            sink.focus();
+        }
+    }
+}

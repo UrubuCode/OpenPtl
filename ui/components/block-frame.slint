@@ -8,8 +8,8 @@ component FrameButton inherits Rectangle {
     in property <bool> destructive: false;
     callback clicked();
 
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: Theme.radius-sm;
     background: touch.has-hover
         ? (root.destructive ? Theme.danger : Theme.surface-hover)
@@ -17,8 +17,8 @@ component FrameButton inherits Rectangle {
     animate background { duration: Theme.motion-fast; }
 
     UiIcon {
-        width: 12px;
-        height: 12px;
+        width: 13px;
+        height: 13px;
         source: root.icon;
         tint: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-muted;
     }
@@ -30,6 +30,10 @@ component FrameButton inherits Rectangle {
 
 /// Moldura de um bloco flutuante: cabeçalho para arrastar, botões de minimizar
 /// e fechar, e uma alça de redimensionamento no canto.
+///
+/// A pilha interna é um `VerticalLayout`. Posicionar cabeçalho e corpo à mão,
+/// com `y` e `height` calculados, deixava o cabeçalho renderizando vazio;
+/// deixar o layout resolver a divisão é mais simples e não quebra.
 export component BlockFrame inherits Rectangle {
     in property <BlockRow> data;
     callback moved(length, length);
@@ -38,12 +42,12 @@ export component BlockFrame inherits Rectangle {
     callback minimize-toggled();
     callback closed();
 
+    property <length> bar-height: 32px;
+
     x: root.data.x;
     y: root.data.y;
     width: root.data.width;
-    height: root.data.minimized ? header-height : root.data.height;
-
-    property <length> header-height: 30px;
+    height: root.data.minimized ? root.bar-height : root.data.height;
 
     background: Theme.surface;
     border-radius: Theme.radius-lg;
@@ -51,93 +55,95 @@ export component BlockFrame inherits Rectangle {
     border-color: root.data.active ? Theme.accent : Theme.border;
     clip: true;
 
-    animate height, border-color {
-        duration: Theme.motion-base;
-        easing: Theme.ease-smooth;
-    }
+    // A altura não é animada: durante o redimensionamento a animação persegue
+    // o alvo e o bloco parece não acompanhar o ponteiro.
+    animate border-color { duration: Theme.motion-fast; }
 
-    header := Rectangle {
-        height: root.header-height;
-        background: root.data.active ? Theme.surface-raised : Theme.surface-inset;
-        animate background { duration: Theme.motion-fast; }
+    VerticalLayout {
+        Rectangle {
+            height: root.bar-height;
+            vertical-stretch: 0;
+            background: root.data.active ? Theme.surface-raised : Theme.surface-inset;
+            animate background { duration: Theme.motion-fast; }
 
-        HorizontalLayout {
-            padding-left: Theme.space-md;
-            padding-right: Theme.space-xs;
-            spacing: Theme.space-sm;
+            drag := TouchArea {
+                mouse-cursor: MouseCursor.move;
+                moved => {
+                    root.moved(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+                }
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        root.raised();
+                    }
+                }
+                double-clicked => { root.minimize-toggled(); }
+            }
 
-            VerticalLayout {
-                horizontal-stretch: 1;
-                alignment: center;
+            HorizontalLayout {
+                padding-left: Theme.space-md;
+                padding-right: Theme.space-xs;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                spacing: Theme.space-sm;
 
                 Text {
+                    horizontal-stretch: 1;
                     text: root.data.title;
+                    vertical-alignment: center;
                     font-size: Type.caption;
                     font-weight: Type.weight-medium;
                     color: root.data.active ? Theme.text-primary : Theme.text-secondary;
                     overflow: elide;
                 }
-            }
 
-            if root.data.subtitle != "": Text {
-                text: root.data.subtitle;
-                vertical-alignment: center;
-                font-size: Type.caption;
-                color: Theme.text-muted;
-                overflow: elide;
-            }
+                if root.data.subtitle != "": Text {
+                    text: root.data.subtitle;
+                    vertical-alignment: center;
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                    overflow: elide;
+                }
 
-            FrameButton {
-                y: 4px;
-                icon: root.data.minimized ? Icons.plus : Icons.minimize;
-                clicked => { root.minimize-toggled(); }
-            }
-            FrameButton {
-                y: 4px;
-                icon: Icons.close;
-                destructive: true;
-                clicked => { root.closed(); }
-            }
-        }
-
-        drag := TouchArea {
-            mouse-cursor: MouseCursor.move;
-            moved => {
-                root.moved(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
-            }
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.down) {
-                    root.raised();
+                FrameButton {
+                    icon: root.data.minimized ? Icons.plus : Icons.minimize;
+                    clicked => { root.minimize-toggled(); }
+                }
+                FrameButton {
+                    icon: Icons.close;
+                    destructive: true;
+                    clicked => { root.closed(); }
                 }
             }
-            double-clicked => { root.minimize-toggled(); }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            visible: !root.data.minimized;
+            background: Theme.canvas;
+
+            VerticalLayout {
+                @children
+            }
         }
     }
 
-    // Precisa ser um layout: o conteúdo é declarado como filho de `BlockFrame`,
-    // então o `parent` dele é a raiz do bloco, não este corpo. Sem o layout
-    // dimensionando, o conteúdo assume o tamanho da raiz e cobre o cabeçalho.
-    body := VerticalLayout {
-        y: root.header-height;
-        height: parent.height - root.header-height;
-        visible: !root.data.minimized;
-
-        @children
-    }
-
-    // Alça de redimensionamento no canto inferior direito.
+    // Alça de redimensionamento. Fica por último para receber o ponteiro antes
+    // do conteúdo que encosta no canto.
     if !root.data.minimized: Rectangle {
-        x: parent.width - 16px;
-        y: parent.height - 16px;
-        width: 16px;
-        height: 16px;
+        x: parent.width - 22px;
+        y: parent.height - 22px;
+        width: 22px;
+        height: 22px;
+        background: grip.has-hover ? Theme.surface-hover : transparent;
+        border-top-left-radius: Theme.radius-sm;
+        animate background { duration: Theme.motion-fast; }
 
         UiIcon {
             width: 12px;
             height: 12px;
             source: Icons.grip;
             tint: grip.has-hover ? Theme.accent : Theme.text-muted;
-            rotation-angle: -45deg;
+            transform-rotation: -45deg;
         }
 
         grip := TouchArea {

@@ -213,6 +213,12 @@ pub fn open_session_block(window: &AppWindow, session_id: &str, label: &str, has
 }
 
 fn add_block(window: &AppWindow, kind: BlockKind, title: &str) {
+    push_block(window, kind, title, "");
+    publish(window);
+}
+
+/// Acrescenta um bloco a area corrente, em cascata para nao cobrir o anterior.
+fn push_block(window: &AppWindow, kind: BlockKind, title: &str, subtitle: &str) {
     let session = window.get_active_session().to_string();
     STATE.with(|state| {
         let mut state = state.borrow_mut();
@@ -227,7 +233,7 @@ fn add_block(window: &AppWindow, kind: BlockKind, title: &str) {
                 id,
                 kind,
                 title: title.to_owned(),
-                subtitle: String::new(),
+                subtitle: subtitle.to_owned(),
                 session,
                 x: 32.0 + offset,
                 y: 24.0 + offset,
@@ -237,7 +243,6 @@ fn add_block(window: &AppWindow, kind: BlockKind, title: &str) {
             });
         }
     });
-    publish(window);
 }
 
 /// Altera um bloco e atualiza só a linha correspondente do modelo.
@@ -351,4 +356,30 @@ fn to_row(block: &Block, on_top: bool) -> BlockRow {
         minimized: block.minimized,
         active: on_top,
     }
+}
+
+/// Abre (ou traz para a frente) o bloco de editor da área corrente. Editar um
+/// arquivo deixa de ser uma seção separada e passa a ser mais um bloco.
+pub fn open_editor_block(window: &AppWindow, path: &str) {
+    let name = path.rsplit('/').next().unwrap_or(path).to_owned();
+
+    let existing = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let tab = active_tab_mut(&mut state)?;
+        let index = tab
+            .blocks
+            .iter()
+            .position(|block| block.kind == BlockKind::Editor)?;
+        let mut block = tab.blocks.remove(index);
+        block.subtitle = name.clone();
+        tab.blocks.push(block);
+        Some(())
+    });
+
+    if existing.is_none() {
+        push_block(window, BlockKind::Editor, "Editor", &name);
+    }
+
+    window.set_section(Section::Workspace);
+    publish(window);
 }

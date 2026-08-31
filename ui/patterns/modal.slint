@@ -1,6 +1,7 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { UiCard } from "../components/card.slint";
+import { FocusSink } from "focus-sink.slint";
 
 export component Modal inherits Rectangle {
     in property <bool> open: false;
@@ -26,7 +27,7 @@ export component Modal inherits Rectangle {
     UiCard {
         raised: true;
         width: root.panel-width;
-        height: content.preferred-height + 2 * Theme.space-lg;
+        height: content.min-height;
 
         // Entra subindo e crescendo de leve, a mesma ideia do fade-in-up.
         y: (parent.height - self.height) / 2 + (1 - root.veil) * Theme.rise * 2;
@@ -36,8 +37,9 @@ export component Modal inherits Rectangle {
             easing: Theme.ease-out-soft;
         }
 
-        // Impede que o clique dentro do painel chegue ao véu e feche o modal.
-        TouchArea { }
+        // Impede que o clique dentro do painel chegue ao veu e feche o modal,
+        // e tira o foco de um campo quando o clique vai para o vazio.
+        FocusSink { }
 
         content := VerticalLayout {
             padding: Theme.space-lg;

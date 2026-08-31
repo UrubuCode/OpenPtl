@@ -8,7 +8,6 @@ import { FileRow } from "../models/file.slint";
 import { BlockFrame } from "../components/block-frame.slint";
 import { TerminalView } from "../components/terminal-view.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
-import { PageHeader } from "../patterns/page-header.slint";
 
 component FileLine inherits Rectangle {
     in property <FileRow> data;
@@ -86,9 +85,20 @@ export component WorkspacePage inherits Rectangle {
         alignment: center;
         spacing: Theme.space-lg;
 
-        PageHeader {
-            title: "Área de trabalho";
-            subtitle: root.hint;
+        // Centralizado tambem na horizontal: o cabecalho de pagina alinha o
+        // texto a esquerda e destoava dos botoes centralizados.
+        Text {
+            text: "Área de trabalho";
+            horizontal-alignment: center;
+            font-size: Type.display;
+            font-weight: Type.weight-bold;
+            color: Theme.text-primary;
+        }
+        Text {
+            text: root.hint;
+            horizontal-alignment: center;
+            font-size: Type.body;
+            color: Theme.text-muted;
         }
 
         HorizontalLayout {

@@ -2,7 +2,7 @@ import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { UiIcon, Icons } from "../components/icon.slint";
 
-export enum Section { workspace, home, terminal, files, editor, keychain, known-hosts, notes, sync, settings, about }
+export enum Section { workspace, home, keychain, known-hosts, notes, sync, settings, about }
 
 component SidebarItem inherits Rectangle {
     in property <string> label;
@@ -87,9 +87,6 @@ export component Sidebar inherits Rectangle {
 
         SidebarItem { icon: Icons.workspace; label: "Área de trabalho"; collapsed: root.collapsed; active: root.active == Section.workspace; clicked => { root.selected(Section.workspace); } }
         SidebarItem { icon: Icons.connections; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
-        SidebarItem { icon: Icons.terminal; label: "Terminal"; collapsed: root.collapsed; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
-        SidebarItem { icon: Icons.files; label: "Arquivos"; collapsed: root.collapsed; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
-        SidebarItem { icon: Icons.editor; label: "Editor"; collapsed: root.collapsed; active: root.active == Section.editor; clicked => { root.selected(Section.editor); } }
         SidebarItem { icon: Icons.keychain; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
         SidebarItem { icon: Icons.shield; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
         SidebarItem { icon: Icons.notes; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }

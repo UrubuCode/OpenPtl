@@ -37,7 +37,9 @@ export component AppWindow inherits Window {
     preferred-height: 760px;
     min-width: 880px;
     min-height: 560px;
-    background: Theme.sidebar;
+    // Transparente para o arredondamento aparecer: sem moldura do sistema, o
+    // canto redondo precisa ser desenhado pela propria janela.
+    background: transparent;
 
     in-out property <Section> section: Section.home;
     in property <bool> window-maximized: false;
@@ -158,6 +160,13 @@ export component AppWindow inherits Window {
 
     // Sidebar e barra de titulo dividem o mesmo fundo, sem costura entre elas:
     // a sidebar vai do topo a base e a barra ocupa so a faixa do conteudo.
+    shell := Rectangle {
+        background: Theme.sidebar;
+        border-radius: root.window-maximized ? 0px : Theme.window-radius;
+        clip: true;
+        animate border-radius { duration: Theme.motion-fast; }
+    }
+
     HorizontalLayout {
         if root.vault.initialized && !root.vault.locked: Sidebar {
             active: root.section;
@@ -177,6 +186,7 @@ export component AppWindow inherits Window {
                 maximize-toggled => { root.window-maximize-toggle(); }
                 close-requested => { root.window-close(); }
                 sidebar-toggled => { root.sidebar-collapsed = !root.sidebar-collapsed; }
+                show-sidebar-toggle: root.vault.initialized && !root.vault.locked;
                 tabs: root.tabs;
                 active-tab: root.active-tab;
                 show-tabs: root.section == Section.workspace;

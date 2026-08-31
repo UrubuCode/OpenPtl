@@ -12,7 +12,7 @@ use cosmic_text::{Action, Motion};
 use slint::platform::Key;
 use slint::{ComponentHandle, Image, Rgba8Pixel, SharedPixelBuffer, SharedString};
 
-use super::{AppWindow, Section};
+use super::AppWindow;
 use crate::backend::Backend;
 use crate::libs::editor::CodeEditor;
 
@@ -68,7 +68,7 @@ fn bind_open(window: &AppWindow, backend: Arc<Backend>) {
                         window.set_editor_path(target.as_str().into());
                         window.set_editor_dirty(false);
                         window.set_editor_message(SharedString::new());
-                        window.set_section(Section::Editor);
+                        super::workspace_flow::open_editor_block(&window, &target);
                         repaint(&window, editor);
                     });
                 }

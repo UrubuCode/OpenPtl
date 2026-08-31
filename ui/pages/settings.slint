@@ -10,7 +10,7 @@ import { PageHeader } from "../patterns/page-header.slint";
 component SettingsGroup inherits UiCard {
     in property <string> title;
 
-    height: body.preferred-height + 2 * Theme.space-lg;
+    height: body.min-height;
 
     body := VerticalLayout {
         padding: Theme.space-lg;

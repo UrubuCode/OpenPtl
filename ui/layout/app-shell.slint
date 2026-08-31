@@ -5,7 +5,6 @@ import { PageTransition } from "../patterns/page-transition.slint";
 import { BlockRow } from "../models/workspace.slint";
 import { WorkspacePage } from "../pages/workspace.slint";
 import { ConnectionsPage } from "../pages/connections.slint";
-import { TerminalPage } from "../pages/terminal.slint";
 import { SessionRow } from "../models/session.slint";
 import { TermLine } from "../models/terminal.slint";
 import { KeychainRow } from "../models/keychain.slint";
@@ -19,9 +18,7 @@ import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
 import { SyncPage } from "../pages/sync.slint";
 import { FileRow } from "../models/file.slint";
-import { FilesPage } from "../pages/files.slint";
 import { TransferRow } from "../models/transfer.slint";
-import { EditorPage } from "../pages/editor.slint";
 
 export { Section }
 
@@ -141,41 +138,6 @@ export component AppShell inherits Rectangle {
                 connect-requested(id) => { root.connection-connect-requested(id); }
                 edit-requested(id) => { root.connection-edit-requested(id); }
                 delete-requested(id) => { root.connection-delete-requested(id); }
-            }
-            if root.section == Section.terminal: TerminalPage {
-                sessions: root.sessions;
-                lines: root.terminal-lines;
-                active-session: root.active-session;
-                session-selected(id) => { root.session-selected(id); }
-                session-closed(id) => { root.session-closed(id); }
-                input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
-            }
-            if root.section == Section.files: FilesPage {
-                sessions: root.sessions;
-                entries: root.files;
-                path: root.files-path;
-                message: root.files-message;
-                transfers: root.transfers;
-                path-requested(path) => { root.file-path-requested(path); }
-                parent-requested => { root.file-parent-requested(); }
-                reload-requested => { root.file-reload-requested(); }
-                folder-created(name) => { root.file-folder-created(name); }
-                delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
-                download-requested(path) => { root.download-requested(path); }
-                edit-requested(path) => { root.editor-open-requested(path); }
-                upload-requested => { root.upload-requested(); }
-                transfers-cleared => { root.transfers-cleared(); }
-            }
-            if root.section == Section.editor: EditorPage {
-                path: root.editor-path;
-                surface: root.editor-surface;
-                dirty: root.editor-dirty;
-                message: root.editor-message;
-                key-pressed(text, ctrl, shift) => { root.editor-key-pressed(text, ctrl, shift); }
-                clicked(x, y) => { root.editor-clicked(x, y); }
-                surface-resized(w, h) => { root.editor-resized(w, h); }
-                save-requested => { root.editor-save-requested(); }
-                close-requested => { root.editor-close-requested(); }
             }
             if root.section == Section.keychain: KeychainPage {
                 rows: root.keychain;

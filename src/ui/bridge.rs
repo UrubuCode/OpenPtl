@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
+use super::dev_unlock;
 use super::editor_flow;
 use super::files_flow;
 use super::keychain_flow;
@@ -53,7 +54,9 @@ pub fn run() -> Result<()> {
     editor_flow::bind(&window, Arc::clone(&backend));
     let _sync_refresh = sync_flow::bind(&window, Arc::clone(&backend));
     update_flow::bind(&window, Arc::clone(&backend));
-    let _terminal_poll = terminal_view::bind(&window, backend);
+    let _terminal_poll = terminal_view::bind(&window, Arc::clone(&backend));
+
+    try_dev_unlock(&window);
 
     window.run()?;
     Ok(())
@@ -223,4 +226,14 @@ fn apply_startup_link(window: &AppWindow) {
     window.set_form_draft(draft_from_link(&link));
     window.set_form_error(SharedString::new());
     window.set_form_open(true);
+}
+
+/// Abre o cofre sozinho quando há senha de desenvolvimento configurada. Em
+/// release `dev_unlock::password` devolve sempre `None`, então isto não faz
+/// nada — ver `ui/dev_unlock.rs`.
+fn try_dev_unlock(window: &AppWindow) {
+    let Some(password) = dev_unlock::password() else {
+        return;
+    };
+    window.invoke_vault_submitted(password.as_str().into(), password.as_str().into());
 }

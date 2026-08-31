@@ -42,6 +42,7 @@ export component TitleBar inherits Rectangle {
     in property <[WorkspaceTab]> tabs;
     in property <string> active-tab;
     in property <bool> show-tabs: false;
+    in property <bool> show-sidebar-toggle: true;
     callback drag-started();
     callback dragged(length, length);
     callback minimize-requested();
@@ -64,7 +65,8 @@ export component TitleBar inherits Rectangle {
         padding-right: root.maximized ? 0px : Theme.space-xs;
         animate padding-left, padding-right { duration: Theme.motion-fast; }
 
-        WindowControl {
+        // Nao ha sidebar para recolher enquanto o cofre esta trancado.
+        if root.show-sidebar-toggle: WindowControl {
             width: 40px;
             icon: Icons.menu;
             clicked => { root.sidebar-toggled(); }

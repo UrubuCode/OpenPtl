@@ -4,6 +4,7 @@ import { VaultState } from "../models/vault.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
 import { UiCard } from "../components/card.slint";
+import { FocusSink } from "../patterns/focus-sink.slint";
 
 export component VaultPage inherits Rectangle {
     in property <VaultState> state;
@@ -14,16 +15,30 @@ export component VaultPage inherits Rectangle {
     property <string> password;
     property <string> confirmation;
 
+    function submit() {
+        if (!root.busy && root.password != "") {
+            root.submitted(root.password, root.confirmation);
+        }
+    }
+
     background: Theme.canvas;
+
+    // Antes do cartao: clicar no fundo tira o foco do campo de senha.
+    FocusSink { }
 
     UiCard {
         raised: true;
         width: 400px;
-        height: form.preferred-height + 2 * Theme.space-xl;
+        // min-height e a altura justa do conteudo; preferred-height inclui a
+        // sobra que o layout aceitaria, e deixava um vazio no rodape do cartao.
+        height: form.min-height;
 
         form := VerticalLayout {
             padding: Theme.space-xl;
             spacing: Theme.space-md;
+            // Sem isto o formulario distribui a sobra entre os filhos e abre
+            // lacunas entre o rotulo e o campo.
+            alignment: start;
 
             Text {
                 text: root.state.initialized ? "Desbloquear cofre" : "Criar cofre";
@@ -47,6 +62,9 @@ export component VaultPage inherits Rectangle {
                 secret: true;
                 enabled: !root.busy;
                 value <=> root.password;
+                // Enter confirma direto: exigir o clique no botao depois de
+                // digitar a senha e um passo a mais sem motivo.
+                accepted => { root.submit(); }
             }
 
             if !root.state.initialized: UiField {
@@ -55,6 +73,7 @@ export component VaultPage inherits Rectangle {
                 secret: true;
                 enabled: !root.busy;
                 value <=> root.confirmation;
+                accepted => { root.submit(); }
             }
 
             if root.error != "": Text {
@@ -68,7 +87,7 @@ export component VaultPage inherits Rectangle {
                 label: root.state.initialized ? "Desbloquear" : "Criar cofre";
                 tone: ButtonTone.primary;
                 enabled: !root.busy && root.password != "";
-                clicked => { root.submitted(root.password, root.confirmation); }
+                clicked => { root.submit(); }
             }
         }
     }
