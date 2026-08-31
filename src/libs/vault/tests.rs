@@ -1,6 +1,7 @@
 use super::*;
-use crate::constants::NOTES_FILE_NAME;
+use crate::constants::{MUTATIONS_FILE_NAME, NOTES_FILE_NAME};
 use crate::libs::models::{ConnectionKind, ConnectionProtocol, Note, NoteColor};
+use crate::libs::mutations::MutationBatch;
 use std::path::Path;
 use tempfile::tempdir;
 
@@ -14,6 +15,7 @@ pub(super) fn test_vault_manager(storage_root: &Path) -> VaultManager {
         known_hosts_path: storage_root.join("known_hosts"),
         known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
         notes_path: storage_root.join(NOTES_FILE_NAME),
+        mutations_path: storage_root.join(MUTATIONS_FILE_NAME),
         runtime: VaultRuntime::default(),
     }
 }
@@ -44,26 +46,39 @@ pub(super) fn should_encrypt_and_decrypt_record() {
 
     let salt = [7u8; 16];
     let key = derive_key("master-password", &salt).expect("kdf should work");
-    let encrypted =
-        encrypt_bin_payload(&profile, &key, &profile.id, 1_700_000_000).expect("encrypt");
+    let encrypted = encrypt_bin_payload(&profile, &key, 1_700_000_000).expect("encrypt");
     let decrypted: ConnectionProfile =
         decrypt_bin_payload(&encrypted, &key, "decrypt test").expect("decrypt");
     assert_eq!(decrypted.host, "127.0.0.1");
 }
 
 #[test]
+fn the_same_content_never_reuses_a_nonce() {
+    let salt = [3u8; 16];
+    let key = derive_key("master-password", &salt).expect("kdf should work");
+    let value = "conteudo identico".to_string();
+
+    let first = encrypt_bin_payload(&value, &key, 1_700_000_000).expect("encrypt");
+    let second = encrypt_bin_payload(&value, &key, 1_700_000_000).expect("encrypt");
+
+    assert_ne!(
+        first.nonce, second.nonce,
+        "o nonce derivado do conteudo revelava arquivos iguais"
+    );
+    assert_ne!(first.ciphertext, second.ciphertext);
+}
+
+#[test]
 pub(super) fn should_fail_on_wrong_key() {
     let value = ManifestBinPayload {
         version: 1,
-        profile: "hash-profile".to_string(),
-        hosts: BTreeMap::new(),
-        keychain: BTreeMap::new(),
+        hosts: BTreeSet::new(),
+        keychain: BTreeSet::new(),
     };
 
     let salt = [1u8; 16];
     let key = derive_key("correct", &salt).expect("kdf should work");
-    let encrypted =
-        encrypt_bin_payload(&value, &key, "manifest.bin", 1_700_000_000).expect("encrypt");
+    let encrypted = encrypt_bin_payload(&value, &key, 1_700_000_000).expect("encrypt");
 
     let wrong_key = derive_key("wrong", &salt).expect("kdf should work");
     let decrypted = decrypt_bin_payload::<ManifestBinPayload>(&encrypted, &wrong_key, "decrypt");
@@ -118,17 +133,9 @@ pub(super) fn should_keep_password_valid_for_snapshot_x_even_after_snapshot_y_ch
 
     // Versao X: estado inicial sincronizado.
     let snapshot_x = snapshot_files(&vault);
-    let profile_hash_x = hash_bytes_hex(
-        snapshot_x
-            .get(PROFILE_FILE_NAME)
-            .expect("version X should include profile.bin"),
-    );
-    let openptl_x = snapshot_x
-        .get(OPENPTL_FILE_NAME)
-        .expect("version X should include openptl.bin")
-        .clone();
+    let header_x = vault.remote_header().expect("header should be derived");
 
-    // Versao Y: cliente altera settings/profile e persiste.
+    // Versao Y: cliente altera settings e persiste.
     let mut settings = vault.settings_get().expect("settings should load");
     settings.sync_interval_minutes = 7;
     settings.sync_on_settings_change = true;
@@ -136,23 +143,18 @@ pub(super) fn should_keep_password_valid_for_snapshot_x_even_after_snapshot_y_ch
         .settings_update(settings)
         .expect("settings should be updated");
 
-    let snapshot_y = snapshot_files(&vault);
-    let profile_hash_y = hash_bytes_hex(
-        snapshot_y
-            .get(PROFILE_FILE_NAME)
-            .expect("version Y should include profile.bin"),
-    );
-
-    // Simula conflito client/server: hashes divergentes entre X (server) e Y (client).
-    assert_ne!(
-        profile_hash_x, profile_hash_y,
-        "profile hash should diverge between snapshot X and Y"
-    );
-
-    // Mesmo com Y local, a senha atual continua valida para o openptl de X.
-    assert!(
+    assert_eq!(
         vault
-            .validate_password_for_openptl_bytes(&openptl_x, password)
+            .settings_get()
+            .expect("settings should load")
+            .sync_interval_minutes,
+        7,
+        "a versao Y difere da X"
+    );
+
+    // Mesmo com Y local, a senha atual continua valida para o cabecalho de X.
+    assert!(
+        VaultManager::password_matches_header(&header_x, password)
             .expect("password validation should run"),
         "same password should validate against version X metadata"
     );
@@ -166,6 +168,176 @@ pub(super) fn should_keep_password_valid_for_snapshot_x_even_after_snapshot_y_ch
         .unlock(Some(password.to_string()))
         .expect("unlock with same password should succeed for snapshot X");
     assert!(!status.locked, "vault should be unlocked after restoring X");
+}
+
+/// Um segundo aparelho, com a mesma senha mestre, nasce vazio e recebe o
+/// conteúdo pelo log — nenhum arquivo do cofre trafega.
+fn paired_vault(source: &VaultManager, storage: &Path, password: &str) -> VaultManager {
+    let header = source.remote_header().expect("header");
+    let mut other = test_vault_manager(storage);
+    other
+        .init_from_remote_header(password, &header)
+        .expect("second device should adopt the remote header");
+    other
+}
+
+fn as_remote(batches: Vec<MutationBatch>) -> Vec<(String, MutationBatch)> {
+    batches
+        .into_iter()
+        .map(|batch| (format!("drive-{}", batch.mutation_id), batch))
+        .collect()
+}
+
+#[test]
+fn a_second_device_receives_connections_through_the_log() {
+    let storage = tempdir().expect("temp dir");
+    let password = "senha-super-segura";
+
+    let mut first = test_vault_manager(&storage.path().join("um"));
+    first.init(Some(password.to_string())).expect("init");
+    first
+        .connection_save(ConnectionProfile {
+            name: "producao".into(),
+            host: "10.0.0.9".into(),
+            port: 2222,
+            username: "root".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let mut second = paired_vault(&first, &storage.path().join("dois"), password);
+    assert!(second.connections_list().expect("list").is_empty());
+
+    let batches = as_remote(first.pending_batches().expect("pending"));
+    assert!(!batches.is_empty(), "a alteracao local vira lote");
+    second.ingest_remote(&batches, None).expect("ingest");
+
+    let received = second.connections_list().expect("list");
+    assert_eq!(received.len(), 1);
+    assert_eq!(received[0].host, "10.0.0.9");
+    assert_eq!(received[0].port, 2222);
+}
+
+#[test]
+fn edits_to_different_fields_of_the_same_host_both_survive() {
+    let storage = tempdir().expect("temp dir");
+    let password = "senha-super-segura";
+
+    let mut first = test_vault_manager(&storage.path().join("um"));
+    first.init(Some(password.to_string())).expect("init");
+    let host = first
+        .connection_save(ConnectionProfile {
+            name: "producao".into(),
+            host: "10.0.0.9".into(),
+            port: 22,
+            username: "root".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let mut second = paired_vault(&first, &storage.path().join("dois"), password);
+    second
+        .ingest_remote(&as_remote(first.pending_batches().expect("pending")), None)
+        .expect("ingest");
+    for batch in first.pending_batches().expect("pending") {
+        first
+            .confirm_pushed(batch.mutation_id, &format!("drive-{}", batch.mutation_id))
+            .expect("confirm");
+    }
+
+    // Cada aparelho mexe num campo diferente do mesmo host, sem se ver.
+    let mut from_first = host.clone();
+    from_first.port = 2222;
+    first.connection_save(from_first).expect("save");
+
+    let mut from_second = second.profile_by_id(&host.id).expect("host");
+    from_second.username = "deploy".into();
+    second.connection_save(from_second).expect("save");
+
+    let first_batches = as_remote(first.pending_batches().expect("pending"));
+    let second_batches = as_remote(second.pending_batches().expect("pending"));
+    first.ingest_remote(&second_batches, None).expect("ingest");
+    second.ingest_remote(&first_batches, None).expect("ingest");
+
+    for vault in [&first, &second] {
+        let profile = vault.profile_by_id(&host.id).expect("host");
+        assert_eq!(profile.port, 2222, "a porta do primeiro aparelho sobrevive");
+        assert_eq!(
+            profile.username, "deploy",
+            "o usuario do segundo aparelho sobrevive"
+        );
+    }
+}
+
+#[test]
+fn a_deleted_host_stays_deleted_on_both_devices() {
+    let storage = tempdir().expect("temp dir");
+    let password = "senha-super-segura";
+
+    let mut first = test_vault_manager(&storage.path().join("um"));
+    first.init(Some(password.to_string())).expect("init");
+    let host = first
+        .connection_save(ConnectionProfile {
+            name: "temporario".into(),
+            host: "10.0.0.9".into(),
+            username: "root".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let mut second = paired_vault(&first, &storage.path().join("dois"), password);
+    second
+        .ingest_remote(&as_remote(first.pending_batches().expect("pending")), None)
+        .expect("ingest");
+    for batch in first.pending_batches().expect("pending") {
+        first
+            .confirm_pushed(batch.mutation_id, &format!("drive-{}", batch.mutation_id))
+            .expect("confirm");
+    }
+    assert_eq!(second.connections_list().expect("list").len(), 1);
+
+    first.connection_delete(&host.id).expect("delete");
+    second
+        .ingest_remote(&as_remote(first.pending_batches().expect("pending")), None)
+        .expect("ingest");
+
+    assert!(
+        second.connections_list().expect("list").is_empty(),
+        "a lapide remove o host no outro aparelho"
+    );
+}
+
+#[test]
+fn the_same_batch_arriving_twice_changes_nothing() {
+    let storage = tempdir().expect("temp dir");
+    let password = "senha-super-segura";
+
+    let mut first = test_vault_manager(&storage.path().join("um"));
+    first.init(Some(password.to_string())).expect("init");
+    first
+        .connection_save(ConnectionProfile {
+            name: "producao".into(),
+            host: "10.0.0.9".into(),
+            username: "root".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let mut second = paired_vault(&first, &storage.path().join("dois"), password);
+    let batches = as_remote(first.pending_batches().expect("pending"));
+    assert!(second.ingest_remote(&batches, None).expect("ingest"));
+
+    // Um reenvio depois de a resposta se perder cria outro arquivo no Drive
+    // com o mesmo lote dentro; o id da mutação é o que impede a duplicata.
+    let duplicated: Vec<_> = batches
+        .iter()
+        .map(|(_, batch)| (format!("drive-retry-{}", batch.mutation_id), batch.clone()))
+        .collect();
+    assert!(
+        !second.ingest_remote(&duplicated, None).expect("ingest"),
+        "o mesmo lote nao pode ser aplicado duas vezes"
+    );
+    assert_eq!(second.connections_list().expect("list").len(), 1);
 }
 
 #[test]

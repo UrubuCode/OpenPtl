@@ -28,7 +28,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "net", "io-util"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 rustls-native-certs = "0.8"
 urlencoding = "2"
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 zeroize = "1"
 alacritty_terminal = "0.26"
 cosmic-text = { version = "0.19", features = ["syntect"] }

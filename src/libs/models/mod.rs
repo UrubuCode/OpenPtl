@@ -1,11 +1,11 @@
-// Resolução de conflitos e recuperação de cofre existem no domínio mas ainda
-// não têm tela: SyncConflict*, SyncKeepSide e RecoveryProbeResult.
 #![allow(dead_code)]
 
 //! Modelos serializados do domínio, divididos por área.
 //!
-//! A ordem dos campos e das variantes de enum define o formato binário do
-//! vault: alterá-la invalida vaults existentes.
+//! A ordem dos campos e das variantes de enum define o formato binário dos
+//! arquivos locais do cofre: alterá-la invalida vaults existentes. O que
+//! trafega entre dispositivos é o log de mutações, em JSON cifrado, e esse
+//! não depende de posição.
 
 pub mod base;
 pub mod notes;

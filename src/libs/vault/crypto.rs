@@ -89,55 +89,12 @@ pub(crate) fn compute_key_check(key: &[u8; 32]) -> [u8; 32] {
     out
 }
 
-#[cfg(test)]
-pub(crate) fn hash_bytes_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    to_hex(&digest)
-}
-
 pub(crate) fn to_hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
         out.push_str(&format!("{:02x}", byte));
     }
     out
-}
-
-pub(crate) fn content_hash_bytes(key: &[u8; 32], file_tag: &str, plaintext: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(b"openptl-content-hash-v1");
-    hasher.update(key);
-    hasher.update(file_tag.as_bytes());
-    hasher.update(plaintext);
-    let digest = hasher.finalize();
-    to_hex(&digest)
-}
-
-pub(crate) fn content_hash_payload<T: Serialize>(
-    payload: &T,
-    key: &[u8; 32],
-    file_tag: &str,
-) -> Result<String> {
-    let plaintext = encode_bin(payload)?;
-    Ok(content_hash_bytes(key, file_tag, &plaintext))
-}
-
-pub(crate) fn profile_hash_payload_input(payload: &ProfileBinPayload) -> ProfileBinPayload {
-    let mut normalized = payload.clone();
-    // Ignore local sync bookkeeping fields so profile conflicts reflect real user-config changes.
-    normalized.sync = SyncMetadata {
-        last_sync_at: None,
-        last_remote_modified: None,
-        last_local_change: 0,
-    };
-    normalized
-}
-
-pub(crate) fn profile_content_hash(payload: &ProfileBinPayload, key: &[u8; 32]) -> Result<String> {
-    let normalized = profile_hash_payload_input(payload);
-    content_hash_payload(&normalized, key, PROFILE_FILE_NAME)
 }
 
 pub(crate) fn encode_bin<T: Serialize>(value: &T) -> Result<Vec<u8>> {
@@ -165,26 +122,24 @@ pub(crate) fn write_bin_file<T: Serialize>(path: &Path, value: &T) -> Result<()>
     fs::write(path, data).with_context(|| format!("Falha ao escrever arquivo {}", path.display()))
 }
 
-pub(crate) fn derive_nonce(key: &[u8; 32], file_tag: &str, plaintext: &[u8]) -> [u8; 24] {
-    let mut hasher = Sha256::new();
-    hasher.update(key);
-    hasher.update(file_tag.as_bytes());
-    hasher.update(plaintext);
-    let digest = hasher.finalize();
-
+/// Nonce sempre aleatório.
+///
+/// A versão anterior derivava o nonce do próprio conteúdo, o que revelava
+/// quando dois arquivos guardavam a mesma coisa e não sobreviveria ao log de
+/// mutações, onde lotes distintos podem ter conteúdo igual.
+pub(crate) fn random_nonce() -> [u8; 24] {
     let mut nonce = [0u8; 24];
-    nonce.copy_from_slice(&digest[..24]);
+    OsRng.fill_bytes(&mut nonce);
     nonce
 }
 
 pub(crate) fn encrypt_bin_payload<T: Serialize>(
     payload: &T,
     key: &[u8; 32],
-    file_tag: &str,
     updated_at: i64,
 ) -> Result<EncryptedBin> {
     let plaintext = encode_bin(payload)?;
-    let nonce = derive_nonce(key, file_tag, &plaintext);
+    let nonce = random_nonce();
 
     let cipher = XChaCha20Poly1305::new(key.into());
     let ciphertext = cipher
@@ -221,6 +176,40 @@ pub(crate) fn decrypt_bin_payload<T: DeserializeOwned>(
         &plaintext,
         &format!("Falha ao decodificar {}", context_message),
     )
+}
+
+/// Envelope dos objetos que vão para o Drive: `[nonce 24][ciphertext]`.
+///
+/// O corpo é JSON, não bincode: lotes e snapshots atravessam versões
+/// diferentes do aplicativo, e um formato posicional faria um campo novo
+/// invalidar o histórico já publicado pelos outros aparelhos.
+pub fn encrypt_remote_blob<T: Serialize>(payload: &T, key: &[u8; 32]) -> Result<Vec<u8>> {
+    let plaintext = serde_json::to_vec(payload).context("Falha ao serializar objeto remoto")?;
+    let nonce = random_nonce();
+
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let ciphertext = cipher
+        .encrypt(XNonce::from_slice(&nonce), plaintext.as_ref())
+        .map_err(|_| anyhow!("Falha ao criptografar objeto remoto"))?;
+
+    let mut out = Vec::with_capacity(nonce.len() + ciphertext.len());
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+pub fn decrypt_remote_blob<T: DeserializeOwned>(bytes: &[u8], key: &[u8; 32]) -> Result<T> {
+    if bytes.len() <= 24 {
+        return Err(anyhow!("Objeto remoto truncado"));
+    }
+    let (nonce, ciphertext) = bytes.split_at(24);
+
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let plaintext = cipher
+        .decrypt(XNonce::from_slice(nonce), ciphertext)
+        .map_err(|_| anyhow!("Falha ao descriptografar objeto remoto"))?;
+
+    serde_json::from_slice(&plaintext).context("Falha ao decodificar objeto remoto")
 }
 
 pub(crate) fn normalize_bin_file_name(input: &str) -> Result<String> {

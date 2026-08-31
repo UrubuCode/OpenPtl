@@ -71,7 +71,32 @@ pub fn bind(window: &AppWindow, backend: Arc<Backend>) -> Timer {
     });
 
     refresh_servers(window, &backend);
+    refresh_servers_from_repository(window, &backend);
     start_refresh(window, backend)
+}
+
+/// Busca a lista oficial no repositório e mescla com os servidores locais.
+///
+/// A consulta é assíncrona e o resultado volta pelo event loop: falhar aqui
+/// não atrapalha nada, o aplicativo segue com o que o cofre já conhece.
+fn refresh_servers_from_repository(window: &AppWindow, backend: &Backend) {
+    let handle = window.as_weak();
+    backend.refresh_auth_servers(move |outcome| {
+        let Ok(servers) = outcome else {
+            return;
+        };
+        let _ = handle.upgrade_in_event_loop(move |window| {
+            let rows: Vec<ServerRow> = servers
+                .iter()
+                .map(|server| ServerRow {
+                    id: server.id.as_str().into(),
+                    label: server.label.as_str().into(),
+                    address: server.address.as_str().into(),
+                })
+                .collect();
+            window.set_servers(ModelRc::new(VecModel::from(rows)));
+        });
+    });
 }
 
 fn start_refresh(window: &AppWindow, backend: Arc<Backend>) -> Timer {

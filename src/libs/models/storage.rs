@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::base::{ConnectionProfile, KeychainEntry};
 use super::settings::AppSettings;
@@ -104,12 +104,17 @@ pub struct ProfileBinPayload {
     pub window_state: Option<WindowState>,
 }
 
+/// Índice dos registros gravados em arquivo próprio.
+///
+/// Guardava um hash de conteúdo por item para detectar divergência entre
+/// dispositivos; o log de mutações passou a resolver isso, e o AEAD de cada
+/// arquivo já autentica o conteúdo. Sobrou o que ele sempre foi de fato: a
+/// lista de ids que a leitura precisa percorrer.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestBinPayload {
     pub version: u32,
-    pub profile: String,
     #[serde(default)]
-    pub hosts: BTreeMap<String, String>,
+    pub hosts: BTreeSet<String>,
     #[serde(default)]
-    pub keychain: BTreeMap<String, String>,
+    pub keychain: BTreeSet<String>,
 }

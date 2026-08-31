@@ -31,12 +31,7 @@ impl VaultManager {
 
     pub(super) fn write_known_hosts_store(&self, content: &str) -> Result<()> {
         let key = self.current_key()?;
-        let encrypted = encrypt_bin_payload(
-            &content.to_string(),
-            &key,
-            KNOWN_HOSTS_FILE_NAME,
-            Utc::now().timestamp(),
-        )?;
+        let encrypted = encrypt_bin_payload(&content.to_string(), &key, Utc::now().timestamp())?;
         write_bin_file(&self.known_hosts_bin_path, &encrypted)
     }
 
@@ -64,6 +59,7 @@ impl VaultManager {
         if content == current {
             return Ok(());
         }
-        self.write_known_hosts_store(&content)
+        self.write_known_hosts_store(&content)?;
+        self.capture_mutations()
     }
 }

@@ -1,5 +1,11 @@
 use super::*;
 
+/// Driver do Google Drive.
+///
+/// Não conhece nenhum nome de arquivo do domínio: criar, listar, baixar e
+/// remover, só. O layout remoto vive em `remote.rs`, o que mantém a regra de
+/// negócio fora do transporte — e permitiu trocar o esquema de arquivos fixos
+/// pelo log de mutações sem tocar aqui.
 pub(crate) async fn ensure_openptl_folder(
     client: &Client,
     access_token: &str,
@@ -40,21 +46,7 @@ pub(crate) async fn ensure_named_folder(
         .await
         .context("Falha ao listar pastas no Google Drive")?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Falha ao listar pasta no Drive ({}): {}",
-            status,
-            body
-        ));
-    }
-
-    let list = response
-        .json::<DriveFileListResponse>()
-        .await
-        .context("Falha ao decodificar listagem de pastas")?;
-
+    let list: DriveFileListResponse = read_json(response, "listar pasta").await?;
     if let Some(found) = list.files.into_iter().next() {
         return Ok(Some(found.id));
     }
@@ -76,80 +68,80 @@ pub(crate) async fn ensure_named_folder(
         .await
         .context("Falha ao criar pasta no Google Drive")?;
 
-    let create_status = create_response.status();
-    if !create_status.is_success() {
-        let body = create_response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Falha ao criar pasta no Drive ({}): {}",
-            create_status,
-            body
-        ));
-    }
-
-    let created = create_response
-        .json::<DriveFileMetadata>()
-        .await
-        .context("Falha ao decodificar pasta criada")?;
-
+    let created: DriveFileMetadata = read_json(create_response, "criar pasta").await?;
     Ok(Some(created.id))
 }
 
-pub(crate) async fn list_drive_bin_files(
+/// Lista a pasta inteira, seguindo a paginação.
+///
+/// A versão anterior pedia uma página de mil itens e ignorava o resto; com o
+/// log de mutações a pasta cresce até a compactação, e perder a segunda página
+/// significaria perder alterações em silêncio.
+pub(crate) async fn list_drive_files(
     client: &Client,
     access_token: &str,
     folder_id: &str,
-) -> Result<HashMap<String, DriveFileMetadata>> {
+) -> Result<Vec<DriveFileMetadata>> {
     let query = format!(
         "trashed=false and '{}' in parents and mimeType!='{}'",
         folder_id, DRIVE_FOLDER_MIME_TYPE
     );
 
-    let response = client
-        .get("https://www.googleapis.com/drive/v3/files")
-        .bearer_auth(access_token)
-        .query(&[
-            ("q", query.as_str()),
-            ("spaces", "drive"),
-            ("fields", "files(id,name,mimeType,modifiedTime)"),
-            ("pageSize", "1000"),
-        ])
-        .send()
-        .await
-        .context("Falha ao listar arquivos no Google Drive")?;
+    let mut out = Vec::new();
+    let mut page_token: Option<String> = None;
 
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Falha ao listar arquivos no Drive ({}): {}",
-            status,
-            body
-        ));
-    }
-
-    let list = response
-        .json::<DriveFileListResponse>()
-        .await
-        .context("Falha ao decodificar listagem de arquivos")?;
-
-    let mut out: HashMap<String, DriveFileMetadata> = HashMap::new();
-    for item in list.files {
-        let Some(name) = item.name.clone() else {
-            continue;
-        };
-        if !name.to_ascii_lowercase().ends_with(".bin") {
-            continue;
+    loop {
+        let mut request = client
+            .get("https://www.googleapis.com/drive/v3/files")
+            .bearer_auth(access_token)
+            .query(&[
+                ("q", query.as_str()),
+                ("spaces", "drive"),
+                (
+                    "fields",
+                    "nextPageToken,files(id,name,mimeType,modifiedTime)",
+                ),
+                ("pageSize", "1000"),
+            ]);
+        if let Some(token) = &page_token {
+            request = request.query(&[("pageToken", token.as_str())]);
         }
 
-        if let Some(current) = out.get(&name) {
-            if item.modified_time > current.modified_time {
-                out.insert(name, item);
-            }
-        } else {
-            out.insert(name, item);
+        let response = request
+            .send()
+            .await
+            .context("Falha ao listar arquivos no Google Drive")?;
+        let list: DriveFileListResponse = read_json(response, "listar arquivos").await?;
+
+        out.extend(
+            list.files
+                .into_iter()
+                .filter(|item| item.has_storage_extension()),
+        );
+
+        match list.next_page_token {
+            Some(token) if !token.is_empty() => page_token = Some(token),
+            _ => break,
         }
     }
+
     Ok(out)
+}
+
+/// Cria um arquivo e envia o conteúdo numa tacada.
+///
+/// Objetos remotos são imutáveis, então criar é a única escrita que existe:
+/// nunca reescrevemos um arquivo compartilhado, que é como dois aparelhos
+/// perderiam alterações um do outro num Drive sem compare-and-swap.
+pub(crate) async fn create_drive_object(
+    client: &Client,
+    access_token: &str,
+    folder_id: &str,
+    file_name: &str,
+    content: Vec<u8>,
+) -> Result<DriveFileMetadata> {
+    let created = create_drive_file(client, access_token, folder_id, file_name).await?;
+    upload_file_bytes(client, access_token, &created.id, content).await
 }
 
 pub(crate) async fn create_drive_file(
@@ -170,20 +162,7 @@ pub(crate) async fn create_drive_file(
         .await
         .context("Falha ao criar metadata de arquivo no Drive")?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Falha ao criar arquivo no Drive ({}): {}",
-            status,
-            body
-        ));
-    }
-
-    response
-        .json::<DriveFileMetadata>()
-        .await
-        .context("Falha ao decodificar metadata criada")
+    read_json(response, "criar arquivo").await
 }
 
 pub(crate) async fn upload_file_bytes(
@@ -210,16 +189,7 @@ pub(crate) async fn upload_file_bytes(
         .await
         .context("Falha ao enviar arquivo para o Drive")?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("Falha no upload para Drive ({}): {}", status, body));
-    }
-
-    response
-        .json::<DriveFileMetadata>()
-        .await
-        .context("Falha ao ler resposta de upload")
+    read_json(response, "enviar arquivo").await
 }
 
 pub(crate) async fn download_file_bytes(
@@ -276,9 +246,33 @@ pub(crate) async fn delete_drive_file(
     Ok(())
 }
 
+async fn read_json<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+    action: &str,
+) -> Result<T> {
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!(
+            "Falha ao {} no Drive ({}): {}",
+            action,
+            status,
+            body
+        ));
+    }
+
+    response
+        .json::<T>()
+        .await
+        .with_context(|| format!("Falha ao decodificar resposta de {action}"))
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct DriveFileListResponse {
+    #[serde(default)]
     pub(crate) files: Vec<DriveFileMetadata>,
+    #[serde(rename = "nextPageToken", default)]
+    pub(crate) next_page_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -289,4 +283,16 @@ pub(crate) struct DriveFileMetadata {
     pub(crate) mime_type: Option<String>,
     #[serde(rename = "modifiedTime")]
     pub(crate) modified_time: Option<String>,
+}
+
+impl DriveFileMetadata {
+    pub(crate) fn file_name(&self) -> &str {
+        self.name.as_deref().unwrap_or_default()
+    }
+
+    fn has_storage_extension(&self) -> bool {
+        self.file_name()
+            .to_ascii_lowercase()
+            .ends_with(&format!(".{STORAGE_FILE_EXTENSION}"))
+    }
 }

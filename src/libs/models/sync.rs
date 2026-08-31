@@ -57,45 +57,7 @@ impl SyncState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncConflictKind {
-    Host,
-    Keychain,
-    Profile,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncConflictItem {
-    pub kind: SyncConflictKind,
-    pub id: String,
-    pub label: String,
-    pub local_hash: Option<String>,
-    pub remote_hash: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SyncConflictPreview {
-    #[serde(default)]
-    pub conflicts: Vec<SyncConflictItem>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncKeepSide {
-    Client,
-    Server,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncConflictDecision {
-    pub kind: SyncConflictKind,
-    pub id: String,
-    pub keep: SyncKeepSide,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecoveryProbeResult {
-    pub found: bool,
-    pub message: BackendMessage,
-}
+// A resolução de conflito por arquivo — `SyncConflict*`, `SyncKeepSide` e o
+// resultado da sondagem de recuperação — foi removida junto com o esquema de
+// arquivos fixos no Drive. O log de mutações reconcilia por campo, com o
+// relógio lógico, e não tem pergunta a fazer ao usuário.

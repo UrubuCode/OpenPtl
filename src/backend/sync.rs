@@ -1,16 +1,19 @@
 //! Operações de sincronização expostas à interface.
 //!
-//! Cada uma despacha para o runtime e publica o andamento no relator; a
-//! interface lê de lá. O cofre só é tocado na thread que faz a chamada, nunca
-//! dentro da tarefa assíncrona, para não segurar o cadeado durante a rede.
+//! Uma rodada é sempre: baixar o que falta, aplicar localmente, enviar a fila
+//! e, se o log tiver crescido demais, compactar. O cofre só é tocado na thread
+//! que faz a chamada, nunca dentro da tarefa assíncrona, para não segurar o
+//! cadeado durante a rede.
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use super::Backend;
-use crate::libs::models::SyncLoggedUser;
-use crate::libs::sync::{request_sync_cancel, Reporter};
+use crate::constants::REMOTE_COMPACTION_THRESHOLD;
+use crate::libs::models::{AuthServer, SyncLoggedUser};
+use crate::libs::sync::{fetch_official_servers, request_sync_cancel, Reporter};
+use crate::libs::vault::SyncContext;
 
 impl Backend {
     pub fn sync_reporter(&self) -> Reporter {
@@ -21,82 +24,133 @@ impl Backend {
         self.sync.try_lock().ok()?.logged_user()
     }
 
-    /// Abre o navegador no fluxo do Google e espera o retorno numa porta local.
+    /// Busca a lista oficial de servidores, mescla com a local e abre o
+    /// navegador no servidor escolhido.
+    ///
+    /// A consulta acontece a cada login para que uma troca de endereço ou de
+    /// `client_id` chegue sem exigir atualização do aplicativo. Falhar nela
+    /// não impede o login: seguimos com o que o cofre já conhece.
     pub fn sync_login(&self) {
-        let Ok((address, fallbacks)) = self.sync_servers() else {
-            return;
-        };
         let sync = Arc::clone(&self.sync);
-        let reporter = self.sync_reporter.clone();
-
-        self.runtime.spawn(async move {
-            let outcome = sync
-                .lock()
-                .await
-                .google_login(&reporter, &address, None)
-                .await;
-            report_failure(&reporter, outcome.err());
-        });
-        let _ = fallbacks;
-    }
-
-    /// Envia os arquivos do cofre para o Drive.
-    pub fn sync_push(&self) {
-        let Ok((address, fallbacks)) = self.sync_servers() else {
-            return;
-        };
-        let Ok(files) = self.local_files() else {
-            return;
-        };
-
-        let sync = Arc::clone(&self.sync);
-        let reporter = self.sync_reporter.clone();
-
-        self.runtime.spawn(async move {
-            let outcome = sync
-                .lock()
-                .await
-                .push(&reporter, files, &address, &fallbacks)
-                .await;
-            report_failure(&reporter, outcome.err());
-        });
-    }
-
-    /// Baixa os arquivos do Drive e substitui o armazenamento local.
-    pub fn sync_pull(&self) {
-        let Ok((address, fallbacks)) = self.sync_servers() else {
-            return;
-        };
-
-        let sync = Arc::clone(&self.sync);
-        let reporter = self.sync_reporter.clone();
         let vault = Arc::clone(&self.vault);
+        let reporter = self.sync_reporter.clone();
 
         self.runtime.spawn(async move {
+            if let Ok(servers) = fetch_official_servers().await {
+                if let Ok(mut vault) = vault.lock() {
+                    let _ = vault.merge_remote_servers(servers);
+                }
+            }
+
+            let selected = {
+                let Ok(vault) = vault.lock() else {
+                    return;
+                };
+                vault.selected_auth_server().ok()
+            };
+            let Some(server) = selected else {
+                return;
+            };
+
             let outcome = sync
                 .lock()
                 .await
-                .pull(&reporter, &address, &fallbacks)
+                .google_login(&reporter, &server.address, server.client_id.clone())
+                .await;
+            report_failure(&reporter, outcome.err());
+        });
+    }
+
+    /// Rodada completa: recebe, aplica, envia e compacta.
+    pub fn sync_now(&self) {
+        let Ok((address, fallbacks)) = self.sync_servers() else {
+            return;
+        };
+        let Ok(context) = self.sync_context() else {
+            return;
+        };
+
+        let sync = Arc::clone(&self.sync);
+        let vault = Arc::clone(&self.vault);
+        let reporter = self.sync_reporter.clone();
+
+        self.runtime.spawn(async move {
+            let mut manager = sync.lock().await;
+            manager.use_servers(address, fallbacks);
+
+            let fetched = manager
+                .fetch_remote(
+                    &reporter,
+                    &context.key,
+                    &context.seen,
+                    context.base_snapshot,
+                )
                 .await;
 
-            match outcome {
-                // Só substitui o local quando o remoto trouxe conteúdo: uma
-                // resposta vazia não pode apagar o cofre do usuário.
-                Ok(Some(files)) => {
-                    if let Ok(mut vault) = vault.lock() {
-                        report_failure(
-                            &reporter,
-                            vault
-                                .replace_local_files(&files)
-                                .and_then(|()| vault.reload_unlocked_from_disk_and_persist())
-                                .err(),
-                        );
+            let fetched = match fetched {
+                Ok(value) => value,
+                Err(error) => return report_failure(&reporter, Some(error)),
+            };
+
+            // Aplicar antes de enviar: o que chegou pode alterar o que a fila
+            // local ainda vai publicar.
+            let pending = {
+                let Ok(mut vault) = vault.lock() else {
+                    return report_failure(&reporter, Some(anyhow!("vault_indisponivel")));
+                };
+                if let Err(error) = vault.ingest_remote(&fetched.batches, fetched.snapshot) {
+                    return report_failure(&reporter, Some(error));
+                }
+                match vault.pending_batches() {
+                    Ok(batches) => batches,
+                    Err(error) => return report_failure(&reporter, Some(error)),
+                }
+            };
+
+            if !pending.is_empty() {
+                match manager
+                    .push_batches(&reporter, &context.key, &context.header, &pending)
+                    .await
+                {
+                    Ok(pushed) => {
+                        if let Ok(mut vault) = vault.lock() {
+                            for (mutation_id, file_id) in pushed {
+                                let _ = vault.confirm_pushed(mutation_id, &file_id);
+                            }
+                        }
+                    }
+                    Err(error) => return report_failure(&reporter, Some(error)),
+                }
+            }
+
+            let total_remote = fetched.remote_batch_count + pending.len();
+            if total_remote >= REMOTE_COMPACTION_THRESHOLD {
+                let snapshot = {
+                    let Ok(vault) = vault.lock() else { return };
+                    vault.snapshot_for_compaction()
+                };
+                if let Ok(snapshot) = snapshot {
+                    if let Ok(file_id) = manager.compact(&reporter, &context.key, &snapshot).await {
+                        if let Ok(mut vault) = vault.lock() {
+                            let _ = vault.adopt_compaction(&snapshot, &file_id);
+                        }
                     }
                 }
-                Ok(None) => reporter.clear_progress(),
-                Err(error) => report_failure(&reporter, Some(error)),
             }
+
+            reporter.clear_progress();
         });
+    }
+
+    /// Mantidos como atalhos da interface: ambos disparam a rodada completa,
+    /// porque com log de mutações enviar sem receber deixaria o aparelho
+    /// publicando sobre um estado que ele nem conhece.
+    pub fn sync_push(&self) {
+        self.sync_now();
+    }
+
+    pub fn sync_pull(&self) {
+        self.sync_now();
     }
 
     pub fn sync_cancel(&self) {
@@ -112,6 +166,30 @@ impl Backend {
         self.sync_reporter.clear_progress();
     }
 
+    /// Atualiza a lista de servidores a partir do repositório oficial.
+    pub fn refresh_auth_servers<F>(&self, on_done: F)
+    where
+        F: FnOnce(Result<Vec<AuthServer>>) + Send + 'static,
+    {
+        let vault = Arc::clone(&self.vault);
+        self.runtime.spawn(async move {
+            let fetched = fetch_official_servers().await;
+            let outcome = match fetched {
+                Ok(servers) => {
+                    let mut guard = match vault.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return on_done(Err(anyhow!("vault_indisponivel"))),
+                    };
+                    guard
+                        .merge_remote_servers(servers)
+                        .and_then(|()| guard.auth_servers_list())
+                }
+                Err(error) => Err(error),
+            };
+            on_done(outcome);
+        });
+    }
+
     /// Endereço do servidor de auth escolhido, mais os demais como reserva.
     fn sync_servers(&self) -> Result<(String, Vec<String>)> {
         let vault = self.vault()?;
@@ -125,8 +203,8 @@ impl Backend {
         Ok((selected.address, fallbacks))
     }
 
-    fn local_files(&self) -> Result<Vec<(String, Vec<u8>)>> {
-        self.vault()?.list_local_bin_files()
+    fn sync_context(&self) -> Result<SyncContext> {
+        self.vault()?.sync_context()
     }
 }
 

@@ -50,6 +50,7 @@ impl VaultManager {
             salt,
             payload: Some(payload),
             created_at: Some(Utc::now().timestamp()),
+            materializing: false,
         };
 
         self.persist()?;
@@ -103,8 +104,53 @@ impl VaultManager {
             salt,
             payload: Some(payload),
             created_at: Some(openptl.created_at),
+            materializing: false,
         };
 
+        self.apply_known_hosts_after_load()?;
+        self.status()
+    }
+
+    /// Cria um cofre vazio já alinhado com o cofre remoto.
+    ///
+    /// Um aparelho novo precisa do mesmo salt para derivar a mesma chave —
+    /// sem isso ele não abriria nenhum lote de mutações. O conteúdo chega
+    /// depois, pelo log; aqui só nasce o cofre local.
+    pub fn init_from_remote_header(
+        &mut self,
+        password: &str,
+        header: &crate::libs::mutations::RemoteHeader,
+    ) -> Result<VaultStatus> {
+        let salt = header
+            .salt
+            .ok_or_else(|| anyhow!("Cofre remoto usa chave do sistema e exige senha mestre"))?;
+        let key = derive_key(password.trim(), &salt)?;
+        if compute_key_check(&key) != header.key_check {
+            return Err(anyhow!("Senha mestre invalida para o cofre remoto"));
+        }
+
+        self.clear_local_storage()?;
+
+        let mut payload = VaultPayload {
+            version: CURRENT_PAYLOAD_VERSION,
+            ..VaultPayload::default()
+        };
+        ensure_default_server(&mut payload.auth_servers);
+
+        self.runtime = VaultRuntime {
+            unlocked: true,
+            key_mode: Some(KeyMode::Password),
+            key: Some(key),
+            salt: Some(salt),
+            payload: Some(payload),
+            created_at: Some(header.created_at),
+            // Nada de gerar mutações para o cofre vazio: elas apagariam no
+            // Drive tudo o que ainda vai ser baixado.
+            materializing: true,
+        };
+
+        self.persist()?;
+        self.runtime.materializing = false;
         self.apply_known_hosts_after_load()?;
         self.status()
     }

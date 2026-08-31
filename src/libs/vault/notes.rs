@@ -36,6 +36,7 @@ impl VaultManager {
         }
 
         self.write_notes_store(&payload)?;
+        self.capture_mutations()?;
         Ok(note)
     }
 
@@ -49,10 +50,11 @@ impl VaultManager {
             return Err(anyhow!("Nota nao encontrada"));
         }
 
-        self.write_notes_store(&payload)
+        self.write_notes_store(&payload)?;
+        self.capture_mutations()
     }
 
-    fn read_notes_store(&self) -> Result<NotesBinPayload> {
+    pub(super) fn read_notes_store(&self) -> Result<NotesBinPayload> {
         if !self.notes_path.exists() {
             return Ok(NotesBinPayload {
                 version: CURRENT_PAYLOAD_VERSION,
@@ -64,10 +66,9 @@ impl VaultManager {
         decrypt_bin_payload(&encrypted, &key, NOTES_FILE_NAME)
     }
 
-    fn write_notes_store(&self, payload: &NotesBinPayload) -> Result<()> {
+    pub(super) fn write_notes_store(&self, payload: &NotesBinPayload) -> Result<()> {
         let key = self.current_key()?;
-        let encrypted =
-            encrypt_bin_payload(payload, &key, NOTES_FILE_NAME, Utc::now().timestamp())?;
+        let encrypted = encrypt_bin_payload(payload, &key, Utc::now().timestamp())?;
         write_bin_file(&self.notes_path, &encrypted)
     }
 }

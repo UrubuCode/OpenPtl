@@ -102,52 +102,42 @@ impl VaultManager {
             auth_servers: payload.auth_servers.clone(),
             window_state: payload.window_state.clone(),
         };
-        let profile_hash = profile_content_hash(&profile_payload, &key)?;
 
-        let mut hosts = BTreeMap::new();
-        let mut keychain = BTreeMap::new();
+        let mut hosts = BTreeSet::new();
+        let mut keychain = BTreeSet::new();
         let mut expected_files = HashSet::new();
 
         for profile in &payload.connections {
             let file_name = format!("{}.bin", profile.id);
             let path = self.storage_root.join(&file_name);
-            let encrypted = encrypt_bin_payload(profile, &key, &profile.id, now)?;
+            let encrypted = encrypt_bin_payload(profile, &key, now)?;
             let encoded = encode_bin(&encrypted)?;
             fs::write(&path, &encoded)
                 .with_context(|| format!("Falha ao escrever arquivo {}", path.display()))?;
-            hosts.insert(
-                profile.id.clone(),
-                content_hash_payload(profile, &key, &profile.id)?,
-            );
+            hosts.insert(profile.id.clone());
             expected_files.insert(file_name);
         }
 
         for entry in &payload.keychain {
             let file_name = format!("{}.bin", entry.id);
             let path = self.storage_root.join(&file_name);
-            let encrypted = encrypt_bin_payload(entry, &key, &entry.id, now)?;
+            let encrypted = encrypt_bin_payload(entry, &key, now)?;
             let encoded = encode_bin(&encrypted)?;
             fs::write(&path, &encoded)
                 .with_context(|| format!("Falha ao escrever arquivo {}", path.display()))?;
-            keychain.insert(
-                entry.id.clone(),
-                content_hash_payload(entry, &key, &entry.id)?,
-            );
+            keychain.insert(entry.id.clone());
             expected_files.insert(file_name);
         }
 
         let manifest_payload = ManifestBinPayload {
             version: CURRENT_PAYLOAD_VERSION,
-            profile: profile_hash,
             hosts,
             keychain,
         };
-        let manifest_encrypted =
-            encrypt_bin_payload(&manifest_payload, &key, MANIFEST_FILE_NAME, now)?;
+        let manifest_encrypted = encrypt_bin_payload(&manifest_payload, &key, now)?;
         write_bin_file(&self.manifest_path, &manifest_encrypted)?;
 
-        let profile_encrypted =
-            encrypt_bin_payload(&profile_payload, &key, PROFILE_FILE_NAME, now)?;
+        let profile_encrypted = encrypt_bin_payload(&profile_payload, &key, now)?;
         write_bin_file(&self.profile_path, &profile_encrypted)?;
 
         let openptl = OpenPtlBin {
@@ -161,7 +151,10 @@ impl VaultManager {
         write_bin_file(&self.openptl_path, &openptl)?;
 
         self.runtime.created_at = Some(created_at);
-        self.cleanup_stale_item_files(&expected_files)
+        self.cleanup_stale_item_files(&expected_files)?;
+        // O log é alimentado depois de o cofre estar gravado: um lote só pode
+        // descrever um estado que já sobreviveu ao disco.
+        self.capture_mutations()
     }
 
     pub(super) fn cleanup_stale_item_files(&self, expected: &HashSet<String>) -> Result<()> {
@@ -188,6 +181,8 @@ impl VaultManager {
                 || name == PROFILE_FILE_NAME
                 || name == MANIFEST_FILE_NAME
                 || name == KNOWN_HOSTS_FILE_NAME
+                || name == NOTES_FILE_NAME
+                || name == MUTATIONS_FILE_NAME
             {
                 continue;
             }
@@ -231,20 +226,10 @@ impl VaultManager {
             ));
         }
 
-        let expected_profile_hash = manifest_payload.profile.clone();
-        let actual_profile_hash = profile_content_hash(&profile_payload, key)?;
-        if actual_profile_hash != expected_profile_hash {
-            return Err(anyhow!(
-                "Hash divergente para profile. Esperado {}, obtido {}",
-                expected_profile_hash,
-                actual_profile_hash
-            ));
-        }
-
         let mut connections = Vec::new();
         let mut keychain = Vec::new();
 
-        for (uuid, expected_hash) in manifest_payload.hosts {
+        for uuid in manifest_payload.hosts {
             ensure_uuid(&uuid, "host")?;
             let path = self.storage_root.join(format!("{}.bin", uuid));
             let encoded = fs::read(&path)
@@ -254,19 +239,10 @@ impl VaultManager {
                 decrypt_bin_payload(&encrypted, key, "Arquivo de host")?;
             profile.id = uuid;
             profile.normalize_protocols();
-            let actual_content_hash = content_hash_payload(&profile, key, profile.id.as_str())?;
-            if actual_content_hash != expected_hash {
-                return Err(anyhow!(
-                    "Hash de conteudo divergente para host {}. Esperado {}, obtido {}",
-                    profile.id,
-                    expected_hash,
-                    actual_content_hash
-                ));
-            }
             connections.push(profile);
         }
 
-        for (uuid, expected_hash) in manifest_payload.keychain {
+        for uuid in manifest_payload.keychain {
             ensure_uuid(&uuid, "keychain")?;
             let path = self.storage_root.join(format!("{}.bin", uuid));
             let encoded = fs::read(&path)
@@ -275,15 +251,6 @@ impl VaultManager {
             let mut entry: KeychainEntry =
                 decrypt_bin_payload(&encrypted, key, "Arquivo de keychain")?;
             entry.id = uuid;
-            let actual_content_hash = content_hash_payload(&entry, key, entry.id.as_str())?;
-            if actual_content_hash != expected_hash {
-                return Err(anyhow!(
-                    "Hash de conteudo divergente para keychain {}. Esperado {}, obtido {}",
-                    entry.id,
-                    expected_hash,
-                    actual_content_hash
-                ));
-            }
             keychain.push(entry);
         }
 

@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -24,8 +24,8 @@ use sha2::{Digest, Sha256};
 
 use crate::constants::{
     APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, KEYRING_VAULT_KEY,
-    KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, NOTES_FILE_NAME, OPENPTL_FILE_NAME,
-    PROFILE_FILE_NAME, STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
+    KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, MUTATIONS_FILE_NAME, NOTES_FILE_NAME,
+    OPENPTL_FILE_NAME, PROFILE_FILE_NAME, STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
 };
 use crate::libs::models::{
     AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry, ManifestBinPayload, Note,
@@ -36,11 +36,13 @@ mod crypto;
 mod files;
 mod known_hosts;
 mod lifecycle;
+mod mutations;
 mod notes;
 mod persistence;
 mod records;
 
 pub(crate) use crypto::*;
+pub use mutations::SyncContext;
 
 #[derive(Debug, Clone, Default)]
 struct VaultRuntime {
@@ -50,6 +52,10 @@ struct VaultRuntime {
     salt: Option<[u8; 16]>,
     payload: Option<VaultPayload>,
     created_at: Option<i64>,
+    /// Trava a captura enquanto o cofre está sendo reescrito a partir do log:
+    /// sem ela, materializar geraria mutações descrevendo o que acabou de
+    /// chegar de outro aparelho.
+    materializing: bool,
 }
 
 pub struct VaultManager {
@@ -60,6 +66,7 @@ pub struct VaultManager {
     known_hosts_path: PathBuf,
     known_hosts_bin_path: PathBuf,
     notes_path: PathBuf,
+    mutations_path: PathBuf,
     runtime: VaultRuntime,
 }
 
@@ -108,6 +115,7 @@ impl VaultManager {
             known_hosts_path: storage_root.join("known_hosts"),
             known_hosts_bin_path: storage_root.join(KNOWN_HOSTS_FILE_NAME),
             notes_path: storage_root.join(NOTES_FILE_NAME),
+            mutations_path: storage_root.join(MUTATIONS_FILE_NAME),
             storage_root,
             runtime: VaultRuntime::default(),
         })

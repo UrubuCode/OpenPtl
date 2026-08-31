@@ -1,7 +1,11 @@
-//! Sincronização do cofre com o Google Drive.
+//! Sincronização do cofre com o Google Drive por log de mutações.
 //!
-//! Conflitos e recuperação estão implementados aqui, mas nenhuma tela os
-//! aciona ainda.
+//! O Drive não oferece compare-and-swap, então nada compartilhado é
+//! reescrito: cada alteração vira um arquivo imutável e a convergência sai do
+//! relógio lógico dentro do payload, não da ordem de chegada.
+//!
+//! Recuperação em aparelho novo (`probe_remote`, `read_remote_header`) e
+//! remoção do backup remoto existem no domínio mas ainda não têm tela.
 #![allow(dead_code)]
 
 use crate::libs::secret_store;
@@ -11,15 +15,15 @@ use aes_gcm::{
 };
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use chrono::Utc;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Mutex as StdMutex, OnceLock},
 };
+use uuid::Uuid;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -28,31 +32,34 @@ use tokio::sync::Notify;
 
 use crate::{
     constants::{
-        APP_KEYRING_SERVICE, AUTH_CALLBACK_TIMEOUT, DRIVE_FOLDER_MIME_TYPE, DRIVE_ROOT_FOLDER_NAME,
-        DRIVE_TOP_PARENT_ID, KEYRING_REFRESH_TOKEN, KEYRING_USER_EMAIL, KEYRING_USER_NAME,
-        KEYRING_USER_PICTURE, MANIFEST_FILE_NAME, OPENPTL_FILE_NAME, PROFILE_FILE_NAME,
+        APP_KEYRING_SERVICE, AUTH_CALLBACK_TIMEOUT, AUTH_SERVERS_TIMEOUT, AUTH_SERVERS_URL,
+        DRIVE_FOLDER_MIME_TYPE, DRIVE_ROOT_FOLDER_NAME, DRIVE_TOP_PARENT_ID, KEYRING_REFRESH_TOKEN,
+        KEYRING_USER_EMAIL, KEYRING_USER_NAME, KEYRING_USER_PICTURE, RELEASE_USER_AGENT,
+        REMOTE_SNAPSHOT_PREFIX, STORAGE_FILE_EXTENSION,
     },
-    libs::models::{
-        BackendMessage, RecoveryProbeResult, SyncConflictDecision, SyncConflictItem,
-        SyncConflictKind, SyncConflictPreview, SyncKeepSide, SyncLoggedUser, SyncMetadata,
-        SyncState, VaultStatus,
-    },
-    libs::vault::VaultManager,
+    libs::models::{AuthServer, BackendMessage, SyncLoggedUser, SyncState},
+    libs::mutations::{MutationBatch, RemoteHeader, RemoteSnapshot},
+    libs::vault::{decrypt_remote_blob, encrypt_remote_blob},
 };
 
 mod auth;
 mod drive;
 mod operations;
+mod remote;
 mod reporter;
+mod servers;
 
 pub use reporter::Reporter;
+pub use servers::fetch_official_servers;
 
 pub(crate) use auth::*;
 pub(crate) use drive::*;
+pub(crate) use remote::*;
 
 static SYNC_CANCELLED: AtomicBool = AtomicBool::new(false);
 static SYNC_CANCEL_NOTIFY: OnceLock<Notify> = OnceLock::new();
 static PENDING_AUTH_CLIENT_ID: OnceLock<StdMutex<Option<String>>> = OnceLock::new();
+static AUTH_ENDPOINTS: OnceLock<StdMutex<(String, Vec<String>)>> = OnceLock::new();
 
 fn pending_client_id_store() -> &'static StdMutex<Option<String>> {
     PENDING_AUTH_CLIENT_ID.get_or_init(|| StdMutex::new(None))
@@ -69,6 +76,26 @@ fn take_pending_client_id() -> Option<String> {
         .lock()
         .ok()
         .and_then(|guard| guard.clone())
+}
+
+fn auth_endpoints_store() -> &'static StdMutex<(String, Vec<String>)> {
+    AUTH_ENDPOINTS.get_or_init(|| StdMutex::new((String::new(), Vec::new())))
+}
+
+/// Guarda qual servidor de auth usar. As operações de Drive renovam o token
+/// sozinhas, e passar o endereço em cada chamada só espalharia o mesmo dado
+/// por toda a fachada.
+pub(crate) fn set_auth_endpoints(address: String, fallbacks: Vec<String>) {
+    if let Ok(mut guard) = auth_endpoints_store().lock() {
+        *guard = (address, fallbacks);
+    }
+}
+
+pub(crate) fn auth_endpoints() -> (String, Vec<String>) {
+    auth_endpoints_store()
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default()
 }
 
 fn sync_cancel_notify() -> &'static Notify {
@@ -106,8 +133,8 @@ pub fn request_sync_cancel() -> SyncState {
 #[derive(Default)]
 pub struct SyncManager;
 
-/// Publica o andamento de uma etapa longa. Substitui o evento `sync:progress`
-/// que o frontend Tauri recebia; o rótulo já vem pronto para exibição.
+/// Publica o andamento de uma etapa longa. O rótulo já vem pronto para
+/// exibição.
 fn report_progress(
     reporter: &Reporter,
     stage: &str,

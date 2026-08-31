@@ -245,21 +245,6 @@ pub(crate) struct RefreshTokenResponse {
     access_token: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct DriveFileListResponse {
-    files: Vec<DriveFileMetadata>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct DriveFileMetadata {
-    id: String,
-    name: Option<String>,
-    #[serde(rename = "mimeType")]
-    mime_type: Option<String>,
-    #[serde(rename = "modifiedTime")]
-    modified_time: Option<String>,
-}
-
 /// Abre o navegador do sistema no endereço de login. O Tauri fazia isso por um
 /// plugin; aqui é o comando padrão do sistema operacional.
 pub(crate) fn open_login_url(url: &str) -> Result<()> {
