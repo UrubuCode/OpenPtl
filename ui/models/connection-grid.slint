@@ -1,0 +1,7 @@
+import { ConnectionRow } from "connection.slint";
+
+/// Uma linha da grade de conexões. O agrupamento em três acontece no Rust: o
+/// `for` do Slint percorre um modelo linear e não sabe montar colunas sozinho.
+export struct ConnectionGridRow {
+    cells: [ConnectionRow],
+}

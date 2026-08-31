@@ -8,6 +8,7 @@ import { FileRow } from "../models/file.slint";
 import { BlockFrame } from "../components/block-frame.slint";
 import { TerminalView } from "../components/terminal-view.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 
 component FileLine inherits Rectangle {
     in property <FileRow> data;
@@ -69,8 +70,7 @@ export component WorkspacePage inherits Rectangle {
     callback terminal-input(string, bool, bool);
     callback terminal-resized(string, length, length);
     callback file-opened(string);
-    callback add-terminal();
-    callback add-files();
+    callback open-connection();
     /// O canvas informa seu tamanho para que o Rust possa manter os blocos
     /// dentro dele.
     callback canvas-resized(length, length);
@@ -90,37 +90,57 @@ export component WorkspacePage inherits Rectangle {
         opacity: 0.35;
     }
 
-    if root.blocks.length == 0: VerticalLayout {
-        alignment: center;
-        spacing: Theme.space-lg;
+    // Cartao central de convite. No workspace nao existe terminal solto: o
+    // que se abre e um bloco, e ele nasce de uma conexao salva.
+    if root.blocks.length == 0: Rectangle {
+        width: 450px;
+        height: 200px;
+        background: Theme.surface;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border;
 
-        // Centralizado tambem na horizontal: o cabecalho de pagina alinha o
-        // texto a esquerda e destoava dos botoes centralizados.
-        Text {
-            text: "Área de trabalho";
-            horizontal-alignment: center;
-            font-size: Type.display;
-            font-weight: Type.weight-bold;
-            color: Theme.text-primary;
-        }
-        Text {
-            text: root.hint;
-            horizontal-alignment: center;
-            font-size: Type.body;
-            color: Theme.text-muted;
-        }
-
-        HorizontalLayout {
-            spacing: Theme.space-sm;
+        VerticalLayout {
+            padding: Theme.space-lg;
+            spacing: Theme.space-md;
             alignment: center;
-            UiButton {
-                label: "Novo terminal";
-                tone: ButtonTone.primary;
-                clicked => { root.add-terminal(); }
+
+            Rectangle {
+                width: 44px;
+                height: 44px;
+                x: (parent.width - self.width) / 2;
+                border-radius: Theme.radius-md;
+                background: Theme.accent.with-alpha(0.16);
+
+                UiIcon {
+                    width: 20px;
+                    height: 20px;
+                    source: Icons.terminal;
+                    tint: Theme.accent-bright;
+                }
             }
-            UiButton {
-                label: "Novo painel de arquivos";
-                clicked => { root.add-files(); }
+
+            Text {
+                text: "Novo Bloco";
+                horizontal-alignment: center;
+                font-size: Type.title;
+                font-weight: Type.weight-semibold;
+                color: Theme.text-primary;
+            }
+            Text {
+                text: "Escolha qual bloco deseja abrir neste workspace.";
+                horizontal-alignment: center;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                UiButton {
+                    label: "Acessar Conexão";
+                    icon: Icons.connections;
+                    clicked => { root.open-connection(); }
+                }
             }
         }
     }

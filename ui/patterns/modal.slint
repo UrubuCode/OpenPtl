@@ -32,7 +32,9 @@ export component Modal inherits Rectangle {
 
     panel := Rectangle {
         width: root.panel-width;
-        height: min(shell.min-height, parent.height - 2 * Theme.space-xl);
+        // A altura vem do conteudo, nao do shell: um ScrollView tem altura
+        // minima propria e minuscula, entao medir por ele encolhia o painel.
+        height: min(body.min-height + 53px + 2 * Theme.space-lg, parent.height - 2 * Theme.space-xl);
         background: Theme.surface;
         border-radius: Theme.radius-lg;
         border-width: 1px;
@@ -106,7 +108,7 @@ export component Modal inherits Rectangle {
             ScrollView {
                 vertical-stretch: 1;
 
-                VerticalLayout {
+                body := VerticalLayout {
                     padding: Theme.space-lg;
                     spacing: Theme.space-md;
                     alignment: start;

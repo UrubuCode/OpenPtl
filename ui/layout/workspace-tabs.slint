@@ -9,7 +9,7 @@ component Tab inherits Rectangle {
     callback selected();
     callback closed();
 
-    width: label.min-width + 54px;
+    width: label.min-width + 58px;
     height: 26px;
     border-radius: Theme.radius-sm;
     background: root.active ? Theme.surface-raised
@@ -28,6 +28,12 @@ component Tab inherits Rectangle {
         animate width { duration: Theme.motion-base; easing: Theme.ease-out-soft; }
     }
 
+    // Antes do conteudo: depois dele, esta area cobriria o botao de fechar.
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.selected(); }
+    }
+
     HorizontalLayout {
         padding-left: Theme.space-md;
         padding-right: Theme.space-xs;
@@ -42,20 +48,18 @@ component Tab inherits Rectangle {
         }
 
         Rectangle {
-            width: 18px;
+            width: 22px;
+            height: 22px;
+            y: 2px;
             border-radius: Theme.radius-sm;
             background: close-touch.has-hover ? Theme.danger : transparent;
             animate background { duration: Theme.motion-fast; }
 
-            Path {
-                width: 6px;
-                height: 6px;
-                commands: "M1 1 L5 5 M5 1 L1 5";
-                stroke: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
-                stroke-width: 1px;
-                stroke-line-cap: round;
-                viewbox-width: 6;
-                viewbox-height: 6;
+            UiIcon {
+                width: 12px;
+                height: 12px;
+                source: Icons.close;
+                tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
             }
 
             close-touch := TouchArea {
@@ -64,10 +68,6 @@ component Tab inherits Rectangle {
         }
     }
 
-    touch := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.selected(); }
-    }
 }
 
 /// Faixa de abas de workspace, exibida na barra de título como no design
@@ -95,15 +95,13 @@ export component WorkspaceTabs inherits HorizontalLayout {
         closed => { root.closed(tab.id); }
     }
 
-    // Alvo generoso: com 26px o mais era dificil de acertar.
+    // Sem moldura: e um afixo da faixa de abas, nao um botao por si so.
     Rectangle {
-        width: 34px;
+        width: 30px;
         height: 26px;
         border-radius: Theme.radius-sm;
-        background: add.has-hover ? Theme.surface-hover : Theme.surface;
-        border-width: 1px;
-        border-color: add.has-hover ? Theme.border-strong : Theme.border;
-        animate background, border-color { duration: Theme.motion-fast; }
+        background: add.has-hover ? Theme.surface : transparent;
+        animate background { duration: Theme.motion-fast; }
 
         UiIcon {
             width: 13px;

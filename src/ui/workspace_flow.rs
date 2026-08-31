@@ -191,16 +191,11 @@ fn bind_blocks(window: &AppWindow) {
     });
 
     let handle = window.as_weak();
-    window.on_block_add_terminal(move || {
+    window.on_block_open_connection(move || {
+        // No workspace não se abre um terminal solto: escolhe-se uma conexão
+        // salva, e dela nascem os blocos.
         if let Some(window) = handle.upgrade() {
-            add_block(&window, BlockKind::Terminal, "Terminal");
-        }
-    });
-
-    let handle = window.as_weak();
-    window.on_block_add_files(move || {
-        if let Some(window) = handle.upgrade() {
-            add_block(&window, BlockKind::Files, "Arquivos");
+            window.set_connection_picker_open(true);
         }
     });
 }
@@ -238,11 +233,6 @@ pub fn open_session_block(window: &AppWindow, session_id: &str, label: &str, has
     });
 
     window.set_section(Section::Workspace);
-    publish(window);
-}
-
-fn add_block(window: &AppWindow, kind: BlockKind, title: &str) {
-    push_block(window, kind, title, "");
     publish(window);
 }
 

@@ -1,0 +1,108 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { ConnectionRow } from "../models/connection.slint";
+import { UiBadge, BadgeTone } from "../components/badge.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { UiSearchField } from "../components/search-field.slint";
+import { Modal } from "../patterns/modal.slint";
+
+component PickerRow inherits Rectangle {
+    in property <ConnectionRow> data;
+    callback picked(string);
+
+    height: 60px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.surface-hover : Theme.surface-inset;
+    animate background { duration: Theme.motion-fast; }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(root.data.id); }
+    }
+
+    HorizontalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-md;
+
+        Rectangle {
+            width: 34px;
+            height: 34px;
+            y: (parent.height - self.height) / 2;
+            horizontal-stretch: 0;
+            border-radius: Theme.radius-md;
+            background: Theme.accent.with-alpha(0.14);
+
+            UiIcon {
+                width: 16px;
+                height: 16px;
+                source: Icons.server;
+                tint: Theme.accent-bright;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.data.name;
+                font-size: Type.body;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.host + ":" + root.data.port + " · " + root.data.username;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.space-xs;
+                if root.data.has-ssh: UiBadge { label: "SSH"; tone: BadgeTone.positive; }
+                if root.data.has-sftp: UiBadge { label: "SFTP"; tone: BadgeTone.neutral; }
+            }
+        }
+    }
+}
+
+/// Escolha da conexão que vai virar bloco. É o caminho de entrada do workspace:
+/// um bloco sempre nasce de um perfil salvo, nunca do nada.
+export component ConnectionPicker inherits Modal {
+    in property <[ConnectionRow]> rows;
+    in-out property <string> query;
+    callback picked(string);
+    callback query-changed(string);
+
+    title: "Abrir Conexão";
+    panel-width: 560px;
+
+    Text {
+        text: "Selecione uma conexão salva para abrir neste workspace.";
+        font-size: Type.body;
+        color: Theme.text-muted;
+    }
+
+    UiSearchField {
+        placeholder: "Buscar conexão…";
+        value <=> root.query;
+        changed(text) => { root.query-changed(text); }
+    }
+
+    if root.rows.length == 0: Text {
+        text: "Nenhuma conexão salva ainda.";
+        font-size: Type.caption;
+        color: Theme.text-muted;
+    }
+
+    for row in root.rows: PickerRow {
+        data: row;
+        picked(id) => { root.picked(id); }
+    }
+}

@@ -25,7 +25,7 @@ use super::transfers_flow;
 use super::update_flow;
 use super::window_flow;
 use super::workspace_flow;
-use super::{AppWindow, ConnectionDraft, VaultState};
+use super::{AppWindow, ConnectionDraft, ConnectionGridRow, ConnectionRow, VaultState};
 use crate::backend::Backend;
 use crate::libs::deeplink;
 use crate::libs::models::{ConnectionProfile, ConnectionProtocol, VaultStatus};
@@ -44,6 +44,7 @@ pub fn run() -> Result<()> {
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));
     bind_connection_filters(&window, Arc::clone(&backend));
+    bind_connection_picker(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));
     session_flow::bind(&window, Arc::clone(&backend));
     // O temporizador de drenagem vive enquanto a janela viver.
@@ -93,6 +94,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
             Ok(status) => {
                 apply_vault_status(&window, status);
                 refresh_connections(&window, &backend);
+                refresh_picker(&window, &backend);
                 keychain_flow::refresh(&window, &backend);
                 known_hosts_flow::refresh(&window, &backend);
                 settings_flow::refresh(&window, &backend);
@@ -193,6 +195,9 @@ pub fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
     });
 }
 
+/// Quantos cartões cabem por linha da grade.
+const GRID_COLUMNS: usize = 3;
+
 fn refresh_connections(window: &AppWindow, backend: &Backend) {
     let profiles = match backend.connections() {
         Ok(profiles) => profiles,
@@ -209,15 +214,27 @@ fn refresh_connections(window: &AppWindow, backend: &Backend) {
     window.set_connection_sftp(count_of(&profiles, ConnectionProtocol::Sftp));
 
     let query = window.get_connection_query().to_lowercase();
-    let filter = window.get_connection_filter();
+    let filter = window.get_connection_filter().to_string();
 
-    let rows = profiles
+    let visible: Vec<ConnectionRow> = profiles
         .iter()
-        .filter(|profile| matches_filter(profile, filter))
+        .filter(|profile| matches_filter(profile, &filter))
         .filter(|profile| matches_query(profile, &query))
         .map(to_row)
-        .collect::<Vec<_>>();
-    window.set_connections(ModelRc::new(VecModel::from(rows)));
+        .collect();
+
+    window.set_connection_empty(visible.is_empty());
+    window.set_connection_grid(ModelRc::new(VecModel::from(grid_of(visible))));
+}
+
+/// Agrupa os cartões em linhas. O `for` do Slint percorre um modelo linear e
+/// não sabe montar colunas, então a grade é montada aqui.
+fn grid_of(rows: Vec<ConnectionRow>) -> Vec<ConnectionGridRow> {
+    rows.chunks(GRID_COLUMNS)
+        .map(|chunk| ConnectionGridRow {
+            cells: ModelRc::new(VecModel::from(chunk.to_vec())),
+        })
+        .collect()
 }
 
 fn count_of(profiles: &[ConnectionProfile], protocol: ConnectionProtocol) -> i32 {
@@ -227,11 +244,11 @@ fn count_of(profiles: &[ConnectionProfile], protocol: ConnectionProtocol) -> i32
         .count() as i32
 }
 
-/// 0 todos, 1 só SSH, 2 só SFTP.
-fn matches_filter(profile: &ConnectionProfile, filter: i32) -> bool {
+/// Vazio significa todos os protocolos.
+fn matches_filter(profile: &ConnectionProfile, filter: &str) -> bool {
     match filter {
-        1 => profile.supports(ConnectionProtocol::Ssh),
-        2 => profile.supports(ConnectionProtocol::Sftp),
+        "ssh" => profile.supports(ConnectionProtocol::Ssh),
+        "sftp" => profile.supports(ConnectionProtocol::Sftp),
         _ => true,
     }
 }
@@ -301,4 +318,38 @@ fn bind_connection_filters(window: &AppWindow, backend: Arc<Backend>) {
             refresh_connections(&window, &backend);
         }
     });
+}
+
+/// Escolha da conexão que vira bloco no workspace. A lista é a mesma do cofre,
+/// filtrada só pela busca do próprio seletor.
+fn bind_connection_picker(window: &AppWindow, backend: Arc<Backend>) {
+    let handle = window.as_weak();
+    let searching = Arc::clone(&backend);
+    window.on_picker_query_changed(move |_| {
+        if let Some(window) = handle.upgrade() {
+            refresh_picker(&window, &searching);
+        }
+    });
+
+    let handle = window.as_weak();
+    window.on_picker_picked(move |id| {
+        if let Some(window) = handle.upgrade() {
+            window.invoke_connection_connect_requested(id);
+        }
+    });
+    let _ = backend;
+}
+
+pub fn refresh_picker(window: &AppWindow, backend: &Backend) {
+    let Ok(profiles) = backend.connections() else {
+        return;
+    };
+    let query = window.get_picker_query().to_lowercase();
+
+    let rows = profiles
+        .iter()
+        .filter(|profile| matches_query(profile, &query))
+        .map(to_row)
+        .collect::<Vec<_>>();
+    window.set_picker_rows(ModelRc::new(VecModel::from(rows)));
 }

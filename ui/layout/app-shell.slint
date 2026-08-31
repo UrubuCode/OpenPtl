@@ -1,6 +1,7 @@
 import { Theme } from "../theme/tokens.slint";
 import { Sidebar, Section } from "sidebar.slint";
 import { ConnectionRow } from "../models/connection.slint";
+import { ConnectionGridRow } from "../models/connection-grid.slint";
 import { PageTransition } from "../patterns/page-transition.slint";
 import { BlockRow } from "../models/workspace.slint";
 import { WorkspacePage } from "../pages/workspace.slint";
@@ -26,12 +27,14 @@ export component AppShell inherits Rectangle {
     in property <bool> sidebar-collapsed: false;
     in property <[BlockRow]> blocks;
     in property <string> workspace-hint;
-    in property <[ConnectionRow]> connections;
+    in property <[ConnectionGridRow]> connection-grid;
+    in property <bool> connection-empty: true;
     in property <int> connection-total;
     in property <int> connection-ssh;
     in property <int> connection-sftp;
     in-out property <string> connection-query;
-    in-out property <int> connection-filter;
+    in-out property <string> connection-filter;
+    in-out property <string> connection-filter-label;
     in property <[SessionRow]> sessions;
     in property <[TermLine]> terminal-lines;
     in property <string> active-session;
@@ -65,7 +68,7 @@ export component AppShell inherits Rectangle {
 
     callback connection-create-requested();
     callback connection-query-changed(string);
-    callback connection-filter-changed(int);
+    callback connection-filter-changed(string);
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
@@ -77,8 +80,7 @@ export component AppShell inherits Rectangle {
     callback terminal-resized(string, length, length);
     callback block-minimize-toggled(string);
     callback block-closed(string);
-    callback block-add-terminal();
-    callback block-add-files();
+    callback block-open-connection();
     callback session-selected(string);
     callback session-closed(string);
     callback terminal-input-sent(string, bool, bool);
@@ -150,16 +152,17 @@ export component AppShell inherits Rectangle {
                 block-closed(id) => { root.block-closed(id); }
                 terminal-input(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
                 file-opened(path) => { root.file-path-requested(path); }
-                add-terminal => { root.block-add-terminal(); }
-                add-files => { root.block-add-files(); }
+                open-connection => { root.block-open-connection(); }
             }
             if root.section == Section.home: ConnectionsPage {
-                rows: root.connections;
+                grid: root.connection-grid;
+                empty: root.connection-empty;
                 total: root.connection-total;
                 ssh-count: root.connection-ssh;
                 sftp-count: root.connection-sftp;
                 query <=> root.connection-query;
                 filter <=> root.connection-filter;
+                filter-label <=> root.connection-filter-label;
                 query-changed(text) => { root.connection-query-changed(text); }
                 filter-changed(value) => { root.connection-filter-changed(value); }
                 create-requested => { root.connection-create-requested(); }

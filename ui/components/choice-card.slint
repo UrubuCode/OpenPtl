@@ -1,0 +1,133 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon } from "./icon.slint";
+
+/// Cartão de escolha: ícone, nome e uma linha de detalhe. Usado onde a opção
+/// merece ser reconhecida de relance — protocolo, modo de importação — em vez
+/// de virar mais um interruptor numa lista.
+export component UiChoiceCard inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <image> icon;
+    in property <bool> selected: false;
+    callback picked();
+
+    height: 96px;
+    horizontal-stretch: 1;
+    border-radius: Theme.radius-md;
+    background: root.selected ? Theme.accent.with-alpha(0.12)
+        : touch.has-hover ? Theme.surface-hover
+        : Theme.surface-inset;
+    border-width: 1px;
+    border-color: root.selected ? Theme.accent : Theme.border;
+    animate background, border-color {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(); }
+    }
+
+    VerticalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-xs;
+        alignment: center;
+
+        UiIcon {
+            width: 20px;
+            height: 20px;
+            x: (parent.width - self.width) / 2;
+            source: root.icon;
+            tint: root.selected ? Theme.accent-bright : Theme.text-secondary;
+        }
+
+        Text {
+            text: root.label;
+            horizontal-alignment: center;
+            font-size: Type.label;
+            font-weight: Type.weight-medium;
+            color: root.selected ? Theme.accent-bright : Theme.text-secondary;
+        }
+
+        if root.hint != "": Text {
+            text: root.hint;
+            horizontal-alignment: center;
+            font-size: Type.caption;
+            color: Theme.text-muted;
+        }
+    }
+}
+
+/// Linha de preferência: título e explicação à esquerda, interruptor à direita.
+/// É o formato que o "usar SSH também como SFTP" tinha.
+export component UiSettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    in-out property <bool> checked;
+    callback toggled();
+
+    height: body.min-height;
+    border-radius: Theme.radius-md;
+    background: Theme.surface-inset;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    body := HorizontalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-md;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+            alignment: center;
+
+            Text {
+                text: root.title;
+                font-size: Type.label;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+        }
+
+        Rectangle {
+            width: 36px;
+            height: 20px;
+            y: (parent.height - self.height) / 2;
+            horizontal-stretch: 0;
+            border-radius: 10px;
+            background: root.checked ? Theme.accent : Theme.surface;
+            border-width: 1px;
+            border-color: root.checked ? Theme.accent-bright : Theme.border-strong;
+            animate background, border-color { duration: Theme.motion-fast; }
+
+            Rectangle {
+                width: 14px;
+                height: 14px;
+                y: (parent.height - self.height) / 2;
+                x: root.checked ? parent.width - self.width - 3px : 3px;
+                border-radius: 7px;
+                background: root.checked ? Theme.text-on-accent : Theme.text-muted;
+                animate x, background {
+                    duration: Theme.motion-base;
+                    easing: Theme.ease-out-soft;
+                }
+            }
+
+            TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => {
+                    root.checked = !root.checked;
+                    root.toggled();
+                }
+            }
+        }
+    }
+}

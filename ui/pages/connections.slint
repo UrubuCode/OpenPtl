@@ -2,25 +2,33 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { ConnectionRow } from "../models/connection.slint";
+import { ConnectionGridRow } from "../models/connection-grid.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiCard } from "../components/card.slint";
 import { UiBadge, BadgeTone } from "../components/badge.slint";
 import { UiIcon, Icons } from "../components/icon.slint";
 import { UiStatCard, StatTone } from "../components/stat-card.slint";
 import { UiSearchField } from "../components/search-field.slint";
-import { UiSegmented } from "../components/segmented.slint";
+import { UiSelect, SelectOption } from "../components/select.slint";
 import { PageHeader } from "../patterns/page-header.slint";
 
-/// Cartão de um perfil. Em grade, não em linha larga: assim cabem vários por
-/// tela e o olho percorre a lista de uma vez, como era antes do porte.
+/// Cartão de um perfil. Compacto e clicável: as ações só aparecem depois do
+/// clique, para a grade continuar legível com muitos perfis.
 component ConnectionCard inherits UiCard {
     in property <ConnectionRow> data;
+    in property <bool> expanded: false;
+    callback opened();
     callback connect-requested(string);
     callback edit-requested(string);
     callback delete-requested(string);
 
-    height: 132px;
     interactive: true;
+    selected: root.expanded;
+
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.opened(); }
+    }
 
     VerticalLayout {
         padding: Theme.space-md;
@@ -28,6 +36,7 @@ component ConnectionCard inherits UiCard {
 
         HorizontalLayout {
             spacing: Theme.space-md;
+            height: 38px;
 
             Rectangle {
                 width: 38px;
@@ -76,10 +85,12 @@ component ConnectionCard inherits UiCard {
 
         Rectangle {
             height: 1px;
+            vertical-stretch: 0;
             background: Theme.border;
         }
 
         HorizontalLayout {
+            height: 18px;
             spacing: Theme.space-sm;
 
             UiIcon {
@@ -97,6 +108,11 @@ component ConnectionCard inherits UiCard {
                 color: Theme.text-muted;
                 overflow: elide;
             }
+        }
+
+        if root.expanded: HorizontalLayout {
+            spacing: Theme.space-sm;
+            alignment: end;
 
             UiButton {
                 compact: true;
@@ -107,7 +123,6 @@ component ConnectionCard inherits UiCard {
             UiButton {
                 compact: true;
                 label: "Editar";
-                tone: ButtonTone.ghost;
                 clicked => { root.edit-requested(root.data.id); }
             }
             UiButton {
@@ -121,24 +136,27 @@ component ConnectionCard inherits UiCard {
 }
 
 export component ConnectionsPage inherits VerticalLayout {
-    in property <[ConnectionRow]> rows;
+    in property <[ConnectionGridRow]> grid;
+    in property <bool> empty: true;
     in property <int> total;
     in property <int> ssh-count;
     in property <int> sftp-count;
     in-out property <string> query;
-    in-out property <int> filter: 0;
+    in-out property <string> filter;
+    in-out property <string> filter-label;
     callback create-requested();
     callback connect-requested(string);
     callback edit-requested(string);
     callback delete-requested(string);
     callback query-changed(string);
-    callback filter-changed(int);
+    callback filter-changed(string);
+
+    /// Perfil aberto. Só um por vez: dois cartões expandidos ao mesmo tempo
+    /// tiram justamente a leitura que a grade compacta oferece.
+    property <string> opened;
 
     padding: Theme.space-lg;
     spacing: Theme.space-lg;
-
-    // O segmentado guarda a escolha em si mesmo; o aviso e que refaz a lista.
-    changed filter => { root.filter-changed(root.filter); }
 
     HorizontalLayout {
         PageHeader {
@@ -165,10 +183,18 @@ export component ConnectionsPage inherits VerticalLayout {
             changed(text) => { root.query-changed(text); }
         }
 
-        UiSegmented {
-            width: 280px;
-            options: ["Todos", "SSH", "SFTP"];
+        // Lista suspensa e não abas: o produto vai ganhar mais protocolos e uma
+        // faixa de abas deixaria de caber.
+        UiSelect {
+            width: 230px;
+            placeholder: "Todos os protocolos";
+            options: [
+                { id: "ssh", label: "SSH" },
+                { id: "sftp", label: "SFTP" },
+            ];
             current <=> root.filter;
+            current-label <=> root.filter-label;
+            selected(id) => { root.filter-changed(id); }
         }
     }
 
@@ -179,14 +205,10 @@ export component ConnectionsPage inherits VerticalLayout {
         UiStatCard { label: "TOTAL"; value: root.total; }
         UiStatCard { label: "SSH"; value: root.ssh-count; tone: StatTone.accent; }
         UiStatCard { label: "SFTP"; value: root.sftp-count; tone: StatTone.accent; }
-        UiStatCard {
-            label: "PROTOCOLOS";
-            value: 2;
-            tone: StatTone.warning;
-        }
+        UiStatCard { label: "PROTOCOLOS"; value: 2; tone: StatTone.warning; }
     }
 
-    if root.rows.length == 0: Rectangle {
+    if root.empty: Rectangle {
         vertical-stretch: 1;
         Text {
             text: root.query == ""
@@ -197,19 +219,29 @@ export component ConnectionsPage inherits VerticalLayout {
         }
     }
 
-    if root.rows.length > 0: ScrollView {
+    if !root.empty: ScrollView {
         vertical-stretch: 1;
 
-        // Grade de duas colunas: a lista respira e ainda cabe muita coisa.
         VerticalLayout {
             spacing: Theme.space-md;
             alignment: start;
 
-            for row in root.rows: ConnectionCard {
-                data: row;
-                connect-requested(id) => { root.connect-requested(id); }
-                edit-requested(id) => { root.edit-requested(id); }
-                delete-requested(id) => { root.delete-requested(id); }
+            for line in root.grid: HorizontalLayout {
+                spacing: Theme.space-md;
+                height: 124px;
+
+                for cell in line.cells: ConnectionCard {
+                    data: cell;
+                    expanded: root.opened == cell.id;
+                    opened => { root.opened = root.opened == cell.id ? "" : cell.id; }
+                    connect-requested(id) => { root.connect-requested(id); }
+                    edit-requested(id) => { root.edit-requested(id); }
+                    delete-requested(id) => { root.delete-requested(id); }
+                }
+
+                // Preenche o resto da linha para o ultimo cartao nao esticar
+                // pela largura toda quando sobram menos de tres.
+                Rectangle { horizontal-stretch: 3 - line.cells.length; }
             }
         }
     }

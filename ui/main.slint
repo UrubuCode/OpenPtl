@@ -2,6 +2,7 @@ import { Theme } from "theme/tokens.slint";
 import { Type } from "theme/typography.slint";
 import { VaultState } from "models/vault.slint";
 import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
+import { ConnectionGridRow } from "models/connection-grid.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { Sidebar, Section } from "layout/sidebar.slint";
 import { TitleBar } from "layout/titlebar.slint";
@@ -9,6 +10,7 @@ import { ServerRow, AccountPanel } from "layout/account-menu.slint";
 import { ResizeEdges } from "layout/resize-edges.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
+import { ConnectionPicker } from "pages/connection-picker.slint";
 import { SelectOption } from "components/select.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
 import { HostChallenge, SessionRow } from "models/session.slint";
@@ -26,6 +28,7 @@ import { BlockRow, WorkspaceTab } from "models/workspace.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
+export { ConnectionGridRow } from "models/connection-grid.slint";
 export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
 export { TransferRow }
@@ -57,12 +60,17 @@ export component AppWindow inherits Window {
     in property <VaultState> vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
-    in property <[ConnectionRow]> connections;
+    in property <[ConnectionRow]> picker-rows;
+    in-out property <bool> connection-picker-open: false;
+    in-out property <string> picker-query;
+    in property <[ConnectionGridRow]> connection-grid;
+    in property <bool> connection-empty: true;
     in property <int> connection-total;
     in property <int> connection-ssh;
     in property <int> connection-sftp;
     in-out property <string> connection-query;
-    in-out property <int> connection-filter;
+    in-out property <string> connection-filter;
+    in-out property <string> connection-filter-label;
     in property <bool> form-open: false;
     in property <ConnectionDraft> form-draft;
     in property <string> form-error;
@@ -127,12 +135,13 @@ export component AppWindow inherits Window {
     callback terminal-resized(string, length, length);
     callback block-minimize-toggled(string);
     callback block-closed(string);
-    callback block-add-terminal();
-    callback block-add-files();
+    callback block-open-connection();
     callback vault-submitted(string, string);
     callback connection-create-requested();
     callback connection-query-changed(string);
-    callback connection-filter-changed(int);
+    callback connection-filter-changed(string);
+    callback picker-picked(string);
+    callback picker-query-changed(string);
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
@@ -259,15 +268,16 @@ export component AppWindow inherits Window {
                 terminal-resized(id, w, h) => { root.terminal-resized(id, w, h); }
                 block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
                 block-closed(id) => { root.block-closed(id); }
-                block-add-terminal => { root.block-add-terminal(); }
-                block-add-files => { root.block-add-files(); }
+                block-open-connection => { root.block-open-connection(); }
                 section <=> root.section;
-                connections: root.connections;
+                connection-grid: root.connection-grid;
+                connection-empty: root.connection-empty;
                 connection-total: root.connection-total;
                 connection-ssh: root.connection-ssh;
                 connection-sftp: root.connection-sftp;
                 connection-query <=> root.connection-query;
                 connection-filter <=> root.connection-filter;
+                connection-filter-label <=> root.connection-filter-label;
                 connection-query-changed(text) => { root.connection-query-changed(text); }
                 connection-filter-changed(value) => { root.connection-filter-changed(value); }
                 sessions: root.sessions;
@@ -399,5 +409,16 @@ export component AppWindow inherits Window {
         enabled: !root.window-maximized;
         resize-started => { root.window-resize-started(); }
         resized(dx, dy, left, top) => { root.window-resized(dx, dy, left, top); }
+    }
+    ConnectionPicker {
+        open: root.connection-picker-open;
+        rows: root.picker-rows;
+        query <=> root.picker-query;
+        dismissed => { root.connection-picker-open = false; }
+        query-changed(text) => { root.picker-query-changed(text); }
+        picked(id) => {
+            root.connection-picker-open = false;
+            root.picker-picked(id);
+        }
     }
 }

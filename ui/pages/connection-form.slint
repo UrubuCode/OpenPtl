@@ -3,7 +3,8 @@ import { Type } from "../theme/typography.slint";
 import { ConnectionDraft } from "../models/connection.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
-import { UiToggle } from "../components/toggle.slint";
+import { UiChoiceCard, UiSettingRow } from "../components/choice-card.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 import { UiSegmented } from "../components/segmented.slint";
 import { UiSelect, SelectOption } from "../components/select.slint";
 import { Modal } from "../patterns/modal.slint";
@@ -60,13 +61,45 @@ export component ConnectionForm inherits Modal {
         }
     }
 
-    if root.step == 0: UiToggle {
-        label: "Terminal SSH";
-        checked <=> root.edited.use-ssh;
+    // Cartoes de escolha, nao interruptores: o protocolo e reconhecido de
+    // relance pelo icone e pela porta padrao.
+    if root.step == 0: HorizontalLayout {
+        spacing: Theme.space-md;
+
+        UiChoiceCard {
+            label: "SSH";
+            hint: "22";
+            icon: Icons.terminal;
+            selected: root.edited.use-ssh;
+            picked => {
+                root.edited.use-ssh = true;
+                root.edited.use-sftp = false;
+            }
+        }
+        UiChoiceCard {
+            label: "SFTP";
+            hint: "22";
+            icon: Icons.files;
+            selected: root.edited.use-sftp && !root.edited.use-ssh;
+            picked => {
+                root.edited.use-ssh = false;
+                root.edited.use-sftp = true;
+            }
+        }
     }
 
-    if root.step == 0: UiToggle {
-        label: "Transferência de arquivos SFTP";
+    if root.step == 0: Text {
+        text: root.edited.use-ssh
+            ? "SSH: abre blocos de terminal remoto no workspace."
+            : "SFTP: abre blocos de navegacao de arquivos no workspace.";
+        font-size: Type.caption;
+        color: Theme.text-muted;
+        wrap: word-wrap;
+    }
+
+    if root.step == 0 && root.edited.use-ssh: UiSettingRow {
+        title: "Usar SSH também como SFTP";
+        description: "Ative para abrir terminal SSH e bloco de arquivos SFTP no mesmo perfil.";
         checked <=> root.edited.use-sftp;
     }
 
