@@ -29,6 +29,14 @@ struct KnownHostsRecord {
 }
 
 impl VaultManager {
+    /// Identificador do cofre: o nome do diretorio em que ele vive.
+    pub fn vault_id(&self) -> String {
+        self.storage_root
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+
     pub fn device_id(&self) -> Result<uuid::Uuid> {
         Ok(self.read_mutation_store()?.device_id)
     }
@@ -271,6 +279,7 @@ impl VaultManager {
     pub fn sync_context(&self) -> Result<SyncContext> {
         let store = self.read_mutation_store()?;
         Ok(SyncContext {
+            vault_id: self.vault_id(),
             key: self.current_key()?,
             seen: store.applied_files.clone(),
             base_snapshot: store.base_snapshot,
@@ -308,6 +317,9 @@ impl VaultManager {
 /// Retrato do estado de sincronia, tirado sob o cadeado e usado fora dele.
 #[derive(Debug, Clone)]
 pub struct SyncContext {
+    /// Cofre a que este retrato pertence. E o nome do diretorio local e o da
+    /// pasta remota, o que mantem os dois lados alinhados sem outro registro.
+    pub vault_id: String,
     pub key: [u8; 32],
     pub seen: std::collections::BTreeSet<String>,
     pub base_snapshot: Option<uuid::Uuid>,

@@ -1,6 +1,6 @@
 import { Theme } from "theme/tokens.slint";
 import { Type } from "theme/typography.slint";
-import { VaultState } from "models/vault.slint";
+import { VaultState, VaultRow } from "models/vault.slint";
 import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { ConnectionGridRow } from "models/connection-grid.slint";
 import { AppShell } from "layout/app-shell.slint";
@@ -28,7 +28,7 @@ import { TransferRow } from "models/transfer.slint";
 import { BlockRow, WorkspaceTab } from "models/workspace.slint";
 
 export { Section } from "layout/sidebar.slint";
-export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
+export { ConnectionRow, ConnectionDraft, VaultState, VaultRow, HostChallenge, SessionRow }
 export { ConnectionGridRow } from "models/connection-grid.slint";
 export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
@@ -59,6 +59,8 @@ export component AppWindow inherits Window {
     in property <string> active-tab;
     in property <string> workspace-hint;
     in property <VaultState> vault;
+    in property <[VaultRow]> vaults;
+    in property <string> selected-vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
     in property <[ConnectionRow]> picker-rows;
@@ -140,6 +142,8 @@ export component AppWindow inherits Window {
     callback block-closed(string);
     callback block-open-connection();
     callback vault-submitted(string, string);
+    callback vault-selected(string);
+    callback vault-created(string);
     callback connection-create-requested();
     callback connection-opened(string);
     callback connection-query-changed(string);
@@ -255,9 +259,13 @@ export component AppWindow inherits Window {
                 background: transparent;
             if root.vault.locked || !root.vault.initialized: VaultPage {
                 state: root.vault;
+                vaults: root.vaults;
+                selected-vault: root.selected-vault;
                 busy: root.vault-busy;
                 error: root.vault-error;
                 submitted(password, confirmation) => { root.vault-submitted(password, confirmation); }
+                vault-selected(id) => { root.vault-selected(id); }
+                vault-created(label) => { root.vault-created(label); }
             }
 
             if root.vault.initialized && !root.vault.locked: AppShell {

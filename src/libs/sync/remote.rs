@@ -1,8 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 
-use super::drive::{create_drive_object, download_file_bytes, DriveFileMetadata};
-use crate::constants::{REMOTE_HEADER_FILE_NAME, REMOTE_SNAPSHOT_PREFIX};
+use super::drive::{
+    create_drive_object, download_file_bytes, ensure_named_folder, DriveFileMetadata,
+};
+use crate::constants::{
+    DRIVE_ROOT_FOLDER_NAME, DRIVE_TOP_PARENT_ID, REMOTE_HEADER_FILE_NAME, REMOTE_SNAPSHOT_PREFIX,
+};
 use crate::libs::mutations::RemoteHeader;
 
 /// Layout da pasta remota.
@@ -62,6 +66,37 @@ impl RemoteLayout {
         }
         &self.snapshots[..count - 1]
     }
+}
+
+/// Pasta remota do cofre: `OpenPtl/<vault-id>`.
+///
+/// Cada cofre tem a própria pasta pelo mesmo motivo que tem o próprio
+/// diretório local — misturar os lotes de dois cofres faria um tentar aplicar
+/// mutações que a chave dele nem abre. É também onde um cofre de empresa vai
+/// se encaixar depois, apontando para uma pasta compartilhada em vez desta.
+pub(crate) async fn ensure_vault_folder(
+    client: &Client,
+    access_token: &str,
+    vault_id: &str,
+    create_if_missing: bool,
+) -> Result<Option<String>> {
+    let Some(root_id) = ensure_named_folder(
+        client,
+        access_token,
+        DRIVE_ROOT_FOLDER_NAME,
+        DRIVE_TOP_PARENT_ID,
+        create_if_missing,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    if vault_id.trim().is_empty() {
+        return Err(anyhow!("Cofre sem identificador para a pasta remota"));
+    }
+
+    ensure_named_folder(client, access_token, vault_id, &root_id, create_if_missing).await
 }
 
 /// Garante que a pasta remota tenha o cabeçalho. Sem ele um aparelho novo não

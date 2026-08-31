@@ -3,3 +3,11 @@ export struct VaultState {
     locked: bool,
     recoverable: bool,
 }
+
+// Um cofre da lista de abertura. `initialized` separa o que já tem senha
+// mestre do que ainda vai receber uma.
+export struct VaultRow {
+    id: string,
+    label: string,
+    initialized: bool,
+}

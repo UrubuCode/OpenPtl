@@ -16,8 +16,6 @@ use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
 };
 use chrono::Utc;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use directories::ProjectDirs;
 use rand::{rngs::OsRng, RngCore};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -25,7 +23,7 @@ use sha2::{Digest, Sha256};
 use crate::constants::{
     APP_KEYRING_SERVICE, CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, KEYRING_VAULT_KEY,
     KNOWN_HOSTS_FILE_NAME, MANIFEST_FILE_NAME, MUTATIONS_FILE_NAME, NOTES_FILE_NAME,
-    OPENPTL_FILE_NAME, PROFILE_FILE_NAME, STORAGE_DIR_NAME, STORAGE_FILE_EXTENSION,
+    OPENPTL_FILE_NAME, PROFILE_FILE_NAME, STORAGE_FILE_EXTENSION,
 };
 use crate::libs::models::{
     AppSettings, AuthServer, ConnectionProfile, KeyMode, KeychainEntry, ManifestBinPayload, Note,
@@ -40,9 +38,11 @@ mod mutations;
 mod notes;
 mod persistence;
 mod records;
+mod registry;
 
 pub(crate) use crypto::*;
 pub use mutations::SyncContext;
+pub use registry::VaultRegistry;
 
 #[derive(Debug, Clone, Default)]
 struct VaultRuntime {
@@ -89,24 +89,12 @@ pub(crate) struct EncryptedBin {
 }
 
 impl VaultManager {
-    /// Resolve o diretório de dados pelo padrão do sistema. Quem precisar de
-    /// outro caminho — os testes, por exemplo — usa `new_in`.
-    pub fn new() -> Result<Self> {
-        let dirs = ProjectDirs::from("com", "urubucode", "openptl")
-            .ok_or_else(|| anyhow!("Nao foi possivel resolver diretorio de dados do aplicativo"))?;
-        Self::new_in(dirs.data_dir().to_path_buf())
-    }
-
-    pub fn new_in(data_dir: std::path::PathBuf) -> Result<Self> {
-        fs::create_dir_all(&data_dir).with_context(|| {
-            format!("Falha ao criar diretorio de dados: {}", data_dir.display())
-        })?;
-
-        let storage_root = data_dir.join(STORAGE_DIR_NAME);
+    /// Abre o cofre que vive num diretório. Quem escolhe o diretório é o
+    /// `VaultRegistry`: o gerenciador não sabe que existem outros cofres, o
+    /// que mantém cada um isolado do resto.
+    pub fn open_at(storage_root: std::path::PathBuf) -> Result<Self> {
         fs::create_dir_all(&storage_root)
             .with_context(|| format!("Falha ao criar diretorio {}", storage_root.display()))?;
-
-        cleanup_legacy_layout(&data_dir, &storage_root)?;
 
         Ok(Self {
             openptl_path: storage_root.join(OPENPTL_FILE_NAME),

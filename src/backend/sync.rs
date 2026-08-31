@@ -77,6 +77,7 @@ impl Backend {
         self.runtime.spawn(async move {
             let mut manager = sync.lock().await;
             manager.use_servers(address, fallbacks);
+            manager.use_vault(context.vault_id.clone());
 
             let fetched = manager
                 .fetch_remote(

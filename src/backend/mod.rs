@@ -9,6 +9,7 @@
 
 mod sync;
 mod update;
+mod vaults;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -17,20 +18,22 @@ use anyhow::{anyhow, Result};
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::constants::DEFAULT_VAULT_LABEL;
 use crate::libs::journal::Journal;
 use crate::libs::models::{
     AppSettings, AuthServer, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry,
-    Note, SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
+    Note, SftpEntry, SshConnectPurpose, SshConnectResult,
 };
 use crate::libs::sync::{Reporter as SyncReporter, SyncManager};
 use crate::libs::transfer::{Direction, Registry as Transfers};
-use crate::libs::vault::VaultManager;
+use crate::libs::vault::{VaultManager, VaultRegistry};
 use crate::protocols::ssh::{known_hosts_list, known_hosts_remove, SshManager};
 
 /// Bloco padrão de transferência quando a preferência não pode ser lida.
 const DEFAULT_CHUNK_BYTES: usize = 1024 * 1024;
 
 pub struct Backend {
+    registry: Arc<Mutex<VaultRegistry>>,
     vault: Arc<Mutex<VaultManager>>,
     ssh: Arc<AsyncMutex<SshManager>>,
     runtime: Runtime,
@@ -41,9 +44,24 @@ pub struct Backend {
 }
 
 impl Backend {
+    /// Diario de eventos, compartilhado com a interface.
+    pub fn journal(&self) -> Journal {
+        self.journal.clone()
+    }
+
     pub fn new() -> Result<Self> {
+        let mut registry = VaultRegistry::new()?;
+        // Sempre existe um cofre selecionado. Um índice vazio só acontece na
+        // primeira execução; criar o cofre padrão aqui deixa a tela de abertura
+        // com o mesmo fluxo de sempre, pedindo a senha mestre.
+        if registry.list().is_empty() {
+            registry.create(DEFAULT_VAULT_LABEL)?;
+        }
+        let vault = VaultManager::open_at(registry.selected_path()?)?;
+
         Ok(Self {
-            vault: Arc::new(Mutex::new(VaultManager::new()?)),
+            registry: Arc::new(Mutex::new(registry)),
+            vault: Arc::new(Mutex::new(vault)),
             ssh: Arc::new(AsyncMutex::new(SshManager::new())),
             runtime: Runtime::new()?,
             transfers: Transfers::new(),
@@ -51,49 +69,6 @@ impl Backend {
             sync_reporter: SyncReporter::new(),
             journal: Journal::new(),
         })
-    }
-
-    /// Diario de eventos, compartilhado com a interface.
-    pub fn journal(&self) -> Journal {
-        self.journal.clone()
-    }
-
-    pub fn status(&self) -> Result<VaultStatus> {
-        self.vault()?.status()
-    }
-
-    pub fn initialize(&self, password: &str) -> Result<VaultStatus> {
-        self.vault()?.init(Some(password.to_owned()))
-    }
-
-    pub fn unlock(&self, password: &str) -> Result<VaultStatus> {
-        self.vault()?.unlock(Some(password.to_owned()))
-    }
-
-    pub fn lock(&self) -> Result<VaultStatus> {
-        Ok(self.vault()?.lock())
-    }
-
-    /// Troca a senha mestre. A confirmação é conferida antes de tocar no cofre:
-    /// uma divergência aqui evita recriptografar tudo com uma senha digitada
-    /// errada, que trancaria o usuário para fora dos próprios dados.
-    pub fn change_master_password(
-        &self,
-        current: &str,
-        next: &str,
-        confirmation: &str,
-    ) -> Result<()> {
-        if next != confirmation {
-            return Err(anyhow!("A nova senha e a confirmacao nao coincidem"));
-        }
-        if next.chars().count() < 6 {
-            return Err(anyhow!("A nova senha precisa de ao menos 6 caracteres"));
-        }
-
-        let mut vault = self.vault()?;
-        vault.verify_master_password(current)?;
-        vault.change_master_password(Some(current.to_owned()), next.to_owned())?;
-        Ok(())
     }
 
     pub fn connections(&self) -> Result<Vec<ConnectionProfile>> {

@@ -341,6 +341,60 @@ fn the_same_batch_arriving_twice_changes_nothing() {
 }
 
 #[test]
+fn two_vaults_of_the_same_user_never_see_each_other() {
+    let temp = tempdir().expect("temp dir");
+    let mut registry = VaultRegistry::new_in(temp.path().to_path_buf()).expect("registry");
+    let pessoal = registry.create("Pessoal").expect("create");
+    let empresa = registry.create("Empresa").expect("create");
+
+    let mut first =
+        VaultManager::open_at(registry.path_of(&pessoal.id).expect("path")).expect("open");
+    first.init(Some("senha-do-pessoal".into())).expect("init");
+    first
+        .connection_save(ConnectionProfile {
+            name: "casa".into(),
+            host: "10.0.0.1".into(),
+            username: "root".into(),
+            ..Default::default()
+        })
+        .expect("save");
+
+    let mut second =
+        VaultManager::open_at(registry.path_of(&empresa.id).expect("path")).expect("open");
+    // Senha mestre propria: um cofre nao herda a chave do outro.
+    second.init(Some("senha-da-empresa".into())).expect("init");
+
+    assert!(
+        second.connections_list().expect("list").is_empty(),
+        "o cofre novo nasce vazio"
+    );
+    assert_eq!(first.connections_list().expect("list").len(), 1);
+
+    // Cada cofre tem o proprio id, que nomeia tambem a pasta remota.
+    assert_eq!(first.vault_id(), pessoal.id);
+    assert_eq!(second.vault_id(), empresa.id);
+    assert_ne!(first.vault_id(), second.vault_id());
+}
+
+#[test]
+fn a_vault_never_opens_with_the_password_of_another() {
+    let temp = tempdir().expect("temp dir");
+    let mut registry = VaultRegistry::new_in(temp.path().to_path_buf()).expect("registry");
+    let empresa = registry.create("Empresa").expect("create");
+
+    let path = registry.path_of(&empresa.id).expect("path");
+    let mut vault = VaultManager::open_at(path.clone()).expect("open");
+    vault.init(Some("senha-da-empresa".into())).expect("init");
+    vault.lock();
+
+    assert!(
+        vault.unlock(Some("senha-do-pessoal".into())).is_err(),
+        "a senha de outro cofre nao pode abrir este"
+    );
+    assert!(vault.unlock(Some("senha-da-empresa".into())).is_ok());
+}
+
+#[test]
 fn notes_round_trip_through_encrypted_store() {
     let storage = tempdir().expect("temp dir");
     let mut vault = test_vault_manager(storage.path());

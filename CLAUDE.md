@@ -20,7 +20,8 @@ src/
   main.rs                     # Entrada do binário
   constants.rs                # Limites, nomes de arquivo e URLs do domínio
   backend/                    # Fachada única da UI para o domínio
-    mod.rs                    # Vault, conexões, SSH, SFTP, transferências
+    mod.rs                    # Conexões, SSH, SFTP, transferências
+    vaults.rs                 # Índice de cofres e ciclo de vida do aberto
     sync.rs                   # Sincronização com o Drive
     update.rs                 # Consulta e download de atualizações
   libs/
@@ -65,6 +66,10 @@ Nenhum trabalho bloqueante roda num callback do Slint. Operações longas vão p
 Para organização da camada Slint, veja a skill `slint-frontend`.
 
 ## Vault
+
+O usuário pode ter **vários cofres** — pessoal, trabalho, cliente. Cada um é um diretório fechado em `OpenPtl/vaults/<id>`, com senha mestre, log de mutações e pasta remota `OpenPtl/<id>` próprios; `vaults.bin` na raiz é só o índice, com rótulo e data, sem conteúdo. O `VaultManager` não sabe que existem outros cofres: quem escolhe o diretório é o `VaultRegistry`. Trocar de cofre tranca o anterior antes de abrir o seguinte, e uma instalação de cofre único é adotada para dentro de `vaults/<id>` na primeira execução.
+
+Separar por diretório, e não por prefixo de arquivo, é o que permitirá acrescentar cofres de origem remota depois: um cofre inteiro é uma unidade movível.
 
 O vault guarda perfis, credenciais, notas e configurações em arquivos binários criptografados. A senha mestre deriva a chave com Argon2id e o conteúdo é protegido com XChaCha20-Poly1305.
 

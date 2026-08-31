@@ -72,6 +72,29 @@ pub enum KeyMode {
     Keychain,
 }
 
+/// Um cofre do usuário. O `id` nomeia o diretório local e a pasta remota, e
+/// por isso nunca muda; o rótulo é só apresentação e pode ser reescrito.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VaultEntry {
+    pub id: String,
+    pub label: String,
+    pub created_at: i64,
+    /// Se o cofre já foi inicializado. Um cofre recém-criado existe no índice
+    /// antes de ter senha mestre.
+    #[serde(default)]
+    pub initialized: bool,
+}
+
+/// Conteúdo de `vaults.bin`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VaultsBinPayload {
+    pub version: u32,
+    #[serde(default)]
+    pub selected: Option<String>,
+    #[serde(default)]
+    pub vaults: Vec<VaultEntry>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultStatus {
     pub initialized: bool,

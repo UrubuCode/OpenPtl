@@ -21,7 +21,9 @@ impl SyncManager {
             access_token_from_refresh_with_fallback(server_address, fallback_addresses).await?;
         let client = Client::new();
 
-        let Some(folder_id) = ensure_openptl_folder(&client, &access_token, false).await? else {
+        let Some(folder_id) =
+            ensure_vault_folder(&client, &access_token, &vault_scope(), false).await?
+        else {
             return Ok(());
         };
 
@@ -124,7 +126,9 @@ impl SyncManager {
         let client = Client::new();
         let access_token = self.access_token().await?;
 
-        let Some(folder_id) = ensure_openptl_folder(&client, &access_token, false).await? else {
+        let Some(folder_id) =
+            ensure_vault_folder(&client, &access_token, &vault_scope(), false).await?
+        else {
             return Ok(RemoteFetch::default());
         };
 
@@ -194,7 +198,7 @@ impl SyncManager {
         let client = Client::new();
         let access_token = self.access_token().await?;
 
-        let folder_id = ensure_openptl_folder(&client, &access_token, true)
+        let folder_id = ensure_vault_folder(&client, &access_token, &vault_scope(), true)
             .await?
             .ok_or_else(|| anyhow!("Falha ao preparar pasta OpenPtl no Google Drive"))?;
 
@@ -241,7 +245,7 @@ impl SyncManager {
         let client = Client::new();
         let access_token = self.access_token().await?;
 
-        let folder_id = ensure_openptl_folder(&client, &access_token, true)
+        let folder_id = ensure_vault_folder(&client, &access_token, &vault_scope(), true)
             .await?
             .ok_or_else(|| anyhow!("Falha ao preparar pasta OpenPtl no Google Drive"))?;
 
@@ -287,7 +291,9 @@ impl SyncManager {
         let client = Client::new();
         let access_token = self.access_token().await?;
 
-        let Some(folder_id) = ensure_openptl_folder(&client, &access_token, false).await? else {
+        let Some(folder_id) =
+            ensure_vault_folder(&client, &access_token, &vault_scope(), false).await?
+        else {
             return Ok(None);
         };
 
@@ -305,6 +311,11 @@ impl SyncManager {
     /// Endereços do servidor de auth, guardados para as chamadas seguintes.
     pub fn use_servers(&mut self, address: String, fallbacks: Vec<String>) {
         set_auth_endpoints(address, fallbacks);
+    }
+
+    /// Cofre sobre o qual as próximas operações agem.
+    pub fn use_vault(&mut self, vault_id: String) {
+        set_vault_scope(vault_id);
     }
 
     async fn access_token(&self) -> Result<String> {

@@ -1,23 +1,90 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
-import { VaultState } from "../models/vault.slint";
+import { VaultState, VaultRow } from "../models/vault.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
 import { UiCard } from "../components/card.slint";
 import { FocusSink } from "../patterns/focus-sink.slint";
 
+// Uma linha da lista de cofres. Fica aqui, e nao em components/, porque so a
+// tela de abertura escolhe cofre.
+component VaultOption inherits Rectangle {
+    in property <string> label;
+    in property <bool> initialized;
+    in property <bool> selected;
+    in property <bool> enabled: true;
+    callback chosen();
+
+    height: 40px;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: root.selected ? Theme.accent : Theme.border;
+    background: root.selected ? Theme.surface-raised
+        : touch.has-hover ? Theme.surface-raised
+        : Theme.surface;
+
+    animate background, border-color {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.chosen(); }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-md;
+        padding-right: Theme.space-md;
+        spacing: Theme.space-sm;
+
+        Text {
+            text: root.label;
+            font-size: Type.body;
+            color: Theme.text-primary;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        Text {
+            text: root.initialized ? "" : "sem senha";
+            font-size: Type.label;
+            color: Theme.text-muted;
+            vertical-alignment: center;
+        }
+    }
+}
+
 export component VaultPage inherits Rectangle {
     in property <VaultState> state;
+    in property <[VaultRow]> vaults;
+    in property <string> selected-vault;
     in property <bool> busy: false;
     in property <string> error;
     callback submitted(string, string);
+    callback vault-selected(string);
+    callback vault-created(string);
 
     property <string> password;
     property <string> confirmation;
+    // A criacao de cofre e um modo da mesma tela: abrir outra janela para
+    // digitar um nome seria desproporcional ao gesto.
+    property <bool> naming: false;
+    property <string> new-label;
 
     function submit() {
         if (!root.busy && root.password != "") {
             root.submitted(root.password, root.confirmation);
+        }
+    }
+
+    function create-vault() {
+        if (!root.busy && root.new-label != "") {
+            root.vault-created(root.new-label);
+            root.new-label = "";
+            root.naming = false;
         }
     }
 
@@ -41,22 +108,73 @@ export component VaultPage inherits Rectangle {
             alignment: start;
 
             Text {
-                text: root.state.initialized ? "Desbloquear cofre" : "Criar cofre";
+                text: root.naming ? "Novo cofre"
+                    : root.state.initialized ? "Desbloquear cofre"
+                    : "Criar cofre";
                 font-size: Type.display;
                 font-weight: Type.weight-bold;
                 color: Theme.text-primary;
             }
 
             Text {
-                text: root.state.initialized
-                    ? "Informe a senha mestre para acessar seus perfis."
-                    : "Escolha uma senha mestre. Ela não pode ser recuperada.";
+                text: root.naming
+                        ? "Cada cofre guarda conexões, chaves e notas próprias, com senha mestre própria."
+                    : root.state.initialized
+                        ? "Informe a senha mestre para acessar seus perfis."
+                        : "Escolha uma senha mestre. Ela não pode ser recuperada.";
                 font-size: Type.body;
                 color: Theme.text-muted;
                 wrap: word-wrap;
             }
 
-            UiField {
+            if root.naming: UiField {
+                label: "Nome do cofre";
+                placeholder: "Trabalho, Pessoal, Cliente...";
+                enabled: !root.busy;
+                value <=> root.new-label;
+                accepted => { root.create-vault(); }
+            }
+
+            if root.naming: HorizontalLayout {
+                spacing: Theme.space-sm;
+
+                UiButton {
+                    label: "Cancelar";
+                    tone: ButtonTone.ghost;
+                    enabled: !root.busy;
+                    clicked => {
+                        root.new-label = "";
+                        root.naming = false;
+                    }
+                }
+
+                UiButton {
+                    label: "Criar";
+                    tone: ButtonTone.primary;
+                    enabled: !root.busy && root.new-label != "";
+                    clicked => { root.create-vault(); }
+                }
+            }
+
+            // Com um cofre só a lista não acrescenta nada; a tela continua
+            // sendo o formulário de senha de sempre.
+            if !root.naming && root.vaults.length > 1: VerticalLayout {
+                spacing: Theme.space-xs;
+
+                for item in root.vaults: VaultOption {
+                    label: item.label;
+                    initialized: item.initialized;
+                    selected: item.id == root.selected-vault;
+                    enabled: !root.busy;
+                    chosen => {
+                        root.password = "";
+                        root.confirmation = "";
+                        root.vault-selected(item.id);
+                    }
+                }
+            }
+
+            if !root.naming: UiField {
                 label: "Senha mestre";
                 placeholder: "Mínimo de 6 caracteres";
                 secret: true;
@@ -67,7 +185,7 @@ export component VaultPage inherits Rectangle {
                 accepted => { root.submit(); }
             }
 
-            if !root.state.initialized: UiField {
+            if !root.naming && !root.state.initialized: UiField {
                 label: "Confirmar senha";
                 placeholder: "Repita a senha mestre";
                 secret: true;
@@ -83,12 +201,24 @@ export component VaultPage inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            UiButton {
+            if !root.naming: UiButton {
                 label: root.state.initialized ? "Desbloquear" : "Criar cofre";
                 tone: ButtonTone.primary;
                 wide: true;
                 enabled: !root.busy && root.password != "";
                 clicked => { root.submit(); }
+            }
+
+            if !root.naming: UiButton {
+                label: "Adicionar outro cofre";
+                tone: ButtonTone.ghost;
+                wide: true;
+                enabled: !root.busy;
+                clicked => {
+                    root.password = "";
+                    root.confirmation = "";
+                    root.naming = true;
+                }
             }
         }
     }

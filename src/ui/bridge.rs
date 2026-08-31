@@ -25,7 +25,7 @@ use super::transfers_flow;
 use super::update_flow;
 use super::window_flow;
 use super::workspace_flow;
-use super::{AppWindow, ConnectionDraft, ConnectionGridRow, ConnectionRow, VaultState};
+use super::{AppWindow, ConnectionDraft, ConnectionGridRow, ConnectionRow, VaultRow, VaultState};
 use crate::backend::Backend;
 use crate::libs::deeplink;
 use crate::libs::models::{ConnectionProfile, ConnectionProtocol, VaultStatus};
@@ -37,6 +37,7 @@ pub fn run() -> Result<()> {
     let window = AppWindow::new()?;
 
     apply_vault_status(&window, backend.status()?);
+    refresh_vaults(&window, &backend);
     apply_environment(&window, &backend);
     window_flow::bind(&window);
     window_flow::center(&window);
@@ -67,7 +68,66 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+/// Lista de cofres e qual está selecionado.
+pub fn refresh_vaults(window: &AppWindow, backend: &Backend) {
+    let Ok(entries) = backend.vaults() else {
+        return;
+    };
+    let selected = backend
+        .selected_vault()
+        .ok()
+        .flatten()
+        .map(|entry| entry.id)
+        .unwrap_or_default();
+
+    let rows: Vec<VaultRow> = entries
+        .iter()
+        .map(|entry| VaultRow {
+            id: entry.id.as_str().into(),
+            label: entry.label.as_str().into(),
+            initialized: entry.initialized,
+        })
+        .collect();
+
+    window.set_vaults(ModelRc::new(VecModel::from(rows)));
+    window.set_selected_vault(selected.as_str().into());
+}
+
+/// Aplica a troca de cofre: a tela volta para o formulário de senha, agora
+/// apontando para o cofre novo. Nada do cofre anterior sobrevive porque a
+/// fachada tranca antes de trocar.
+fn adopt_vault(window: &AppWindow, backend: &Backend, outcome: Result<VaultStatus, anyhow::Error>) {
+    match outcome {
+        Ok(status) => {
+            window.set_vault_error(SharedString::new());
+            apply_vault_status(window, status);
+            refresh_vaults(window, backend);
+        }
+        Err(error) => window.set_vault_error(report(&error)),
+    }
+}
+
 fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
+    let handle = window.as_weak();
+    let choosing = Arc::clone(&backend);
+    window.on_vault_selected(move |id| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        let outcome = choosing.vault_select(&id);
+        adopt_vault(&window, &choosing, outcome);
+    });
+
+    let handle = window.as_weak();
+    let creating = Arc::clone(&backend);
+    window.on_vault_created(move |label| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        let outcome = creating.vault_create(&label);
+        adopt_vault(&window, &creating, outcome);
+    });
+
     let handle = window.as_weak();
     window.on_vault_submitted(move |password, confirmation| {
         let Some(window) = handle.upgrade() else {
@@ -94,6 +154,7 @@ fn bind_vault(window: &AppWindow, backend: Arc<Backend>) {
         match outcome {
             Ok(status) => {
                 apply_vault_status(&window, status);
+                refresh_vaults(&window, &backend);
                 refresh_connections(&window, &backend);
                 refresh_picker(&window, &backend);
                 keychain_flow::refresh(&window, &backend);

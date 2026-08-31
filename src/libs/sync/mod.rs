@@ -33,9 +33,8 @@ use tokio::sync::Notify;
 use crate::{
     constants::{
         APP_KEYRING_SERVICE, AUTH_CALLBACK_TIMEOUT, AUTH_SERVERS_TIMEOUT, AUTH_SERVERS_URL,
-        DRIVE_FOLDER_MIME_TYPE, DRIVE_ROOT_FOLDER_NAME, DRIVE_TOP_PARENT_ID, KEYRING_REFRESH_TOKEN,
-        KEYRING_USER_EMAIL, KEYRING_USER_NAME, KEYRING_USER_PICTURE, RELEASE_USER_AGENT,
-        REMOTE_SNAPSHOT_PREFIX, STORAGE_FILE_EXTENSION,
+        DRIVE_FOLDER_MIME_TYPE, KEYRING_REFRESH_TOKEN, KEYRING_USER_EMAIL, KEYRING_USER_NAME,
+        KEYRING_USER_PICTURE, RELEASE_USER_AGENT, REMOTE_SNAPSHOT_PREFIX, STORAGE_FILE_EXTENSION,
     },
     libs::models::{AuthServer, BackendMessage, SyncLoggedUser, SyncState},
     libs::mutations::{MutationBatch, RemoteHeader, RemoteSnapshot},
@@ -60,6 +59,7 @@ static SYNC_CANCELLED: AtomicBool = AtomicBool::new(false);
 static SYNC_CANCEL_NOTIFY: OnceLock<Notify> = OnceLock::new();
 static PENDING_AUTH_CLIENT_ID: OnceLock<StdMutex<Option<String>>> = OnceLock::new();
 static AUTH_ENDPOINTS: OnceLock<StdMutex<(String, Vec<String>)>> = OnceLock::new();
+static VAULT_SCOPE: OnceLock<StdMutex<String>> = OnceLock::new();
 
 fn pending_client_id_store() -> &'static StdMutex<Option<String>> {
     PENDING_AUTH_CLIENT_ID.get_or_init(|| StdMutex::new(None))
@@ -93,6 +93,24 @@ pub(crate) fn set_auth_endpoints(address: String, fallbacks: Vec<String>) {
 
 pub(crate) fn auth_endpoints() -> (String, Vec<String>) {
     auth_endpoints_store()
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default()
+}
+
+/// Cofre em uso. Toda operacao de Drive acontece dentro da pasta dele; sem
+/// isso dois cofres do mesmo usuario dividiriam o mesmo diretorio remoto e um
+/// tentaria aplicar lotes que a chave dele nao abre.
+pub(crate) fn set_vault_scope(vault_id: String) {
+    let store = VAULT_SCOPE.get_or_init(|| StdMutex::new(String::new()));
+    if let Ok(mut guard) = store.lock() {
+        *guard = vault_id;
+    }
+}
+
+pub(crate) fn vault_scope() -> String {
+    VAULT_SCOPE
+        .get_or_init(|| StdMutex::new(String::new()))
         .lock()
         .map(|guard| guard.clone())
         .unwrap_or_default()

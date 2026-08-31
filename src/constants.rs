@@ -7,6 +7,17 @@ pub const KEYRING_VAULT_KEY: &str = "vault-key";
 
 /// Pasta raiz do armazenamento criptografado local.
 pub const STORAGE_DIR_NAME: &str = "OpenPtl";
+/// Pasta que agrupa os cofres. Cada cofre tem um diretório próprio dentro
+/// dela, com o conjunto completo de arquivos criptografados.
+pub const VAULTS_DIR_NAME: &str = "vaults";
+/// Índice dos cofres existentes e de qual está selecionado. Não é
+/// criptografado: guarda apenas rótulo e data, nunca conteúdo — o mesmo nível
+/// de exposição que `openptl.bin`, que já traz salt e verificador em claro.
+pub const VAULTS_REGISTRY_FILE_NAME: &str = "vaults.bin";
+/// Rótulo do cofre criado ao migrar uma instalação de cofre único.
+pub const DEFAULT_VAULT_LABEL: &str = "Pessoal";
+/// Limite do rótulo, para o índice não virar depósito de texto.
+pub const VAULT_LABEL_MAX_LEN: usize = 60;
 /// Arquivo principal de metadados do vault.
 pub const OPENPTL_FILE_NAME: &str = "openptl.bin";
 /// Arquivo com o payload de perfis criptografado.

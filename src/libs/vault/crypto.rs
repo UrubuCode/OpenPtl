@@ -15,44 +15,6 @@ pub(crate) fn legacy_known_hosts_content() -> Option<String> {
     None
 }
 
-pub(crate) fn cleanup_legacy_layout(data_dir: &Path, storage_root: &Path) -> Result<()> {
-    let legacy_vault = data_dir.join("vault.enc.json");
-    if legacy_vault.exists() {
-        let _ = fs::remove_file(&legacy_vault);
-    }
-
-    let legacy_default = storage_root.join("default");
-    if legacy_default.exists() && legacy_default.is_dir() {
-        let _ = fs::remove_dir_all(&legacy_default);
-    }
-
-    if storage_root.exists() {
-        let entries = fs::read_dir(storage_root)
-            .with_context(|| format!("Falha ao listar {}", storage_root.display()))?;
-        for entry in entries {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                let _ = fs::remove_dir_all(&path);
-                continue;
-            }
-
-            let Some(name) = path
-                .file_name()
-                .map(|value| value.to_string_lossy().to_string())
-            else {
-                continue;
-            };
-            if is_bin_file_name(&name) {
-                continue;
-            }
-            let _ = fs::remove_file(&path);
-        }
-    }
-
-    Ok(())
-}
-
 pub(crate) fn ensure_default_server(servers: &mut Vec<AuthServer>) {
     if !servers.iter().any(|item| item.id == "default") {
         servers.push(AuthServer::default_server());

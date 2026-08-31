@@ -6,21 +6,6 @@ use super::*;
 /// remover, só. O layout remoto vive em `remote.rs`, o que mantém a regra de
 /// negócio fora do transporte — e permitiu trocar o esquema de arquivos fixos
 /// pelo log de mutações sem tocar aqui.
-pub(crate) async fn ensure_openptl_folder(
-    client: &Client,
-    access_token: &str,
-    create_if_missing: bool,
-) -> Result<Option<String>> {
-    ensure_named_folder(
-        client,
-        access_token,
-        DRIVE_ROOT_FOLDER_NAME,
-        DRIVE_TOP_PARENT_ID,
-        create_if_missing,
-    )
-    .await
-}
-
 pub(crate) async fn ensure_named_folder(
     client: &Client,
     access_token: &str,
