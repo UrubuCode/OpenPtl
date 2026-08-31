@@ -14,6 +14,7 @@ use super::editor_flow;
 use super::files_flow;
 use super::keychain_flow;
 use super::known_hosts_flow;
+use super::logs_flow;
 use super::mappers::{draft_from_link, empty_draft, from_draft, to_draft, to_row};
 use super::notes_flow;
 use super::session_flow;
@@ -27,7 +28,7 @@ use super::workspace_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
 use crate::libs::deeplink;
-use crate::libs::models::VaultStatus;
+use crate::libs::models::{ConnectionProfile, ConnectionProtocol, VaultStatus};
 
 const MIN_PASSWORD_LEN: usize = 6;
 
@@ -42,11 +43,13 @@ pub fn run() -> Result<()> {
     workspace_flow::bind(&window, Arc::clone(&backend));
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));
+    bind_connection_filters(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));
     session_flow::bind(&window, Arc::clone(&backend));
     // O temporizador de drenagem vive enquanto a janela viver.
     keychain_flow::bind(&window, Arc::clone(&backend));
     known_hosts_flow::bind(&window, Arc::clone(&backend));
+    let _logs_refresh = logs_flow::bind(&window, Arc::clone(&backend));
     settings_flow::bind(&window, Arc::clone(&backend));
     notes_flow::bind(&window, Arc::clone(&backend));
     files_flow::bind(&window, Arc::clone(&backend));
@@ -191,13 +194,57 @@ pub fn apply_vault_status(window: &AppWindow, status: VaultStatus) {
 }
 
 fn refresh_connections(window: &AppWindow, backend: &Backend) {
-    match backend.connections() {
-        Ok(profiles) => {
-            let rows = profiles.iter().map(to_row).collect::<Vec<_>>();
-            window.set_connections(ModelRc::new(VecModel::from(rows)));
+    let profiles = match backend.connections() {
+        Ok(profiles) => profiles,
+        Err(error) => {
+            window.set_form_error(report(&error));
+            return;
         }
-        Err(error) => window.set_form_error(report(&error)),
+    };
+
+    // As contagens descrevem o cofre inteiro; a busca e o filtro só decidem o
+    // que aparece na lista.
+    window.set_connection_total(profiles.len() as i32);
+    window.set_connection_ssh(count_of(&profiles, ConnectionProtocol::Ssh));
+    window.set_connection_sftp(count_of(&profiles, ConnectionProtocol::Sftp));
+
+    let query = window.get_connection_query().to_lowercase();
+    let filter = window.get_connection_filter();
+
+    let rows = profiles
+        .iter()
+        .filter(|profile| matches_filter(profile, filter))
+        .filter(|profile| matches_query(profile, &query))
+        .map(to_row)
+        .collect::<Vec<_>>();
+    window.set_connections(ModelRc::new(VecModel::from(rows)));
+}
+
+fn count_of(profiles: &[ConnectionProfile], protocol: ConnectionProtocol) -> i32 {
+    profiles
+        .iter()
+        .filter(|profile| profile.supports(protocol.clone()))
+        .count() as i32
+}
+
+/// 0 todos, 1 só SSH, 2 só SFTP.
+fn matches_filter(profile: &ConnectionProfile, filter: i32) -> bool {
+    match filter {
+        1 => profile.supports(ConnectionProtocol::Ssh),
+        2 => profile.supports(ConnectionProtocol::Sftp),
+        _ => true,
     }
+}
+
+/// A busca olha nome, host e usuário: é por um deles que alguém procura um
+/// servidor.
+fn matches_query(profile: &ConnectionProfile, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    profile.name.to_lowercase().contains(query)
+        || profile.host.to_lowercase().contains(query)
+        || profile.username.to_lowercase().contains(query)
 }
 
 /// Dados que não mudam durante a execução: versão do binário e onde o cofre
@@ -236,4 +283,22 @@ fn try_dev_unlock(window: &AppWindow) {
         return;
     };
     window.invoke_vault_submitted(password.as_str().into(), password.as_str().into());
+}
+
+/// Busca e filtro apenas reconstroem a lista; nada é gravado no cofre.
+fn bind_connection_filters(window: &AppWindow, backend: Arc<Backend>) {
+    let handle = window.as_weak();
+    let searching = Arc::clone(&backend);
+    window.on_connection_query_changed(move |_| {
+        if let Some(window) = handle.upgrade() {
+            refresh_connections(&window, &searching);
+        }
+    });
+
+    let handle = window.as_weak();
+    window.on_connection_filter_changed(move |_| {
+        if let Some(window) = handle.upgrade() {
+            refresh_connections(&window, &backend);
+        }
+    });
 }

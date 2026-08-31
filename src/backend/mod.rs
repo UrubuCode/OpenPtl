@@ -17,6 +17,7 @@ use anyhow::{anyhow, Result};
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::libs::journal::Journal;
 use crate::libs::models::{
     AppSettings, AuthServer, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry,
     Note, SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
@@ -36,6 +37,7 @@ pub struct Backend {
     transfers: Transfers,
     sync: Arc<AsyncMutex<SyncManager>>,
     sync_reporter: SyncReporter,
+    journal: Journal,
 }
 
 impl Backend {
@@ -47,7 +49,13 @@ impl Backend {
             transfers: Transfers::new(),
             sync: Arc::new(AsyncMutex::new(SyncManager::new())),
             sync_reporter: SyncReporter::new(),
+            journal: Journal::new(),
         })
+    }
+
+    /// Diario de eventos, compartilhado com a interface.
+    pub fn journal(&self) -> Journal {
+        self.journal.clone()
     }
 
     pub fn status(&self) -> Result<VaultStatus> {
@@ -64,6 +72,28 @@ impl Backend {
 
     pub fn lock(&self) -> Result<VaultStatus> {
         Ok(self.vault()?.lock())
+    }
+
+    /// Troca a senha mestre. A confirmação é conferida antes de tocar no cofre:
+    /// uma divergência aqui evita recriptografar tudo com uma senha digitada
+    /// errada, que trancaria o usuário para fora dos próprios dados.
+    pub fn change_master_password(
+        &self,
+        current: &str,
+        next: &str,
+        confirmation: &str,
+    ) -> Result<()> {
+        if next != confirmation {
+            return Err(anyhow!("A nova senha e a confirmacao nao coincidem"));
+        }
+        if next.chars().count() < 6 {
+            return Err(anyhow!("A nova senha precisa de ao menos 6 caracteres"));
+        }
+
+        let mut vault = self.vault()?;
+        vault.verify_master_password(current)?;
+        vault.change_master_password(Some(current.to_owned()), next.to_owned())?;
+        Ok(())
     }
 
     pub fn connections(&self) -> Result<Vec<ConnectionProfile>> {

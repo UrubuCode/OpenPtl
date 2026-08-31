@@ -1,0 +1,57 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "./icon.slint";
+
+/// Campo de busca com a lupa à esquerda. Separado do `UiField` porque não tem
+/// rótulo acima e o ícone faz parte da moldura.
+export component UiSearchField inherits Rectangle {
+    in property <string> placeholder: "Buscar…";
+    in-out property <string> value;
+    callback changed(string);
+
+    height: Theme.control-height;
+    background: Theme.surface-inset;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.border;
+    animate border-color { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-md;
+        padding-right: Theme.space-md;
+        spacing: Theme.space-sm;
+
+        UiIcon {
+            width: 15px;
+            height: 15px;
+            y: (parent.height - self.height) / 2;
+            source: Icons.search;
+            tint: Theme.text-muted;
+        }
+
+        Rectangle {
+            clip: true;
+
+            if root.value == "" && !input.has-focus: Text {
+                x: 0;
+                text: root.placeholder;
+                vertical-alignment: center;
+                font-size: Type.body;
+                color: Theme.text-muted;
+            }
+
+            input := TextInput {
+                x: 0;
+                width: max(parent.width, self.preferred-width);
+                single-line: true;
+                vertical-alignment: center;
+                font-size: Type.body;
+                color: Theme.text-primary;
+                selection-background-color: Theme.accent;
+                selection-foreground-color: Theme.text-on-accent;
+                text <=> root.value;
+                edited => { root.changed(self.text); }
+            }
+        }
+    }
+}

@@ -14,6 +14,7 @@ import { KnownHostsPage } from "../pages/known-hosts.slint";
 import { SettingsDraft } from "../models/settings.slint";
 import { SettingsPage } from "../pages/settings.slint";
 import { AboutPage } from "../pages/about.slint";
+import { LogsPage, LogRow } from "../pages/logs.slint";
 import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
 import { FileRow } from "../models/file.slint";
@@ -26,6 +27,11 @@ export component AppShell inherits Rectangle {
     in property <[BlockRow]> blocks;
     in property <string> workspace-hint;
     in property <[ConnectionRow]> connections;
+    in property <int> connection-total;
+    in property <int> connection-ssh;
+    in property <int> connection-sftp;
+    in-out property <string> connection-query;
+    in-out property <int> connection-filter;
     in property <[SessionRow]> sessions;
     in property <[TermLine]> terminal-lines;
     in property <string> active-session;
@@ -34,12 +40,14 @@ export component AppShell inherits Rectangle {
     in property <string> known-hosts-path;
     in property <SettingsDraft> settings;
     in property <string> settings-message;
+    in property <string> password-message;
     in property <bool> update-canary;
     in property <string> update-status;
     in property <bool> update-ready;
     in property <string> version;
     in property <string> storage-path;
     in property <[NoteRow]> notes;
+    in property <[LogRow]> logs;
     in property <[FileRow]> files;
     in property <string> files-path;
     in property <string> files-message;
@@ -56,6 +64,8 @@ export component AppShell inherits Rectangle {
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
+    callback connection-query-changed(string);
+    callback connection-filter-changed(int);
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
@@ -78,6 +88,7 @@ export component AppShell inherits Rectangle {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback master-password-changed(string, string, string);
     callback update-check-requested();
     callback update-download-requested();
     callback update-install-requested();
@@ -86,6 +97,7 @@ export component AppShell inherits Rectangle {
     callback note-edit-requested(string);
     callback note-pin-toggled(string);
     callback note-delete-requested(string);
+    callback logs-cleared();
     callback file-path-requested(string);
     callback file-parent-requested();
     callback file-reload-requested();
@@ -143,6 +155,13 @@ export component AppShell inherits Rectangle {
             }
             if root.section == Section.home: ConnectionsPage {
                 rows: root.connections;
+                total: root.connection-total;
+                ssh-count: root.connection-ssh;
+                sftp-count: root.connection-sftp;
+                query <=> root.connection-query;
+                filter <=> root.connection-filter;
+                query-changed(text) => { root.connection-query-changed(text); }
+                filter-changed(value) => { root.connection-filter-changed(value); }
                 create-requested => { root.connection-create-requested(); }
                 connect-requested(id) => { root.connection-connect-requested(id); }
                 edit-requested(id) => { root.connection-edit-requested(id); }
@@ -167,6 +186,11 @@ export component AppShell inherits Rectangle {
                 delete-requested(id) => { root.note-delete-requested(id); }
             }
             if root.section == Section.settings: SettingsPage {
+                connection-count: root.connection-total;
+                keychain-count: root.keychain.length;
+                known-host-count: root.known-hosts.length;
+                password-message: root.password-message;
+                master-password-changed(old, fresh, confirm) => { root.master-password-changed(old, fresh, confirm); }
                 settings: root.settings;
                 message: root.settings-message;
                 version: root.version;
@@ -179,6 +203,10 @@ export component AppShell inherits Rectangle {
                 update-download-requested => { root.update-download-requested(); }
                 update-install-requested => { root.update-install-requested(); }
                 update-channel-changed(canary) => { root.update-channel-changed(canary); }
+            }
+            if root.section == Section.logs: LogsPage {
+                rows: root.logs;
+                cleared => { root.logs-cleared(); }
             }
             if root.section == Section.about: AboutPage {
                 version: root.version;

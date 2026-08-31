@@ -77,6 +77,7 @@ fn apply(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str, result: S
             // Um host recém-aceito já entrou no cofre; a lista precisa refletir.
             super::known_hosts_flow::refresh(window, backend);
             open_workspace(window, backend, profile_id);
+            backend.journal().info("Sessao aberta.");
             window.set_status_message("Sessão aberta.".into());
         }
         SshConnectResult::UnknownHostChallenge {
@@ -87,6 +88,9 @@ fn apply(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str, result: S
             known_hosts_path,
             ..
         } => {
+            backend
+                .journal()
+                .warning(format!("Host desconhecido: {host}:{port}"));
             window.set_challenge(HostChallenge {
                 active: true,
                 id: profile_id.into(),
@@ -99,6 +103,7 @@ fn apply(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str, result: S
             window.set_status_message("Confirme a impressão digital do servidor.".into());
         }
         SshConnectResult::AuthRequired { message } | SshConnectResult::Error { message } => {
+            backend.journal().error(message.message.clone());
             window.set_status_message(message.message.as_str().into());
         }
     }

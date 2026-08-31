@@ -1,32 +1,14 @@
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { SettingsDraft } from "../models/settings.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
 import { UiToggle } from "../components/toggle.slint";
-import { UiCard } from "../components/card.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 import { PageHeader } from "../patterns/page-header.slint";
 import { TabBar } from "../patterns/tab-bar.slint";
-
-component SettingsGroup inherits UiCard {
-    in property <string> title;
-
-    height: body.min-height;
-
-    body := VerticalLayout {
-        padding: Theme.space-lg;
-        spacing: Theme.space-md;
-
-        Text {
-            text: root.title;
-            font-size: Type.title;
-            font-weight: Type.weight-medium;
-            color: Theme.text-primary;
-        }
-
-        @children
-    }
-}
+import { SectionCard, UiAlert, AlertTone } from "../patterns/section-card.slint";
 
 export component SettingsPage inherits VerticalLayout {
     in property <SettingsDraft> settings;
@@ -35,126 +17,242 @@ export component SettingsPage inherits VerticalLayout {
     in property <bool> canary: false;
     in property <string> update-status;
     in property <bool> update-ready: false;
+    in property <int> connection-count;
+    in property <int> keychain-count;
+    in property <int> known-host-count;
+    in property <string> password-message;
     callback saved(SettingsDraft);
     callback vault-lock-requested();
     callback update-check-requested();
     callback update-download-requested();
     callback update-install-requested();
     callback update-channel-changed(bool);
+    callback master-password-changed(string, string, string);
 
     property <SettingsDraft> edited: root.settings;
-    // A pagina virou abas: quatro grupos empilhados obrigavam a rolar para
-    // chegar em qualquer um deles.
     property <int> tab: 0;
+    property <string> current-password;
+    property <string> new-password;
+    property <string> confirm-password;
 
     padding: Theme.space-lg;
-    spacing: Theme.space-lg;
+    spacing: Theme.space-md;
 
     PageHeader {
         title: "Configurações";
-        subtitle: "Preferências de sessão e de terminal.";
+        subtitle: root.tab == 0 ? "Aplicação"
+            : root.tab == 1 ? "Terminal"
+            : root.tab == 2 ? "Atualizações"
+            : "Segurança";
     }
 
     TabBar {
-        tabs: ["Segurança", "Conexão", "Terminal", "Atualizações"];
+        tabs: ["Aplicação", "Terminal", "Atualizações", "Segurança"];
+        icons: [Icons.app, Icons.terminal, Icons.reload, Icons.security];
         current <=> root.tab;
     }
 
-    if root.tab == 0: SettingsGroup {
-        title: "Segurança";
+    ScrollView {
+        vertical-stretch: 1;
 
-        UiField {
-            label: "Bloquear o cofre após inatividade (minutos)";
-            placeholder: "0 desativa";
-            value <=> root.edited.inactivity-lock-minutes;
-        }
-        HorizontalLayout {
+        VerticalLayout {
+            spacing: Theme.space-md;
             alignment: start;
-            UiButton {
-                label: "Bloquear agora";
-                tone: ButtonTone.danger;
-                clicked => { root.vault-lock-requested(); }
+
+            if root.tab == 0: SectionCard {
+                title: "Conexão";
+                icon: Icons.connections;
+
+                UiToggle {
+                    label: "Reconectar automaticamente ao perder a sessão";
+                    checked <=> root.edited.auto-reconnect-enabled;
+                }
+                UiField {
+                    label: "Espera antes de reconectar (segundos)";
+                    placeholder: "5";
+                    enabled: root.edited.auto-reconnect-enabled;
+                    value <=> root.edited.reconnect-delay-seconds;
+                }
+            }
+
+            if root.tab == 1: SectionCard {
+                title: "Terminal";
+                icon: Icons.terminal;
+
+                UiToggle {
+                    label: "Copiar ao selecionar";
+                    checked <=> root.edited.terminal-copy-on-select;
+                }
+                UiToggle {
+                    label: "Colar com o botão direito";
+                    checked <=> root.edited.terminal-right-click-paste;
+                }
+                UiToggle {
+                    label: "Atalhos com Ctrl+Shift";
+                    checked <=> root.edited.terminal-ctrl-shift-shortcuts;
+                }
+            }
+
+            if root.tab == 2: SectionCard {
+                title: "Atualizações";
+                icon: Icons.reload;
+
+                Text {
+                    text: "Versão instalada: " + root.version;
+                    font-size: Type.body;
+                    color: Theme.text-secondary;
+                }
+                UiToggle {
+                    label: "Receber versões de teste (canary)";
+                    checked: root.canary;
+                    toggled => { root.update-channel-changed(!root.canary); }
+                }
+                if root.update-status != "": Text {
+                    text: root.update-status;
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: Theme.space-sm;
+                    alignment: start;
+                    UiButton {
+                        label: "Procurar atualização";
+                        icon: Icons.reload;
+                        clicked => { root.update-check-requested(); }
+                    }
+                    UiButton {
+                        label: "Baixar";
+                        tone: ButtonTone.primary;
+                        icon: Icons.download;
+                        clicked => { root.update-download-requested(); }
+                    }
+                    if root.update-ready: UiButton {
+                        label: "Abrir instalador";
+                        tone: ButtonTone.primary;
+                        clicked => { root.update-install-requested(); }
+                    }
+                }
+            }
+
+            if root.tab == 3: SectionCard {
+                title: "Segurança";
+                icon: Icons.security;
+
+                UiAlert {
+                    tone: AlertTone.danger;
+                    icon: Icons.warning;
+                    title: "Aviso crítico de criptografia";
+                    message: "A senha mestre controla toda a criptografia local do OpenPtl. Alterá-la recriptografa os dados atuais do aplicativo.";
+                }
+
+                Text {
+                    text: "Trocar senha mestre";
+                    font-size: Type.body;
+                    font-weight: Type.weight-semibold;
+                    color: Theme.text-primary;
+                }
+                Text {
+                    text: "Defina uma nova senha forte. A senha atual é obrigatória para confirmar a alteração.";
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.space-md;
+                    UiField {
+                        horizontal-stretch: 1;
+                        placeholder: "Senha atual";
+                        secret: true;
+                        value <=> root.current-password;
+                    }
+                    UiField {
+                        horizontal-stretch: 1;
+                        placeholder: "Nova senha";
+                        secret: true;
+                        revealable: true;
+                        value <=> root.new-password;
+                    }
+                    UiField {
+                        horizontal-stretch: 1;
+                        placeholder: "Confirmar";
+                        secret: true;
+                        value <=> root.confirm-password;
+                    }
+                }
+
+                if root.password-message != "": Text {
+                    text: root.password-message;
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    UiButton {
+                        label: "Atualizar senha";
+                        icon: Icons.lock;
+                        enabled: root.current-password != "" && root.new-password != "";
+                        clicked => {
+                            root.master-password-changed(
+                                root.current-password,
+                                root.new-password,
+                                root.confirm-password
+                            );
+                            root.current-password = "";
+                            root.new-password = "";
+                            root.confirm-password = "";
+                        }
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.border; }
+
+                Text {
+                    text: "Bloquear o cofre";
+                    font-size: Type.body;
+                    font-weight: Type.weight-semibold;
+                    color: Theme.text-primary;
+                }
+
+                UiField {
+                    label: "Bloquear após inatividade (minutos)";
+                    placeholder: "0 desativa";
+                    value <=> root.edited.inactivity-lock-minutes;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.space-md;
+                    alignment: start;
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "Conexões: " + root.connection-count
+                            + " · Keychain: " + root.keychain-count
+                            + " · Known hosts: " + root.known-host-count;
+                        font-size: Type.caption;
+                        color: Theme.text-muted;
+                    }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    UiButton {
+                        label: "Bloquear agora";
+                        tone: ButtonTone.danger;
+                        icon: Icons.lock;
+                        clicked => { root.vault-lock-requested(); }
+                    }
+                }
             }
         }
     }
-
-    if root.tab == 1: SettingsGroup {
-        title: "Conexão";
-
-        UiToggle {
-            label: "Reconectar automaticamente ao perder a sessão";
-            checked <=> root.edited.auto-reconnect-enabled;
-        }
-        UiField {
-            label: "Espera antes de reconectar (segundos)";
-            placeholder: "5";
-            enabled: root.edited.auto-reconnect-enabled;
-            value <=> root.edited.reconnect-delay-seconds;
-        }
-    }
-
-    if root.tab == 3: SettingsGroup {
-        title: "Atualizações";
-
-        Text {
-            text: "Versão instalada: " + root.version;
-            font-size: Type.body;
-            color: Theme.text-secondary;
-        }
-        UiToggle {
-            label: "Receber versões de teste (canary)";
-            checked: root.canary;
-            toggled => { root.update-channel-changed(!root.canary); }
-        }
-        if root.update-status != "": Text {
-            text: root.update-status;
-            font-size: Type.caption;
-            color: Theme.text-muted;
-            wrap: word-wrap;
-        }
-        HorizontalLayout {
-            spacing: Theme.space-sm;
-            alignment: start;
-            UiButton {
-                label: "Procurar atualização";
-                tone: ButtonTone.neutral;
-                clicked => { root.update-check-requested(); }
-            }
-            UiButton {
-                label: "Baixar";
-                tone: ButtonTone.primary;
-                clicked => { root.update-download-requested(); }
-            }
-            if root.update-ready: UiButton {
-                label: "Abrir instalador";
-                tone: ButtonTone.primary;
-                clicked => { root.update-install-requested(); }
-            }
-        }
-    }
-
-    if root.tab == 2: SettingsGroup {
-        title: "Terminal";
-
-        UiToggle {
-            label: "Copiar ao selecionar";
-            checked <=> root.edited.terminal-copy-on-select;
-        }
-        UiToggle {
-            label: "Colar com o botão direito";
-            checked <=> root.edited.terminal-right-click-paste;
-        }
-        UiToggle {
-            label: "Atalhos com Ctrl+Shift";
-            checked <=> root.edited.terminal-ctrl-shift-shortcuts;
-        }
-    }
-
-    Rectangle { vertical-stretch: 1; }
 
     HorizontalLayout {
         spacing: Theme.space-md;
         alignment: end;
+        vertical-stretch: 0;
 
         if root.message != "": Text {
             text: root.message;
@@ -165,6 +263,7 @@ export component SettingsPage inherits VerticalLayout {
         UiButton {
             label: "Salvar";
             tone: ButtonTone.primary;
+            icon: Icons.save;
             clicked => { root.saved(root.edited); }
         }
     }

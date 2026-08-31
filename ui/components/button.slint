@@ -1,5 +1,6 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { UiIcon } from "./icon.slint";
 
 export enum ButtonTone { neutral, primary, danger, ghost }
 
@@ -15,6 +16,8 @@ export component UiButton inherits Rectangle {
     in property <bool> wide: false;
     /// Versao baixa, para caber em linhas de lista.
     in property <bool> compact: false;
+    /// Icone opcional a esquerda do rotulo.
+    in property <image> icon;
     callback clicked();
 
     height: root.compact ? 26px : Theme.control-height;
@@ -64,6 +67,18 @@ export component UiButton inherits Rectangle {
     HorizontalLayout {
         padding-left: root.side-padding;
         padding-right: root.side-padding;
+        spacing: Theme.space-sm;
+        alignment: center;
+
+        if root.icon.width > 0: UiIcon {
+            width: 14px;
+            height: 14px;
+            y: (parent.height - self.height) / 2;
+            source: root.icon;
+            tint: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
+                ? Theme.text-on-accent
+                : Theme.text-secondary;
+        }
 
         caption := Text {
             text: root.label;

@@ -1,0 +1,112 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon } from "../components/icon.slint";
+
+/// Cartão com cabeçalho de ícone e título, o recipiente que agrupava as
+/// configurações antes do porte.
+export component SectionCard inherits Rectangle {
+    in property <string> title;
+    in property <image> icon;
+
+    height: shell.min-height;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    shell := VerticalLayout {
+        Rectangle {
+            height: 52px;
+            vertical-stretch: 0;
+            background: Theme.surface-raised;
+
+            HorizontalLayout {
+                padding-left: Theme.space-lg;
+                padding-right: Theme.space-lg;
+                spacing: Theme.space-md;
+
+                UiIcon {
+                    width: 16px;
+                    height: 16px;
+                    y: (parent.height - self.height) / 2;
+                    source: root.icon;
+                    tint: Theme.accent;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.title;
+                    vertical-alignment: center;
+                    font-size: Type.body;
+                    font-weight: Type.weight-semibold;
+                    color: Theme.text-primary;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            vertical-stretch: 0;
+            background: Theme.border;
+        }
+
+        VerticalLayout {
+            padding: Theme.space-lg;
+            spacing: Theme.space-md;
+            alignment: start;
+
+            @children
+        }
+    }
+}
+
+export enum AlertTone { danger, warning, info }
+
+/// Aviso destacado, como a faixa vermelha da tela de segurança.
+export component UiAlert inherits Rectangle {
+    in property <string> title;
+    in property <string> message;
+    in property <AlertTone> tone: AlertTone.danger;
+    in property <image> icon;
+
+    property <color> accent: root.tone == AlertTone.danger ? Theme.danger
+        : root.tone == AlertTone.warning ? Theme.warning
+        : Theme.info;
+
+    height: body.min-height;
+    background: root.accent.with-alpha(0.08);
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: root.accent.with-alpha(0.45);
+
+    body := HorizontalLayout {
+        padding: Theme.space-md;
+        spacing: Theme.space-md;
+
+        UiIcon {
+            width: 16px;
+            height: 16px;
+            source: root.icon;
+            tint: root.accent;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.space-xs;
+
+            Text {
+                text: root.title;
+                font-size: Type.label;
+                font-weight: Type.weight-semibold;
+                color: root.accent;
+            }
+            Text {
+                text: root.message;
+                font-size: Type.caption;
+                color: Theme.text-secondary;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

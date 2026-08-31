@@ -1,0 +1,46 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+export enum StatTone { neutral, accent, positive, warning }
+
+/// Cartão de contagem, como a faixa que ficava acima da lista de conexões: o
+/// rótulo pequeno em cima e o número grande embaixo, com a cor indicando do que
+/// se trata.
+export component UiStatCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <StatTone> tone: StatTone.neutral;
+
+    height: 78px;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding-left: Theme.space-lg;
+        padding-right: Theme.space-lg;
+        padding-top: Theme.space-md;
+        padding-bottom: Theme.space-md;
+        spacing: Theme.space-xs;
+        alignment: center;
+
+        Text {
+            text: root.label;
+            font-size: Type.caption;
+            font-weight: Type.weight-medium;
+            letter-spacing: 0.6px;
+            color: Theme.text-muted;
+        }
+
+        Text {
+            text: root.value;
+            font-size: 22px;
+            font-weight: Type.weight-bold;
+            color: root.tone == StatTone.accent ? Theme.accent
+                : root.tone == StatTone.positive ? Theme.positive
+                : root.tone == StatTone.warning ? Theme.warning
+                : Theme.text-primary;
+        }
+    }
+}

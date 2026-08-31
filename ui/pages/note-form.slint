@@ -4,21 +4,20 @@ import { Type } from "../theme/typography.slint";
 import { Palette } from "../theme/palette.slint";
 import { NoteDraft } from "../models/note.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
-import { UiField } from "../components/field.slint";
-import { UiToggle } from "../components/toggle.slint";
-import { Modal } from "../patterns/modal.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 
 component ColorSwatch inherits Rectangle {
     in property <int> index;
     in property <bool> selected: false;
     callback picked(int);
 
-    width: 22px;
-    height: 22px;
-    border-radius: 11px;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
     background: Palette.note[root.index];
     border-width: root.selected ? 2px : 0px;
     border-color: Theme.text-primary;
+    animate border-width { duration: Theme.motion-fast; }
 
     TouchArea {
         mouse-cursor: MouseCursor.pointer;
@@ -26,93 +25,174 @@ component ColorSwatch inherits Rectangle {
     }
 }
 
-export component NoteForm inherits Modal {
+/// Editor de nota em painel grande, como era antes do porte: o título na
+/// própria barra do topo junto das cores e do salvar, o corpo ocupando quase
+/// tudo, e o rodapé lembrando os atalhos.
+export component NoteForm inherits Rectangle {
+    in property <bool> open: false;
     in property <NoteDraft> draft;
     in property <string> error;
     callback saved(NoteDraft);
     callback cancelled();
 
-    panel-width: 560px;
-    title: root.draft.id == "" ? "Nova nota" : "Editar nota";
-    dismissed => { root.cancelled(); }
+    visible: root.open || root.veil > 0.01;
+    background: Theme.overlay.with-alpha(0.72 * root.veil);
 
     property <NoteDraft> edited: root.draft;
-
-    UiField {
-        label: "Título";
-        placeholder: "Ex.: Rotina de deploy";
-        value <=> root.edited.title;
+    property <float> veil: root.open ? 1.0 : 0.0;
+    animate veil {
+        duration: Theme.motion-base;
+        easing: Theme.ease-smooth;
     }
 
-    VerticalLayout {
-        spacing: Theme.space-xs;
-        Text {
-            text: "Conteúdo";
-            font-size: Type.caption;
-            color: Theme.text-muted;
+    TouchArea {
+        clicked => { root.cancelled(); }
+    }
+
+    panel := Rectangle {
+        width: min(parent.width - 2 * Theme.space-xl, 780px);
+        height: min(parent.height - 2 * Theme.space-xl, 680px);
+        y: (parent.height - self.height) / 2 + (1 - root.veil) * Theme.rise * 2;
+        opacity: root.veil;
+        background: Theme.surface;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        clip: true;
+        animate y, opacity {
+            duration: Theme.motion-base;
+            easing: Theme.ease-out-soft;
         }
-        // Mesmo motivo do UiField: o TextEdit do std-widgets traz a própria
-        // moldura e barra de rolagem, que ficariam sobrepostas a esta.
-        Rectangle {
-            height: 220px;
-            background: Theme.surface-inset;
-            border-radius: Theme.radius-md;
-            border-width: 1px;
-            border-color: body.has-focus ? Theme.accent : Theme.border;
-            animate border-color { duration: Theme.motion-fast; }
-            clip: true;
 
-            ScrollView {
-                x: Theme.space-md;
-                y: Theme.space-sm;
-                width: parent.width - 2 * Theme.space-md;
-                height: parent.height - 2 * Theme.space-sm;
+        TouchArea { }
 
-                body := TextInput {
-                    width: parent.width;
-                    single-line: false;
-                    wrap: word-wrap;
-                    font-family: Type.family;
-                    font-size: Type.body;
-                    color: Theme.text-primary;
-                    selection-background-color: Theme.accent;
-                    selection-foreground-color: Theme.text-on-accent;
-                    text <=> root.edited.content;
+        VerticalLayout {
+            Rectangle {
+                height: 56px;
+                vertical-stretch: 0;
+                background: Theme.surface-raised;
+
+                HorizontalLayout {
+                    padding-left: Theme.space-lg;
+                    padding-right: Theme.space-sm;
+                    spacing: Theme.space-md;
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        clip: true;
+
+                        if root.edited.title == "": Text {
+                            x: 0;
+                            text: "Título da nota…";
+                            vertical-alignment: center;
+                            font-size: Type.title;
+                            color: Theme.text-muted;
+                        }
+
+                        TextInput {
+                            x: 0;
+                            width: parent.width;
+                            single-line: true;
+                            vertical-alignment: center;
+                            font-size: Type.title;
+                            font-weight: Type.weight-semibold;
+                            color: Theme.text-primary;
+                            selection-background-color: Theme.accent;
+                            text <=> root.edited.title;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: Theme.space-xs;
+                        for index in 9: ColorSwatch {
+                            index: index;
+                            selected: index == root.edited.color;
+                            picked(value) => { root.edited.color = value; }
+                        }
+                    }
+
+                    UiButton {
+                        compact: true;
+                        label: "Salvar";
+                        tone: ButtonTone.primary;
+                        enabled: root.edited.title != "";
+                        clicked => { root.saved(root.edited); }
+                    }
+
+                    Rectangle {
+                        width: 28px;
+                        height: 28px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: Theme.radius-sm;
+                        background: close-touch.has-hover ? Theme.danger : transparent;
+                        animate background { duration: Theme.motion-fast; }
+
+                        UiIcon {
+                            width: 14px;
+                            height: 14px;
+                            source: Icons.close;
+                            tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+                        }
+
+                        close-touch := TouchArea {
+                            clicked => { root.cancelled(); }
+                        }
+                    }
                 }
             }
-        }
-    }
 
-    HorizontalLayout {
-        spacing: Theme.space-sm;
-        alignment: start;
-        for index in 9: ColorSwatch {
-            index: index;
-            selected: index == root.edited.color;
-            picked(value) => { root.edited.color = value; }
-        }
-    }
+            Rectangle { height: 1px; vertical-stretch: 0; background: Theme.border; }
 
-    UiToggle {
-        label: "Fixar no topo";
-        checked <=> root.edited.pinned;
-    }
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.canvas;
 
-    if root.error != "": Text {
-        text: root.error;
-        color: Theme.danger;
-        wrap: word-wrap;
-    }
+                ScrollView {
+                    x: Theme.space-lg;
+                    y: Theme.space-md;
+                    width: parent.width - 2 * Theme.space-lg;
+                    height: parent.height - 2 * Theme.space-md;
 
-    HorizontalLayout {
-        spacing: Theme.space-sm;
-        alignment: end;
-        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.cancelled(); } }
-        UiButton {
-            label: "Salvar";
-            tone: ButtonTone.primary;
-            enabled: root.edited.title != "";
-            clicked => { root.saved(root.edited); }
+                    TextInput {
+                        width: parent.width;
+                        single-line: false;
+                        wrap: word-wrap;
+                        font-size: Type.body;
+                        color: Theme.text-primary;
+                        selection-background-color: Theme.accent;
+                        selection-foreground-color: Theme.text-on-accent;
+                        text <=> root.edited.content;
+                    }
+                }
+            }
+
+            Rectangle { height: 1px; vertical-stretch: 0; background: Theme.border; }
+
+            Rectangle {
+                height: 34px;
+                vertical-stretch: 0;
+                background: Theme.surface-raised;
+
+                HorizontalLayout {
+                    padding-left: Theme.space-lg;
+                    padding-right: Theme.space-lg;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.error != "" ? root.error : "Fixe a nota pela lista para mantê-la no topo.";
+                        vertical-alignment: center;
+                        font-size: Type.caption;
+                        color: root.error != "" ? Theme.danger : Theme.text-muted;
+                    }
+
+                    Text {
+                        text: "Esc cancelar";
+                        vertical-alignment: center;
+                        font-size: Type.caption;
+                        color: Theme.text-muted;
+                    }
+                }
+            }
         }
     }
 }

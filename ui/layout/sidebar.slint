@@ -1,14 +1,18 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { UiIcon, Icons } from "../components/icon.slint";
-export enum Section { workspace, home, keychain, known-hosts, notes, settings, about }
+import { UiButton, ButtonTone } from "../components/button.slint";
+
+export enum Section { workspace, home, keychain, known-hosts, notes, settings, logs, about }
+
 component SidebarItem inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> active: false;
     in property <bool> collapsed: false;
     callback clicked();
-    height: 34px;
+
+    height: 36px;
     border-radius: Theme.radius-md;
     background: root.active ? Theme.sidebar-active
         : touch.has-hover ? Theme.surface
@@ -17,67 +21,181 @@ component SidebarItem inherits Rectangle {
         duration: Theme.motion-fast;
         easing: Theme.ease-smooth;
     }
-    // Traço de seleção que cresce a partir do topo, em vez de piscar.
-    Rectangle {
-        x: 0;
-        y: (parent.height - self.height) / 2;
-        width: 3px;
-        height: root.active ? 18px : 0px;
-        border-radius: 2px;
-        background: Theme.accent;
-        animate height {
-            duration: Theme.motion-base;
-            easing: Theme.ease-out-soft;
-        }
-    }
+
     HorizontalLayout {
         padding-left: Theme.space-md;
         padding-right: Theme.space-sm;
         spacing: Theme.space-md;
+
         UiIcon {
             y: (parent.height - self.height) / 2;
             source: root.icon;
-            tint: root.active ? Theme.accent : Theme.sidebar-text;
+            tint: root.active ? Theme.text-primary : Theme.sidebar-text;
         }
+
         Text {
             horizontal-stretch: 1;
             text: root.label;
             vertical-alignment: center;
             font-size: Type.body;
-            font-weight: root.active ? Type.weight-medium : Type.weight-regular;
             color: root.active ? Theme.text-primary : Theme.sidebar-text;
             opacity: root.collapsed ? 0 : 1;
             animate opacity { duration: Theme.motion-fast; }
         }
     }
+
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.clicked(); }
     }
 }
+
+component GroupLabel inherits Text {
+    in property <bool> collapsed: false;
+
+    height: 26px;
+    vertical-alignment: bottom;
+    font-size: Type.caption;
+    font-weight: Type.weight-medium;
+    letter-spacing: 0.6px;
+    color: Theme.text-muted;
+    opacity: root.collapsed ? 0 : 1;
+    animate opacity { duration: Theme.motion-fast; }
+}
+
+/// Barra lateral no formato anterior ao porte: marca do aplicativo no topo, a
+/// ação principal em destaque logo abaixo, e os destinos agrupados por rótulo.
 export component Sidebar inherits Rectangle {
     in property <Section> active;
     in property <bool> collapsed: false;
+    in property <string> version;
     callback selected(Section);
+    callback create-requested();
+
     // Recolhida vira uma faixa de ícones; o conteúdo ao lado ganha o espaço.
-    width: root.collapsed ? 56px : Theme.sidebar-width;
-    // Sem fundo proprio: divide o da janela com a barra de titulo.
+    width: root.collapsed ? 64px : Theme.sidebar-width;
+    // Sem fundo próprio: divide o da janela com a barra de título.
     background: transparent;
     clip: true;
     animate width {
         duration: Theme.motion-base;
         easing: Theme.ease-smooth;
     }
+
     VerticalLayout {
-        padding: Theme.space-sm;
-        padding-top: Theme.titlebar-height;
+        padding: Theme.space-md;
         spacing: 2px;
         alignment: start;
-        SidebarItem { icon: Icons.connections; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
-        SidebarItem { icon: Icons.keychain; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
-        SidebarItem { icon: Icons.shield; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
-        SidebarItem { icon: Icons.notes; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
-        SidebarItem { icon: Icons.settings; label: "Configurações"; collapsed: root.collapsed; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
-        SidebarItem { icon: Icons.about; label: "Sobre"; collapsed: root.collapsed; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
+
+        HorizontalLayout {
+            height: 48px;
+            spacing: Theme.space-md;
+
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                y: (parent.height - self.height) / 2;
+                horizontal-stretch: 0;
+                border-radius: Theme.radius-md;
+                background: Theme.accent.with-alpha(0.16);
+                border-width: 1px;
+                border-color: Theme.accent.with-alpha(0.4);
+
+                Text {
+                    text: "OP";
+                    font-size: Type.caption;
+                    font-weight: Type.weight-bold;
+                    color: Theme.accent-bright;
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                opacity: root.collapsed ? 0 : 1;
+                animate opacity { duration: Theme.motion-fast; }
+
+                Text {
+                    text: "OpenPtl";
+                    font-size: Type.body;
+                    font-weight: Type.weight-bold;
+                    color: Theme.text-primary;
+                }
+                Text {
+                    text: "v" + root.version;
+                    font-size: Type.caption;
+                    color: Theme.text-muted;
+                }
+            }
+        }
+
+        Rectangle { height: Theme.space-sm; }
+
+        UiButton {
+            label: "Nova conexão";
+            tone: ButtonTone.primary;
+            wide: true;
+            icon: Icons.plus;
+            clicked => { root.create-requested(); }
+        }
+
+        Rectangle { height: Theme.space-md; }
+
+        GroupLabel { text: "PRINCIPAL"; collapsed: root.collapsed; }
+
+        SidebarItem {
+            icon: Icons.home;
+            label: "Home";
+            collapsed: root.collapsed;
+            active: root.active == Section.home;
+            clicked => { root.selected(Section.home); }
+        }
+        SidebarItem {
+            icon: Icons.key;
+            label: "Keychain";
+            collapsed: root.collapsed;
+            active: root.active == Section.keychain;
+            clicked => { root.selected(Section.keychain); }
+        }
+        SidebarItem {
+            icon: Icons.shield;
+            label: "Known Hosts";
+            collapsed: root.collapsed;
+            active: root.active == Section.known-hosts;
+            clicked => { root.selected(Section.known-hosts); }
+        }
+        SidebarItem {
+            icon: Icons.notes;
+            label: "Notas";
+            collapsed: root.collapsed;
+            active: root.active == Section.notes;
+            clicked => { root.selected(Section.notes); }
+        }
+
+        Rectangle { height: Theme.space-md; }
+
+        GroupLabel { text: "SISTEMA"; collapsed: root.collapsed; }
+
+        SidebarItem {
+            icon: Icons.settings;
+            label: "Configurações";
+            collapsed: root.collapsed;
+            active: root.active == Section.settings;
+            clicked => { root.selected(Section.settings); }
+        }
+        SidebarItem {
+            icon: Icons.logs;
+            label: "Logs";
+            collapsed: root.collapsed;
+            active: root.active == Section.logs;
+            clicked => { root.selected(Section.logs); }
+        }
+        SidebarItem {
+            icon: Icons.about;
+            label: "Sobre";
+            collapsed: root.collapsed;
+            active: root.active == Section.about;
+            clicked => { root.selected(Section.about); }
+        }
     }
 }

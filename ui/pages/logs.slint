@@ -1,0 +1,103 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+export struct LogRow {
+    time: string,
+    level: string,
+    message: string,
+}
+
+/// Registro do que o aplicativo fez nesta execução. Serve para entender uma
+/// falha de conexão sem precisar reproduzir o problema com o log ligado.
+export component LogsPage inherits VerticalLayout {
+    in property <[LogRow]> rows;
+    callback cleared();
+
+    padding: Theme.space-lg;
+    spacing: Theme.space-md;
+
+    HorizontalLayout {
+        PageHeader {
+            horizontal-stretch: 1;
+            title: "Logs";
+            subtitle: "Eventos desta execução, do mais recente para o mais antigo.";
+        }
+        UiButton {
+            label: "Limpar";
+            tone: ButtonTone.ghost;
+            icon: Icons.trash;
+            clicked => { root.cleared(); }
+        }
+    }
+
+    if root.rows.length == 0: Rectangle {
+        vertical-stretch: 1;
+        Text {
+            text: "Nada registrado ainda.";
+            font-size: Type.body;
+            color: Theme.text-muted;
+        }
+    }
+
+    if root.rows.length > 0: Rectangle {
+        vertical-stretch: 1;
+        background: Theme.surface;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border;
+        clip: true;
+
+        ScrollView {
+            VerticalLayout {
+                alignment: start;
+
+                for row in root.rows: Rectangle {
+                    height: 30px;
+                    background: line-touch.has-hover ? Theme.surface-inset : transparent;
+                    animate background { duration: Theme.motion-fast; }
+
+                    HorizontalLayout {
+                        padding-left: Theme.space-md;
+                        padding-right: Theme.space-md;
+                        spacing: Theme.space-md;
+
+                        Text {
+                            width: 72px;
+                            text: row.time;
+                            vertical-alignment: center;
+                            font-family: Type.mono-family;
+                            font-size: Type.caption;
+                            color: Theme.text-muted;
+                        }
+
+                        Text {
+                            width: 62px;
+                            text: row.level;
+                            vertical-alignment: center;
+                            font-size: Type.caption;
+                            font-weight: Type.weight-medium;
+                            color: row.level == "erro" ? Theme.danger
+                                : row.level == "aviso" ? Theme.warning
+                                : Theme.positive;
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: row.message;
+                            vertical-alignment: center;
+                            font-size: Type.caption;
+                            color: Theme.text-secondary;
+                            overflow: elide;
+                        }
+                    }
+
+                    line-touch := TouchArea { }
+                }
+            }
+        }
+    }
+}

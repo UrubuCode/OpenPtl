@@ -13,6 +13,7 @@ use crate::backend::Backend;
 use crate::libs::models::AppSettings;
 
 pub fn bind(window: &AppWindow, backend: Arc<Backend>) {
+    bind_master_password(window, Arc::clone(&backend));
     let handle = window.as_weak();
     let saving = Arc::clone(&backend);
     window.on_settings_saved(move |draft| {
@@ -84,4 +85,20 @@ fn merge(mut settings: AppSettings, draft: &SettingsDraft) -> AppSettings {
 /// Texto inválido mantém o valor atual em vez de zerar a preferência.
 fn parse_or_keep(value: &slint::SharedString, current: u32) -> u32 {
     value.trim().parse().unwrap_or(current)
+}
+
+/// Troca de senha mestre. O resultado aparece na própria seção de segurança,
+/// não numa mensagem global: é ali que o usuário está olhando.
+fn bind_master_password(window: &AppWindow, backend: Arc<Backend>) {
+    let handle = window.as_weak();
+    window.on_master_password_changed(move |current, next, confirmation| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+
+        match backend.change_master_password(&current, &next, &confirmation) {
+            Ok(()) => window.set_password_message("Senha mestre atualizada.".into()),
+            Err(error) => window.set_password_message(format!("{error}").into()),
+        }
+    });
 }

@@ -18,6 +18,7 @@ import { KeychainForm } from "pages/keychain-form.slint";
 import { KnownHostRow } from "models/session.slint";
 import { SettingsDraft } from "models/settings.slint";
 import { NoteRow, NoteDraft } from "models/note.slint";
+import { LogRow } from "pages/logs.slint";
 import { NoteForm } from "pages/note-form.slint";
 import { FileRow } from "models/file.slint";
 import { TransferRow } from "models/transfer.slint";
@@ -30,6 +31,7 @@ export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteD
 export { TransferRow }
 export { ServerRow } from "layout/account-menu.slint";
 export { SelectOption } from "components/select.slint";
+export { LogRow } from "pages/logs.slint";
 export { BlockRow, BlockKind, WorkspaceTab } from "models/workspace.slint";
 
 export component AppWindow inherits Window {
@@ -56,6 +58,11 @@ export component AppWindow inherits Window {
     in property <bool> vault-busy: false;
     in property <string> vault-error;
     in property <[ConnectionRow]> connections;
+    in property <int> connection-total;
+    in property <int> connection-ssh;
+    in property <int> connection-sftp;
+    in-out property <string> connection-query;
+    in-out property <int> connection-filter;
     in property <bool> form-open: false;
     in property <ConnectionDraft> form-draft;
     in property <string> form-error;
@@ -73,12 +80,14 @@ export component AppWindow inherits Window {
     in property <string> known-hosts-path;
     in property <SettingsDraft> settings;
     in property <string> settings-message;
+    in property <string> password-message;
     in property <bool> update-canary;
     in property <string> update-status;
     in property <bool> update-ready;
     in property <string> version;
     in property <string> storage-path;
     in property <[NoteRow]> notes;
+    in property <[LogRow]> logs;
     in property <bool> note-form-open: false;
     in property <NoteDraft> note-draft;
     in property <string> note-error;
@@ -122,6 +131,8 @@ export component AppWindow inherits Window {
     callback block-add-files();
     callback vault-submitted(string, string);
     callback connection-create-requested();
+    callback connection-query-changed(string);
+    callback connection-filter-changed(int);
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
@@ -140,6 +151,7 @@ export component AppWindow inherits Window {
     callback known-host-remove-requested(string);
     callback settings-saved(SettingsDraft);
     callback vault-lock-requested();
+    callback master-password-changed(string, string, string);
     callback update-check-requested();
     callback update-download-requested();
     callback update-install-requested();
@@ -150,6 +162,7 @@ export component AppWindow inherits Window {
     callback note-delete-requested(string);
     callback note-saved(NoteDraft);
     callback note-form-dismissed();
+    callback logs-cleared();
     callback file-path-requested(string);
     callback file-parent-requested();
     callback file-reload-requested();
@@ -184,7 +197,9 @@ export component AppWindow inherits Window {
         if root.vault.initialized && !root.vault.locked: Sidebar {
             active: root.section;
             collapsed: root.sidebar-collapsed;
+            version: root.version;
             selected(next) => { root.section = next; }
+            create-requested => { root.connection-create-requested(); }
         }
 
         VerticalLayout {
@@ -248,6 +263,13 @@ export component AppWindow inherits Window {
                 block-add-files => { root.block-add-files(); }
                 section <=> root.section;
                 connections: root.connections;
+                connection-total: root.connection-total;
+                connection-ssh: root.connection-ssh;
+                connection-sftp: root.connection-sftp;
+                connection-query <=> root.connection-query;
+                connection-filter <=> root.connection-filter;
+                connection-query-changed(text) => { root.connection-query-changed(text); }
+                connection-filter-changed(value) => { root.connection-filter-changed(value); }
                 sessions: root.sessions;
                 terminal-lines: root.terminal-lines;
                 active-session: root.active-session;
@@ -256,12 +278,14 @@ export component AppWindow inherits Window {
                 known-hosts-path: root.known-hosts-path;
                 settings: root.settings;
                 settings-message: root.settings-message;
+                password-message: root.password-message;
                 update-canary: root.update-canary;
                 update-status: root.update-status;
                 update-ready: root.update-ready;
                 version: root.version;
                 storage-path: root.storage-path;
                 notes: root.notes;
+                logs: root.logs;
                 files: root.files;
                 files-path: root.files-path;
                 files-message: root.files-message;
@@ -288,6 +312,7 @@ export component AppWindow inherits Window {
                 known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
                 settings-saved(draft) => { root.settings-saved(draft); }
                 vault-lock-requested => { root.vault-lock-requested(); }
+                master-password-changed(old, fresh, confirm) => { root.master-password-changed(old, fresh, confirm); }
                 update-check-requested => { root.update-check-requested(); }
                 update-download-requested => { root.update-download-requested(); }
                 update-install-requested => { root.update-install-requested(); }
@@ -296,6 +321,7 @@ export component AppWindow inherits Window {
                 note-edit-requested(id) => { root.note-edit-requested(id); }
                 note-pin-toggled(id) => { root.note-pin-toggled(id); }
                 note-delete-requested(id) => { root.note-delete-requested(id); }
+                logs-cleared => { root.logs-cleared(); }
                 file-path-requested(path) => { root.file-path-requested(path); }
                 file-parent-requested => { root.file-parent-requested(); }
                 file-reload-requested => { root.file-reload-requested(); }

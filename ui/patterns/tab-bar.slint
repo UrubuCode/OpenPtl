@@ -1,9 +1,11 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { UiIcon } from "../components/icon.slint";
 
 /// Barra de abas de conteúdo, para dividir uma página longa em seções.
 export component TabBar inherits HorizontalLayout {
     in property <[string]> tabs;
+    in property <[image]> icons;
     in-out property <int> current: 0;
 
     spacing: Theme.space-xs;
@@ -11,7 +13,7 @@ export component TabBar inherits HorizontalLayout {
     vertical-stretch: 0;
 
     for label[index] in root.tabs: Rectangle {
-        width: caption.min-width + 2 * Theme.space-lg;
+        width: caption.min-width + (root.icons.length > index ? 60px : 2 * Theme.space-lg);
         height: 32px;
         border-radius: Theme.radius-md;
         background: index == root.current ? Theme.surface-inset
@@ -36,6 +38,19 @@ export component TabBar inherits HorizontalLayout {
             }
         }
 
+        HorizontalLayout {
+            padding-left: Theme.space-md;
+            padding-right: Theme.space-md;
+            spacing: Theme.space-sm;
+
+            if root.icons.length > index: UiIcon {
+                width: 14px;
+                height: 14px;
+                y: (parent.height - self.height) / 2;
+                source: root.icons[index];
+                tint: index == root.current ? Theme.accent : Theme.text-muted;
+            }
+
         caption := Text {
             text: label;
             vertical-alignment: center;
@@ -43,6 +58,7 @@ export component TabBar inherits HorizontalLayout {
             font-size: Type.label;
             font-weight: index == root.current ? Type.weight-medium : Type.weight-regular;
             color: index == root.current ? Theme.text-primary : Theme.text-muted;
+        }
         }
 
         touch := TouchArea {
