@@ -10,31 +10,64 @@ export component UiButton inherits Rectangle {
     callback clicked();
 
     height: Theme.control-height;
-    min-width: 96px;
+    min-width: 92px;
     border-radius: Theme.radius-md;
     border-width: root.tone == ButtonTone.ghost ? 0px : 1px;
-    opacity: root.enabled ? 1.0 : 0.52;
+    opacity: root.enabled ? 1.0 : 0.45;
 
     border-color: root.tone == ButtonTone.primary ? Theme.accent-bright
         : root.tone == ButtonTone.danger ? Theme.danger
-        : Theme.border-strong;
+        : Theme.border;
 
-    background: !root.enabled ? Theme.surface-inset
-        : touch.pressed ? Theme.accent-pressed
-        : root.tone == ButtonTone.primary ? Theme.accent
-        : root.tone == ButtonTone.danger ? Theme.danger-surface
-        : root.tone == ButtonTone.ghost ? transparent
-        : Theme.surface-raised;
+    background: !root.enabled ? Theme.surface
+        : touch.pressed ? pressed-tone()
+        : touch.has-hover ? hover-tone()
+        : rest-tone();
 
-    animate background { duration: Theme.motion-fast; }
+    // O botão afunda um pouco ao ser pressionado: o toque ganha resposta
+    // física sem precisar de sombra.
+    property <float> depth: touch.pressed && root.enabled ? 0.97 : 1.0;
 
-    Text {
-        text: root.label;
-        font-size: Type.label;
-        font-weight: Type.weight-medium;
-        color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
-            ? Theme.text-on-accent
-            : Theme.text-secondary;
+    animate background, border-color, opacity {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
+
+    pure function rest-tone() -> color {
+        return root.tone == ButtonTone.primary ? Theme.accent
+            : root.tone == ButtonTone.danger ? Theme.danger-surface
+            : root.tone == ButtonTone.ghost ? transparent
+            : Theme.surface-inset;
+    }
+
+    pure function hover-tone() -> color {
+        return root.tone == ButtonTone.primary ? Theme.accent-bright
+            : root.tone == ButtonTone.danger ? Theme.danger
+            : Theme.surface-hover;
+    }
+
+    pure function pressed-tone() -> color {
+        return root.tone == ButtonTone.primary ? Theme.accent-pressed
+            : root.tone == ButtonTone.danger ? Theme.danger
+            : Theme.surface;
+    }
+
+    content := Rectangle {
+        width: parent.width * root.depth;
+        height: parent.height * root.depth;
+        animate width, height {
+            duration: Theme.motion-fast;
+            easing: Theme.ease-smooth;
+        }
+
+        Text {
+            text: root.label;
+            font-size: Type.label;
+            font-weight: Type.weight-medium;
+            color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
+                ? Theme.text-on-accent
+                : Theme.text-secondary;
+        }
     }
 
     touch := TouchArea {

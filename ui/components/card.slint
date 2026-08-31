@@ -3,11 +3,27 @@ import { Theme } from "../theme/tokens.slint";
 export component UiCard inherits Rectangle {
     in property <bool> selected: false;
     in property <bool> raised: false;
+    in property <bool> interactive: false;
 
-    background: root.raised ? Theme.surface-raised : Theme.surface;
+    background: root.raised ? Theme.surface-raised
+        : root.interactive && hover.has-hover ? Theme.surface-raised
+        : Theme.surface;
     border-radius: Theme.radius-lg;
     border-width: 1px;
-    border-color: root.selected ? Theme.accent : Theme.border;
+    border-color: root.selected ? Theme.accent
+        : root.interactive && hover.has-hover ? Theme.border-strong
+        : Theme.border;
 
-    animate border-color { duration: Theme.motion-fast; }
+    animate background, border-color {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
+
+    // Só escuta o ponteiro quando o cartão se declara interativo, para não
+    // roubar o hover dos botões que vivem dentro dele.
+    hover := TouchArea {
+        enabled: root.interactive;
+    }
+
+    @children
 }

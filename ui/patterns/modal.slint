@@ -8,8 +8,16 @@ export component Modal inherits Rectangle {
     in property <length> panel-width: 460px;
     callback dismissed();
 
-    visible: root.open;
-    background: Theme.overlay.with-alpha(0.72);
+    // Fica na árvore mesmo fechado para a transição ter de onde partir; o
+    // `visible` só desliga depois que a saída termina.
+    visible: root.open || root.veil > 0.01;
+    background: Theme.overlay.with-alpha(0.72 * root.veil);
+
+    property <float> veil: root.open ? 1.0 : 0.0;
+    animate veil {
+        duration: Theme.motion-base;
+        easing: Theme.ease-smooth;
+    }
 
     TouchArea {
         clicked => { root.dismissed(); }
@@ -20,6 +28,15 @@ export component Modal inherits Rectangle {
         width: root.panel-width;
         height: content.preferred-height + 2 * Theme.space-lg;
 
+        // Entra subindo e crescendo de leve, a mesma ideia do fade-in-up.
+        y: (parent.height - self.height) / 2 + (1 - root.veil) * Theme.rise * 2;
+        opacity: root.veil;
+        animate y, opacity {
+            duration: Theme.motion-base;
+            easing: Theme.ease-out-soft;
+        }
+
+        // Impede que o clique dentro do painel chegue ao véu e feche o modal.
         TouchArea { }
 
         content := VerticalLayout {
@@ -29,7 +46,7 @@ export component Modal inherits Rectangle {
             Text {
                 text: root.title;
                 font-size: Type.title;
-                font-weight: Type.weight-bold;
+                font-weight: Type.weight-semibold;
                 color: Theme.text-primary;
             }
 

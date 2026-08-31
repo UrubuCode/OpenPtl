@@ -5,25 +5,58 @@ export enum Section { home, terminal, files, editor, keychain, known-hosts, note
 
 component SidebarItem inherits Rectangle {
     in property <string> label;
+    in property <string> glyph;
     in property <bool> active: false;
+    in property <bool> collapsed: false;
     callback clicked();
 
-    height: 36px;
-    border-radius: Theme.radius-sm;
+    height: 34px;
+    border-radius: Theme.radius-md;
     background: root.active ? Theme.sidebar-active
         : touch.has-hover ? Theme.surface
         : transparent;
-    animate background { duration: Theme.motion-fast; }
+    animate background {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
+
+    // Traço de seleção que cresce a partir do topo, em vez de piscar.
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: root.active ? 18px : 0px;
+        border-radius: 2px;
+        background: Theme.accent;
+        animate height {
+            duration: Theme.motion-base;
+            easing: Theme.ease-out-soft;
+        }
+    }
 
     HorizontalLayout {
         padding-left: Theme.space-md;
-        padding-right: Theme.space-md;
+        padding-right: Theme.space-sm;
+        spacing: Theme.space-md;
+
         Text {
+            width: 16px;
+            text: root.glyph;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: Type.body;
+            color: root.active ? Theme.accent : Theme.sidebar-text;
+        }
+
+        Text {
+            horizontal-stretch: 1;
             text: root.label;
             vertical-alignment: center;
             font-size: Type.body;
             font-weight: root.active ? Type.weight-medium : Type.weight-regular;
             color: root.active ? Theme.text-primary : Theme.sidebar-text;
+            opacity: root.collapsed ? 0 : 1;
+            animate opacity { duration: Theme.motion-fast; }
         }
     }
 
@@ -35,10 +68,17 @@ component SidebarItem inherits Rectangle {
 
 export component Sidebar inherits Rectangle {
     in property <Section> active;
+    in property <bool> collapsed: false;
     callback selected(Section);
 
-    width: Theme.sidebar-width;
+    // Recolhida vira uma faixa de ícones; o conteúdo ao lado ganha o espaço.
+    width: root.collapsed ? 56px : Theme.sidebar-width;
     background: Theme.sidebar;
+    clip: true;
+    animate width {
+        duration: Theme.motion-base;
+        easing: Theme.ease-smooth;
+    }
 
     Rectangle {
         width: 1px;
@@ -47,19 +87,19 @@ export component Sidebar inherits Rectangle {
     }
 
     VerticalLayout {
-        padding: Theme.space-md;
-        spacing: Theme.space-xs;
+        padding: Theme.space-sm;
+        spacing: 2px;
         alignment: start;
 
-        SidebarItem { label: "Conexões"; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
-        SidebarItem { label: "Terminal"; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
-        SidebarItem { label: "Arquivos"; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
-        SidebarItem { label: "Editor"; active: root.active == Section.editor; clicked => { root.selected(Section.editor); } }
-        SidebarItem { label: "Chaveiro"; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
-        SidebarItem { label: "Hosts conhecidos"; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
-        SidebarItem { label: "Notas"; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
-        SidebarItem { label: "Sincronização"; active: root.active == Section.sync; clicked => { root.selected(Section.sync); } }
-        SidebarItem { label: "Configurações"; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
-        SidebarItem { label: "Sobre"; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
+        SidebarItem { glyph: "◆"; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
+        SidebarItem { glyph: "▮"; label: "Terminal"; collapsed: root.collapsed; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
+        SidebarItem { glyph: "▤"; label: "Arquivos"; collapsed: root.collapsed; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
+        SidebarItem { glyph: "✎"; label: "Editor"; collapsed: root.collapsed; active: root.active == Section.editor; clicked => { root.selected(Section.editor); } }
+        SidebarItem { glyph: "⚿"; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
+        SidebarItem { glyph: "⛨"; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
+        SidebarItem { glyph: "✐"; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
+        SidebarItem { glyph: "⟳"; label: "Sincronização"; collapsed: root.collapsed; active: root.active == Section.sync; clicked => { root.selected(Section.sync); } }
+        SidebarItem { glyph: "⚙"; label: "Configurações"; collapsed: root.collapsed; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
+        SidebarItem { glyph: "◇"; label: "Sobre"; collapsed: root.collapsed; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
     }
 }

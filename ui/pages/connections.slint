@@ -5,7 +5,7 @@ import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiCard } from "../components/card.slint";
 import { UiBadge, BadgeTone } from "../components/badge.slint";
 import { PageHeader } from "../patterns/page-header.slint";
-import { ListPanel } from "../patterns/list-panel.slint";
+import { ListPanel, ListFooter } from "../patterns/list-panel.slint";
 
 component ConnectionCard inherits UiCard {
     in property <ConnectionRow> data;
@@ -53,12 +53,17 @@ component ConnectionCard inherits UiCard {
     }
 }
 
+// Quantos cartoes entram a cada avanco da lista.
+global Paging { out property <int> page-size: 12; }
+
 export component ConnectionsPage inherits VerticalLayout {
     in property <[ConnectionRow]> rows;
     callback create-requested();
     callback connect-requested(string);
     callback edit-requested(string);
     callback delete-requested(string);
+
+    property <int> shown: Paging.page-size;
 
     padding: Theme.space-lg;
     spacing: Theme.space-lg;
@@ -77,14 +82,28 @@ export component ConnectionsPage inherits VerticalLayout {
     }
 
     ListPanel {
+        vertical-stretch: 1;
         empty: root.rows.length == 0;
         empty-message: "Nenhuma conexão cadastrada. Crie a primeira.";
 
-        for row in root.rows: ConnectionCard {
-            data: row;
-            connect-requested(id) => { root.connect-requested(id); }
-            edit-requested(id) => { root.edit-requested(id); }
-            delete-requested(id) => { root.delete-requested(id); }
+        // Carregamento progressivo: uma lista longa não monta centenas de
+        // cartões de uma vez só para o usuário ver os primeiros. O `if` precisa
+        // de um contêiner porque o Slint não o aceita colado ao `for`.
+        for row[index] in root.rows: Rectangle {
+            height: index < root.shown ? 84px : 0px;
+
+            if index < root.shown: ConnectionCard {
+                data: row;
+                connect-requested(id) => { root.connect-requested(id); }
+                edit-requested(id) => { root.edit-requested(id); }
+                delete-requested(id) => { root.delete-requested(id); }
+            }
         }
+    }
+
+    if root.rows.length > 0: ListFooter {
+        visible-count: min(root.shown, root.rows.length);
+        total: root.rows.length;
+        load-more => { root.shown += Paging.page-size; }
     }
 }

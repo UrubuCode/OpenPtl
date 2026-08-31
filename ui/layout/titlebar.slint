@@ -1,21 +1,42 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 
+// Os controles eram glifos de texto (—, ▢, ✕) e nem toda fonte instalada os
+// desenha: em modo janela ficavam invisíveis. Agora são traçados próprios, que
+// não dependem de fonte nenhuma.
+component ControlIcon inherits Path {
+    in property <brush> tint;
+
+    width: 10px;
+    height: 10px;
+    stroke: root.tint;
+    stroke-width: 1px;
+    stroke-line-cap: round;
+    viewbox-width: 10;
+    viewbox-height: 10;
+}
+
 component WindowControl inherits Rectangle {
-    in property <string> glyph;
+    in property <string> shape;
     in property <bool> destructive: false;
     callback clicked();
 
-    width: 44px;
+    width: 46px;
     background: touch.has-hover
         ? (root.destructive ? Theme.danger : Theme.surface-hover)
         : transparent;
-    animate background { duration: Theme.motion-fast; }
+    animate background {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
+    }
 
-    Text {
-        text: root.glyph;
-        font-size: Type.caption;
-        color: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-secondary;
+    ControlIcon {
+        commands: root.shape;
+        tint: touch.has-hover && root.destructive
+            ? Theme.text-on-accent
+            : Theme.text-secondary;
+        opacity: touch.pressed ? 0.6 : 1.0;
+        animate opacity { duration: Theme.motion-fast; }
     }
 
     touch := TouchArea {
@@ -33,6 +54,7 @@ export component TitleBar inherits Rectangle {
     callback minimize-requested();
     callback maximize-toggled();
     callback close-requested();
+    callback sidebar-toggled();
 
     height: Theme.titlebar-height;
     background: Theme.overlay;
@@ -44,17 +66,28 @@ export component TitleBar inherits Rectangle {
     }
 
     HorizontalLayout {
+        // Em modo janela os cantos são arredondados; sem esta folga o primeiro
+        // e o último controle caem sob o arredondamento e somem.
+        padding-left: root.maximized ? 0px : Theme.space-sm;
+        padding-right: root.maximized ? 0px : Theme.space-xs;
+        animate padding-left, padding-right { duration: Theme.motion-fast; }
+
+        WindowControl {
+            width: 40px;
+            shape: "M1 2 L9 2 M1 5 L9 5 M1 8 L9 8";
+            clicked => { root.sidebar-toggled(); }
+        }
+
         Rectangle {
             horizontal-stretch: 1;
 
             HorizontalLayout {
-                padding-left: Theme.space-md;
+                padding-left: Theme.space-sm;
                 alignment: start;
 
                 Text {
                     text: root.title;
                     vertical-alignment: center;
-                    font-family: Type.family;
                     font-size: Type.label;
                     font-weight: Type.weight-semibold;
                     color: Theme.text-secondary;
@@ -80,15 +113,17 @@ export component TitleBar inherits Rectangle {
         }
 
         WindowControl {
-            glyph: "—";
+            shape: "M1 5 L9 5";
             clicked => { root.minimize-requested(); }
         }
         WindowControl {
-            glyph: root.maximized ? "❐" : "▢";
+            shape: root.maximized
+                ? "M1 3 L7 3 L7 9 L1 9 Z M3 3 L3 1 L9 1 L9 7 L7 7"
+                : "M1 1 L9 1 L9 9 L1 9 Z";
             clicked => { root.maximize-toggled(); }
         }
         WindowControl {
-            glyph: "✕";
+            shape: "M1 1 L9 9 M9 1 L1 9";
             destructive: true;
             clicked => { root.close-requested(); }
         }

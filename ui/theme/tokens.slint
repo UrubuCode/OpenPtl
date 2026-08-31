@@ -46,6 +46,13 @@ export global Theme {
     out property <length> sidebar-width: 232px;
     out property <length> titlebar-height: 40px;
 
+    // Vocabulário de movimento herdado do design anterior: a curva é a mesma
+    // --transition-smooth, e a entrada sobe 8px enquanto aparece.
     out property <duration> motion-fast: 120ms;
     out property <duration> motion-base: 200ms;
+    out property <duration> motion-slow: 400ms;
+    out property <easing> ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    out property <easing> ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+    out property <length> rise: 8px;
+    out property <length> window-radius: 10px;
 }

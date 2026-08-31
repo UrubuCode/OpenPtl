@@ -2,6 +2,52 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 
+/// Rodapé de uma lista com carregamento progressivo. Mostra quanto já apareceu
+/// do total e oferece o avanço manual, para quem não quer depender da rolagem.
+export component ListFooter inherits HorizontalLayout {
+    in property <int> visible-count;
+    in property <int> total;
+    callback load-more();
+
+    property <bool> has-more: root.visible-count < root.total;
+
+    height: 34px;
+    alignment: center;
+    spacing: Theme.space-sm;
+
+    Text {
+        text: root.has-more
+            ? "Mostrando " + root.visible-count + " de " + root.total
+            : "— fim da lista · " + root.total + (root.total == 1 ? " item —" : " itens —");
+        vertical-alignment: center;
+        font-size: Type.caption;
+        color: Theme.text-muted;
+        opacity: root.has-more ? 1.0 : 0.6;
+    }
+
+    if root.has-more: Rectangle {
+        width: more.preferred-width + 2 * Theme.space-md;
+        height: 22px;
+        y: 6px;
+        border-radius: Theme.radius-sm;
+        background: touch.has-hover ? Theme.surface-hover : Theme.surface-inset;
+        border-width: 1px;
+        border-color: Theme.border;
+        animate background { duration: Theme.motion-fast; }
+
+        more := Text {
+            text: "Mostrar mais";
+            font-size: Type.caption;
+            color: Theme.text-secondary;
+        }
+
+        touch := TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.load-more(); }
+        }
+    }
+}
+
 export component ListPanel inherits Rectangle {
     in property <string> empty-message: "Nada por aqui ainda.";
     in property <bool> empty: false;
@@ -12,6 +58,8 @@ export component ListPanel inherits Rectangle {
         color: Theme.text-muted;
         horizontal-alignment: center;
         vertical-alignment: center;
+        opacity: root.empty ? 1.0 : 0.0;
+        animate opacity { duration: Theme.motion-base; }
     }
 
     ScrollView {

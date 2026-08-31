@@ -38,6 +38,7 @@ export component AppWindow inherits Window {
 
     in-out property <Section> section: Section.home;
     in property <bool> maximized: false;
+    in-out property <bool> sidebar-collapsed: false;
     in property <VaultState> vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
@@ -145,6 +146,7 @@ export component AppWindow inherits Window {
             minimize-requested => { root.window-minimize(); }
             maximize-toggled => { root.window-maximize-toggle(); }
             close-requested => { root.window-close(); }
+            sidebar-toggled => { root.sidebar-collapsed = !root.sidebar-collapsed; }
         }
 
         content := Rectangle {
@@ -159,6 +161,7 @@ export component AppWindow inherits Window {
             }
 
             if root.vault.initialized && !root.vault.locked: AppShell {
+                sidebar-collapsed: root.sidebar-collapsed;
                 section <=> root.section;
                 connections: root.connections;
                 sessions: root.sessions;
