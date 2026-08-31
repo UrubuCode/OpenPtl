@@ -1,5 +1,5 @@
 import { Theme } from "../theme/tokens.slint";
-import { UiIcon } from "../components/icon.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 import { Type } from "../theme/typography.slint";
 import { TermLine } from "../models/terminal.slint";
 import { SessionRow } from "../models/session.slint";
@@ -38,7 +38,7 @@ component SessionTab inherits Rectangle {
             UiIcon {
                 width: 10px;
                 height: 10px;
-                shape: "M3 3 L13 13 M13 3 L3 13";
+                source: Icons.close;
                 tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
             }
 

@@ -1,39 +1,50 @@
 import { Theme } from "../theme/tokens.slint";
 
-/// Traçados dos ícones da interface, num lugar só.
+/// Ícones da interface, do conjunto Lucide via Iconify, em `assets/icons`.
 ///
 /// Glifos de texto não servem: dependem de a fonte instalada ter aquele ponto
-/// de código, e quando não tem o sistema desenha um retângulo vazio. Todos os
-/// caminhos usam a mesma caixa de 16 por 16.
+/// de código, e quando não tem o sistema desenha um retângulo vazio. Os SVGs
+/// foram normalizados para 24 por 24 com traço branco, para que `colorize`
+/// possa tingi-los com a cor do tema.
 export global Icons {
-    out property <string> workspace: "M2 3 H7 V8 H2 Z M9 3 H14 V6 H9 Z M9 8 H14 V13 H9 Z M2 10 H7 V13 H2 Z";
-    out property <string> connections: "M4 8 H12 M8 4 L12 8 L8 12 M2 4 V12";
-    out property <string> terminal: "M2 3 H14 V13 H2 Z M4 6 L6 8 L4 10 M8 10 H11";
-    out property <string> files: "M2 4 H6 L7 6 H14 V12 H2 Z";
-    out property <string> editor: "M3 11 L11 3 L13 5 L5 13 H3 Z M3 11 L5 13";
-    out property <string> keychain: "M6 8 A3 3 0 1 1 6 8.01 M9 8 H14 M12 8 V11 M14 8 V10";
-    out property <string> shield: "M8 2 L13 4 V8 C13 11 8 14 8 14 C8 14 3 11 3 8 V4 Z";
-    out property <string> notes: "M4 2 H12 V14 H4 Z M6 5 H10 M6 8 H10 M6 11 H8";
-    out property <string> sync: "M13 8 A5 5 0 1 1 11 4 M11 1 V4 H14";
-    out property <string> settings: "M8 5 A3 3 0 1 1 8 5.01 M8 1 V3 M8 13 V15 M1 8 H3 M13 8 H15 M3.5 3.5 L5 5 M11 11 L12.5 12.5 M12.5 3.5 L11 5 M5 11 L3.5 12.5";
-    out property <string> about: "M8 2 A6 6 0 1 1 8 2.01 M8 7 V11 M8 5 V5.01";
-    out property <string> folder: "M4 5 L8 9 L4 13";
-    out property <string> file: "M6 9 A1 1 0 1 1 6 9.01";
-    out property <string> check: "M3 8 L6.5 11.5 L13 4.5";
+    out property <image> workspace: @image-url("../../assets/icons/workspace.svg");
+    out property <image> connections: @image-url("../../assets/icons/connections.svg");
+    out property <image> terminal: @image-url("../../assets/icons/terminal.svg");
+    out property <image> files: @image-url("../../assets/icons/files.svg");
+    out property <image> editor: @image-url("../../assets/icons/editor.svg");
+    out property <image> keychain: @image-url("../../assets/icons/keychain.svg");
+    out property <image> shield: @image-url("../../assets/icons/shield.svg");
+    out property <image> notes: @image-url("../../assets/icons/notes.svg");
+    out property <image> sync: @image-url("../../assets/icons/sync.svg");
+    out property <image> settings: @image-url("../../assets/icons/settings.svg");
+    out property <image> about: @image-url("../../assets/icons/about.svg");
+
+    out property <image> folder: @image-url("../../assets/icons/folder-arrow.svg");
+    out property <image> file: @image-url("../../assets/icons/file-dot.svg");
+    out property <image> check: @image-url("../../assets/icons/check.svg");
+    out property <image> close: @image-url("../../assets/icons/close.svg");
+    out property <image> minimize: @image-url("../../assets/icons/minimize.svg");
+    out property <image> maximize: @image-url("../../assets/icons/maximize.svg");
+    out property <image> restore: @image-url("../../assets/icons/restore.svg");
+    out property <image> menu: @image-url("../../assets/icons/menu.svg");
+    out property <image> plus: @image-url("../../assets/icons/plus.svg");
+    out property <image> download: @image-url("../../assets/icons/download.svg");
+    out property <image> upload: @image-url("../../assets/icons/upload.svg");
+    out property <image> trash: @image-url("../../assets/icons/trash.svg");
+    out property <image> pencil: @image-url("../../assets/icons/pencil.svg");
+    out property <image> save: @image-url("../../assets/icons/save.svg");
+    out property <image> reload: @image-url("../../assets/icons/reload.svg");
+    out property <image> parent: @image-url("../../assets/icons/parent.svg");
+    out property <image> grip: @image-url("../../assets/icons/grip.svg");
 }
 
-/// Ícone de traçado, dimensionado pela caixa de 16 por 16 dos caminhos acima.
-export component UiIcon inherits Path {
-    in property <string> shape;
+export component UiIcon inherits Image {
     in property <brush> tint: Theme.text-muted;
 
     width: 16px;
     height: 16px;
-    commands: root.shape;
-    stroke: root.tint;
-    stroke-width: 1.2px;
-    stroke-line-cap: round;
-    stroke-line-join: round;
-    viewbox-width: 16;
-    viewbox-height: 16;
+    image-fit: contain;
+    colorize: root.tint;
+
+    animate colorize { duration: Theme.motion-fast; }
 }

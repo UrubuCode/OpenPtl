@@ -1,0 +1,128 @@
+import { Theme } from "../theme/tokens.slint";
+
+/// Uma janela sem moldura perde as alças de redimensionamento do sistema. Estas
+/// faixas invisíveis nas bordas as devolvem: cada uma informa o deslocamento e
+/// qual canto está ancorado, e o Rust recalcula posição e tamanho.
+export component ResizeEdges inherits Rectangle {
+    in property <bool> enabled: true;
+
+    /// `dx`, `dy`, e as âncoras: mover a borda esquerda ou o topo também move a
+    /// janela, mover a direita ou a base só muda o tamanho.
+    callback resized(length, length, bool, bool);
+    callback resize-started();
+
+    property <length> thickness: 5px;
+    property <length> corner: 14px;
+
+    edge-left := TouchArea {
+        x: 0;
+        width: root.thickness;
+        y: root.corner;
+        height: parent.height - 2 * root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.ew-resize;
+        moved => { root.resized(self.mouse-x - self.pressed-x, 0, true, false); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    edge-right := TouchArea {
+        x: parent.width - root.thickness;
+        width: root.thickness;
+        y: root.corner;
+        height: parent.height - 2 * root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.ew-resize;
+        moved => { root.resized(self.mouse-x - self.pressed-x, 0, false, false); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    edge-top := TouchArea {
+        y: 0;
+        height: root.thickness;
+        x: root.corner;
+        width: parent.width - 2 * root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.ns-resize;
+        moved => { root.resized(0, self.mouse-y - self.pressed-y, false, true); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    edge-bottom := TouchArea {
+        y: parent.height - root.thickness;
+        height: root.thickness;
+        x: root.corner;
+        width: parent.width - 2 * root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.ns-resize;
+        moved => { root.resized(0, self.mouse-y - self.pressed-y, false, false); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    corner-top-left := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.corner;
+        height: root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.nwse-resize;
+        moved => {
+            root.resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y, true, true);
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    corner-top-right := TouchArea {
+        x: parent.width - root.corner;
+        y: 0;
+        width: root.corner;
+        height: root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.nesw-resize;
+        moved => {
+            root.resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y, false, true);
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    corner-bottom-left := TouchArea {
+        x: 0;
+        y: parent.height - root.corner;
+        width: root.corner;
+        height: root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.nesw-resize;
+        moved => {
+            root.resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y, true, false);
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+
+    corner-bottom-right := TouchArea {
+        x: parent.width - root.corner;
+        y: parent.height - root.corner;
+        width: root.corner;
+        height: root.corner;
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.nwse-resize;
+        moved => {
+            root.resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y, false, false);
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { root.resize-started(); }
+        }
+    }
+}

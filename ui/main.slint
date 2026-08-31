@@ -5,6 +5,7 @@ import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { Section } from "layout/sidebar.slint";
 import { TitleBar } from "layout/titlebar.slint";
+import { ResizeEdges } from "layout/resize-edges.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
@@ -93,6 +94,8 @@ export component AppWindow inherits Window {
     callback window-minimize();
     callback window-maximize-toggle();
     callback window-close();
+    callback window-resize-started();
+    callback window-resized(length, length, bool, bool);
     callback tab-selected(string);
     callback tab-closed(string);
     callback tab-created();
@@ -165,6 +168,7 @@ export component AppWindow inherits Window {
             sidebar-toggled => { root.sidebar-collapsed = !root.sidebar-collapsed; }
             tabs: root.tabs;
             active-tab: root.active-tab;
+            show-tabs: root.section == Section.workspace;
             tab-selected(id) => { root.tab-selected(id); }
             tab-closed(id) => { root.tab-closed(id); }
             tab-created => { root.tab-created(); }
@@ -291,5 +295,13 @@ export component AppWindow inherits Window {
         error: root.note-error;
         saved(draft) => { root.note-saved(draft); }
         cancelled => { root.note-form-dismissed(); }
+    }
+
+    // Por último na árvore: as alças ficam por cima de tudo, senão o conteúdo
+    // colado na borda roubaria o ponteiro delas.
+    ResizeEdges {
+        enabled: !root.window-maximized;
+        resize-started => { root.window-resize-started(); }
+        resized(dx, dy, left, top) => { root.window-resized(dx, dy, left, top); }
     }
 }

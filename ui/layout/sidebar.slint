@@ -6,7 +6,7 @@ export enum Section { workspace, home, terminal, files, editor, keychain, known-
 
 component SidebarItem inherits Rectangle {
     in property <string> label;
-    in property <string> icon;
+    in property <image> icon;
     in property <bool> active: false;
     in property <bool> collapsed: false;
     callback clicked();
@@ -42,7 +42,7 @@ component SidebarItem inherits Rectangle {
 
         UiIcon {
             y: (parent.height - self.height) / 2;
-            shape: root.icon;
+            source: root.icon;
             tint: root.active ? Theme.accent : Theme.sidebar-text;
         }
 

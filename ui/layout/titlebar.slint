@@ -2,24 +2,10 @@ import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { WorkspaceTab } from "../models/workspace.slint";
 import { WorkspaceTabs } from "workspace-tabs.slint";
-
-// Os controles eram glifos de texto (—, ▢, ✕) e nem toda fonte instalada os
-// desenha: em modo janela ficavam invisíveis. Agora são traçados próprios, que
-// não dependem de fonte nenhuma.
-component ControlIcon inherits Path {
-    in property <brush> tint;
-
-    width: 10px;
-    height: 10px;
-    stroke: root.tint;
-    stroke-width: 1px;
-    stroke-line-cap: round;
-    viewbox-width: 10;
-    viewbox-height: 10;
-}
+import { UiIcon, Icons } from "../components/icon.slint";
 
 component WindowControl inherits Rectangle {
-    in property <string> shape;
+    in property <image> icon;
     in property <bool> destructive: false;
     callback clicked();
 
@@ -32,8 +18,10 @@ component WindowControl inherits Rectangle {
         easing: Theme.ease-smooth;
     }
 
-    ControlIcon {
-        commands: root.shape;
+    UiIcon {
+        width: 14px;
+        height: 14px;
+        source: root.icon;
         tint: touch.has-hover && root.destructive
             ? Theme.text-on-accent
             : Theme.text-secondary;
@@ -53,6 +41,7 @@ export component TitleBar inherits Rectangle {
     in property <bool> maximized: false;
     in property <[WorkspaceTab]> tabs;
     in property <string> active-tab;
+    in property <bool> show-tabs: false;
     callback drag-started();
     callback dragged(length, length);
     callback minimize-requested();
@@ -81,7 +70,7 @@ export component TitleBar inherits Rectangle {
 
         WindowControl {
             width: 40px;
-            shape: "M1 2 L9 2 M1 5 L9 5 M1 8 L9 8";
+            icon: Icons.menu;
             clicked => { root.sidebar-toggled(); }
         }
 
@@ -90,6 +79,7 @@ export component TitleBar inherits Rectangle {
 
             HorizontalLayout {
                 padding-left: Theme.space-sm;
+                spacing: Theme.space-md;
                 alignment: start;
 
                 Text {
@@ -100,8 +90,12 @@ export component TitleBar inherits Rectangle {
                     color: Theme.text-secondary;
                 }
 
-                WorkspaceTabs {
-                    y: 7px;
+                // As abas só aparecem na área de trabalho. Mantê-las visíveis
+                // nas outras seções fazia parecer que cada página era uma área.
+                if root.show-tabs: WorkspaceTabs {
+                    // Centralizado pela altura da barra, não por um deslocamento
+                    // fixo que desalinha quando a barra muda de tamanho.
+                    y: (root.height - self.height) / 2;
                     tabs: root.tabs;
                     active: root.active-tab;
                     selected(id) => { root.tab-selected(id); }
@@ -129,17 +123,15 @@ export component TitleBar inherits Rectangle {
         }
 
         WindowControl {
-            shape: "M1 5 L9 5";
+            icon: Icons.minimize;
             clicked => { root.minimize-requested(); }
         }
         WindowControl {
-            shape: root.maximized
-                ? "M1 3 L7 3 L7 9 L1 9 Z M3 3 L3 1 L9 1 L9 7 L7 7"
-                : "M1 1 L9 1 L9 9 L1 9 Z";
+            icon: root.maximized ? Icons.restore : Icons.maximize;
             clicked => { root.maximize-toggled(); }
         }
         WindowControl {
-            shape: "M1 1 L9 9 M9 1 L1 9";
+            icon: Icons.close;
             destructive: true;
             clicked => { root.close-requested(); }
         }

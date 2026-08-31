@@ -1,9 +1,10 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { BlockRow } from "../models/workspace.slint";
+import { UiIcon, Icons } from "./icon.slint";
 
 component FrameButton inherits Rectangle {
-    in property <string> shape;
+    in property <image> icon;
     in property <bool> destructive: false;
     callback clicked();
 
@@ -15,15 +16,11 @@ component FrameButton inherits Rectangle {
         : transparent;
     animate background { duration: Theme.motion-fast; }
 
-    Path {
-        width: 8px;
-        height: 8px;
-        commands: root.shape;
-        stroke: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-muted;
-        stroke-width: 1px;
-        stroke-line-cap: round;
-        viewbox-width: 8;
-        viewbox-height: 8;
+    UiIcon {
+        width: 12px;
+        height: 12px;
+        source: root.icon;
+        tint: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-muted;
     }
 
     touch := TouchArea {
@@ -92,12 +89,12 @@ export component BlockFrame inherits Rectangle {
 
             FrameButton {
                 y: 4px;
-                shape: root.data.minimized ? "M1 4 L7 4 M4 1 L4 7" : "M1 4 L7 4";
+                icon: root.data.minimized ? Icons.plus : Icons.minimize;
                 clicked => { root.minimize-toggled(); }
             }
             FrameButton {
                 y: 4px;
-                shape: "M1 1 L7 7 M7 1 L1 7";
+                icon: Icons.close;
                 destructive: true;
                 clicked => { root.closed(); }
             }
@@ -135,14 +132,12 @@ export component BlockFrame inherits Rectangle {
         width: 16px;
         height: 16px;
 
-        Path {
-            width: 8px;
-            height: 8px;
-            commands: "M8 0 L0 8 M8 4 L4 8";
-            stroke: grip.has-hover ? Theme.accent : Theme.text-muted;
-            stroke-width: 1px;
-            viewbox-width: 8;
-            viewbox-height: 8;
+        UiIcon {
+            width: 12px;
+            height: 12px;
+            source: Icons.grip;
+            tint: grip.has-hover ? Theme.accent : Theme.text-muted;
+            rotation-angle: -45deg;
         }
 
         grip := TouchArea {
