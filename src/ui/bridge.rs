@@ -37,6 +37,7 @@ pub fn run() -> Result<()> {
     apply_vault_status(&window, backend.status()?);
     apply_environment(&window, &backend);
     window_flow::bind(&window);
+    window_flow::center(&window);
     workspace_flow::bind(&window, Arc::clone(&backend));
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));

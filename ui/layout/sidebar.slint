@@ -71,21 +71,17 @@ export component Sidebar inherits Rectangle {
 
     // Recolhida vira uma faixa de ícones; o conteúdo ao lado ganha o espaço.
     width: root.collapsed ? 56px : Theme.sidebar-width;
-    background: Theme.sidebar;
+    // Sem fundo proprio: divide o da janela com a barra de titulo.
+    background: transparent;
     clip: true;
     animate width {
         duration: Theme.motion-base;
         easing: Theme.ease-smooth;
     }
 
-    Rectangle {
-        width: 1px;
-        x: parent.width - 1px;
-        background: Theme.sidebar-border;
-    }
-
     VerticalLayout {
         padding: Theme.space-sm;
+        padding-top: Theme.titlebar-height;
         spacing: 2px;
         alignment: start;
 

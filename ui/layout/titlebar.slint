@@ -53,13 +53,9 @@ export component TitleBar inherits Rectangle {
     callback tab-created();
 
     height: Theme.titlebar-height;
-    background: Theme.overlay;
+    // Sem fundo proprio: divide o da janela com a sidebar.
+    background: transparent;
 
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Theme.sidebar-border;
-    }
 
     HorizontalLayout {
         // Em modo janela os cantos são arredondados; sem esta folga o primeiro

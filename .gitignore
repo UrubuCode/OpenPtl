@@ -27,3 +27,6 @@ dist-ssr
 bun.lock
 .modernstyle/
 target/
+
+# Capturas de tela de trabalho
+shot-*.png

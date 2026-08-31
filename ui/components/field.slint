@@ -14,6 +14,9 @@ export component UiField inherits VerticalLayout {
     callback accepted();
 
     spacing: Theme.space-xs;
+    // Sem isto o campo estica dentro do formulario e o espaco extra vira uma
+    // lacuna entre o rotulo e a caixa de texto.
+    vertical-stretch: 0;
 
     if root.label != "": Text {
         text: root.label;
@@ -24,6 +27,7 @@ export component UiField inherits VerticalLayout {
 
     Rectangle {
         height: Theme.control-height;
+        vertical-stretch: 0;
         background: root.enabled ? Theme.surface-inset : Theme.surface;
         border-radius: Theme.radius-md;
         border-width: 1px;

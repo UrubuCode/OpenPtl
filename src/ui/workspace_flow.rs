@@ -8,7 +8,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use slint::{ComponentHandle, ModelRc, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, VecModel};
 
 use super::{AppWindow, BlockKind, BlockRow, Section, WorkspaceTab};
 use crate::backend::Backend;
@@ -240,19 +240,31 @@ fn add_block(window: &AppWindow, kind: BlockKind, title: &str) {
     publish(window);
 }
 
+/// Altera um bloco e atualiza só a linha correspondente do modelo.
+///
+/// Trocar o modelo inteiro a cada evento destruía e recriava os `BlockFrame`,
+/// e junto com eles a `TouchArea` que estava conduzindo o gesto — era o que
+/// tornava arrastar e redimensionar um bloco praticamente impossível.
 fn with_block(handle: &slint::Weak<AppWindow>, id: &str, apply: impl FnOnce(&mut Block)) {
     let Some(window) = handle.upgrade() else {
         return;
     };
-    STATE.with(|state| {
+
+    let updated = STATE.with(|state| {
         let mut state = state.borrow_mut();
-        if let Some(tab) = active_tab_mut(&mut state) {
-            if let Some(block) = tab.blocks.iter_mut().find(|block| block.id == id) {
-                apply(block);
-            }
-        }
+        let tab = active_tab_mut(&mut state)?;
+        let index = tab.blocks.iter().position(|block| block.id == id)?;
+        apply(&mut tab.blocks[index]);
+        Some((
+            index,
+            to_row(&tab.blocks[index], index + 1 == tab.blocks.len()),
+        ))
     });
-    publish(&window);
+
+    let Some((index, row)) = updated else {
+        return;
+    };
+    window.get_blocks().set_row_data(index, row);
 }
 
 fn active_tab_mut(state: &mut Workspaces) -> Option<&mut Tab> {
@@ -300,34 +312,16 @@ fn publish(window: &AppWindow) {
             .collect();
 
         let active = state.active.clone();
-        let last = state
-            .tabs
-            .iter()
-            .find(|tab| tab.id == active)
-            .and_then(|tab| tab.blocks.last())
-            .map(|block| block.id.clone());
-
         let blocks: Vec<BlockRow> = state
             .tabs
             .iter()
             .find(|tab| tab.id == active)
             .map(|tab| {
+                let top = tab.blocks.len();
                 tab.blocks
                     .iter()
-                    .map(|block| BlockRow {
-                        id: block.id.as_str().into(),
-                        kind: block.kind,
-                        title: block.title.as_str().into(),
-                        subtitle: block.subtitle.as_str().into(),
-                        session: block.session.as_str().into(),
-                        x: block.x,
-                        y: block.y,
-                        width: block.width,
-                        height: block.height,
-                        minimized: block.minimized,
-                        // O bloco no topo da pilha é o que está em foco.
-                        active: Some(&block.id) == last.as_ref(),
-                    })
+                    .enumerate()
+                    .map(|(index, block)| to_row(block, index + 1 == top))
                     .collect()
             })
             .unwrap_or_default();
@@ -339,4 +333,22 @@ fn publish(window: &AppWindow) {
         );
         window.set_blocks(ModelRc::new(VecModel::from(blocks)));
     });
+}
+
+/// Converte um bloco para a linha que a interface desenha. O bloco no topo da
+/// pilha é o que está em foco.
+fn to_row(block: &Block, on_top: bool) -> BlockRow {
+    BlockRow {
+        id: block.id.as_str().into(),
+        kind: block.kind,
+        title: block.title.as_str().into(),
+        subtitle: block.subtitle.as_str().into(),
+        session: block.session.as_str().into(),
+        x: block.x,
+        y: block.y,
+        width: block.width,
+        height: block.height,
+        minimized: block.minimized,
+        active: on_top,
+    }
 }
