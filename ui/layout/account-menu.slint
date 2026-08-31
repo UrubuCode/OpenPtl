@@ -1,0 +1,232 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+
+export struct ServerRow {
+    id: string,
+    label: string,
+    address: string,
+}
+
+component MenuRow inherits Rectangle {
+    in property <string> label;
+    in property <string> detail;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 40px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover ? Theme.surface-hover : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-sm;
+        padding-right: Theme.space-sm;
+        spacing: Theme.space-sm;
+
+        // Nome em cima e endereco embaixo: lado a lado, o endereco longo
+        // espremia o nome ate sobrar so um pedaco dele.
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+
+            Text {
+                text: root.label;
+                font-size: Type.label;
+                color: root.selected ? Theme.text-primary : Theme.text-secondary;
+                overflow: elide;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+        }
+
+        if root.selected: UiIcon {
+            width: 13px;
+            height: 13px;
+            y: (parent.height - self.height) / 2;
+            source: Icons.check;
+            tint: Theme.accent;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Avatar da conta na barra de título e o menu que ele abre.
+///
+/// A sincronização deixou a sidebar: ela pertence à conta, não a uma seção. O
+/// menu também escolhe por qual servidor a autenticação passa, que era o que
+/// faltava para trocar de servidor sem editar configurações.
+export component AccountAvatar inherits Rectangle {
+    in property <bool> connected: false;
+    in property <bool> busy: false;
+    in property <string> account;
+    /// Iniciais ja prontas: o Slint nao indexa string, entao quem monta e o Rust.
+    in property <string> initials: "?";
+    in property <string> message;
+    in property <bool> open: false;
+    callback toggled();
+
+    width: 34px;
+
+    avatar := Rectangle {
+        width: 26px;
+        height: 26px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 13px;
+        background: root.connected ? Theme.accent : Theme.surface-inset;
+        border-width: 1px;
+        border-color: root.connected ? Theme.accent-bright : Theme.border-strong;
+        animate background { duration: Theme.motion-fast; }
+
+        Text {
+            text: root.initials;
+            font-size: Type.caption;
+            font-weight: Type.weight-semibold;
+            color: root.connected ? Theme.text-on-accent : Theme.text-muted;
+        }
+
+        // Ponto de atividade enquanto a sincronização roda.
+        if root.busy: Rectangle {
+            x: parent.width - 7px;
+            y: parent.height - 7px;
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: Theme.warning;
+        }
+
+        TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.toggled(); }
+        }
+    }
+}
+
+/// Painel da conta. Vive no nível da janela, não dentro da barra de título: ali
+/// a área de conteúdo é desenhada depois e cobriria o menu.
+export component AccountPanel inherits Rectangle {
+    in property <bool> open: false;
+    in property <bool> connected: false;
+    in property <bool> busy: false;
+    in property <string> account;
+    in property <string> message;
+    in property <[ServerRow]> servers;
+    in property <string> selected-server;
+
+    callback dismissed();
+    callback login-requested();
+    callback logout-requested();
+    callback push-requested();
+    callback pull-requested();
+    callback server-selected(string);
+
+    visible: root.open;
+
+    // Véu invisível: um clique fora fecha o menu.
+    TouchArea {
+        clicked => { root.dismissed(); }
+    }
+
+    panel := Rectangle {
+        x: parent.width - self.width - Theme.space-md;
+        y: Theme.titlebar-height - 2px;
+        width: 300px;
+        height: body.min-height;
+        background: Theme.surface-raised;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        opacity: root.open ? 1.0 : 0.0;
+        animate opacity { duration: Theme.motion-fast; }
+
+        TouchArea { }
+
+        body := VerticalLayout {
+            padding: Theme.space-md;
+            spacing: Theme.space-sm;
+
+            Text {
+                text: root.connected ? root.account : "Nenhuma conta conectada";
+                font-size: Type.label;
+                font-weight: Type.weight-medium;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+
+            if root.message != "": Text {
+                text: root.message;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 1px; background: Theme.border; }
+
+            Text {
+                text: "Servidor de autenticação";
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+
+            for server in root.servers: MenuRow {
+                label: server.label;
+                detail: server.address;
+                selected: server.id == root.selected-server;
+                clicked => { root.server-selected(server.id); }
+            }
+
+            Rectangle { height: 1px; background: Theme.border; }
+
+            if !root.connected: UiButton {
+                label: "Conectar conta";
+                tone: ButtonTone.primary;
+                wide: true;
+                enabled: !root.busy;
+                clicked => {
+                    root.dismissed();
+                    root.login-requested();
+                }
+            }
+
+            if root.connected: HorizontalLayout {
+                spacing: Theme.space-sm;
+
+                UiButton {
+                    label: "Enviar";
+                    tone: ButtonTone.primary;
+                    enabled: !root.busy;
+                    clicked => {
+                        root.dismissed();
+                        root.push-requested();
+                    }
+                }
+                UiButton {
+                    label: "Baixar";
+                    enabled: !root.busy;
+                    clicked => {
+                        root.dismissed();
+                        root.pull-requested();
+                    }
+                }
+                UiButton {
+                    label: "Sair";
+                    tone: ButtonTone.danger;
+                    enabled: !root.busy;
+                    clicked => {
+                        root.dismissed();
+                        root.logout-requested();
+                    }
+                }
+            }
+        }
+    }
+}

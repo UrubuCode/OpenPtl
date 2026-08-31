@@ -8,7 +8,7 @@ component Tab inherits Rectangle {
     callback selected();
     callback closed();
 
-    width: label.preferred-width + 52px;
+    width: label.min-width + 54px;
     height: 26px;
     border-radius: Theme.radius-sm;
     background: root.active ? Theme.surface-raised
@@ -72,6 +72,9 @@ component Tab inherits Rectangle {
 /// Faixa de abas de workspace, exibida na barra de título como no design
 /// anterior: cada aba é uma área de trabalho com seus próprios blocos.
 export component WorkspaceTabs inherits HorizontalLayout {
+    // Centraliza as abas na altura da barra em vez de as encostar no topo.
+    padding-top: (Theme.titlebar-height - 26px) / 2;
+    padding-bottom: (Theme.titlebar-height - 26px) / 2;
     in property <[WorkspaceTab]> tabs;
     in property <string> active;
     callback selected(string);
@@ -80,6 +83,9 @@ export component WorkspaceTabs inherits HorizontalLayout {
 
     spacing: 2px;
     alignment: start;
+    // A faixa nao estica: sem isto as abas se espalhavam pela barra inteira.
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
 
     for tab in root.tabs: Tab {
         data: tab;

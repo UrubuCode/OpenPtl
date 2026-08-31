@@ -86,6 +86,7 @@ export component VaultPage inherits Rectangle {
             UiButton {
                 label: root.state.initialized ? "Desbloquear" : "Criar cofre";
                 tone: ButtonTone.primary;
+                wide: true;
                 enabled: !root.busy && root.password != "";
                 clicked => { root.submit(); }
             }

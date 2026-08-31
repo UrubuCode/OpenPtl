@@ -1,0 +1,53 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+/// Barra de abas de conteúdo, para dividir uma página longa em seções.
+export component TabBar inherits HorizontalLayout {
+    in property <[string]> tabs;
+    in-out property <int> current: 0;
+
+    spacing: Theme.space-xs;
+    alignment: start;
+    vertical-stretch: 0;
+
+    for label[index] in root.tabs: Rectangle {
+        width: caption.min-width + 2 * Theme.space-lg;
+        height: 32px;
+        border-radius: Theme.radius-md;
+        background: index == root.current ? Theme.surface-inset
+            : touch.has-hover ? Theme.surface
+            : transparent;
+        animate background {
+            duration: Theme.motion-fast;
+            easing: Theme.ease-smooth;
+        }
+
+        // Sublinhado que cresce ao ativar, em vez de aparecer de uma vez.
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: parent.height - 2px;
+            width: index == root.current ? parent.width - 2 * Theme.space-md : 0px;
+            height: 2px;
+            border-radius: 1px;
+            background: Theme.accent;
+            animate width {
+                duration: Theme.motion-base;
+                easing: Theme.ease-out-soft;
+            }
+        }
+
+        caption := Text {
+            text: label;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: Type.label;
+            font-weight: index == root.current ? Type.weight-medium : Type.weight-regular;
+            color: index == root.current ? Theme.text-primary : Theme.text-muted;
+        }
+
+        touch := TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.current = index; }
+        }
+    }
+}

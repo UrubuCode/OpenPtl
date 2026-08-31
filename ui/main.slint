@@ -5,6 +5,7 @@ import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { Sidebar, Section } from "layout/sidebar.slint";
 import { TitleBar } from "layout/titlebar.slint";
+import { ServerRow, AccountPanel } from "layout/account-menu.slint";
 import { ResizeEdges } from "layout/resize-edges.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
@@ -26,6 +27,7 @@ export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
 export { TransferRow }
+export { ServerRow } from "layout/account-menu.slint";
 export { BlockRow, BlockKind, WorkspaceTab } from "models/workspace.slint";
 
 export component AppWindow inherits Window {
@@ -90,6 +92,10 @@ export component AppWindow inherits Window {
     in property <string> sync-account;
     in property <string> sync-message;
     in property <int> sync-progress;
+    in property <string> sync-initials: "?";
+    in property <[ServerRow]> servers;
+    in property <string> selected-server;
+    property <bool> account-open: false;
 
     callback window-drag-started();
     callback window-dragged(length, length);
@@ -158,6 +164,7 @@ export component AppWindow inherits Window {
     callback sync-push-requested();
     callback sync-pull-requested();
     callback sync-cancel-requested();
+    callback server-selected(string);
 
     // Sidebar e barra de titulo dividem o mesmo fundo, sem costura entre elas:
     // a sidebar vai do topo a base e a barra ocupa so a faixa do conteudo.
@@ -191,6 +198,12 @@ export component AppWindow inherits Window {
                 tabs: root.tabs;
                 active-tab: root.active-tab;
                 show-tabs: root.section == Section.workspace;
+                sync-connected: root.sync-connected;
+                sync-busy: root.sync-busy;
+                sync-account: root.sync-account;
+                sync-initials: root.sync-initials;
+                sync-message: root.sync-message;
+                account-toggled => { root.account-open = !root.account-open; }
                 tab-selected(id) => { root.tab-selected(id); }
                 tab-closed(id) => { root.tab-closed(id); }
                 tab-created => { root.tab-created(); }
@@ -322,6 +335,24 @@ export component AppWindow inherits Window {
 
     // Por último na árvore: as alças ficam por cima de tudo, senão o conteúdo
     // colado na borda roubaria o ponteiro delas.
+    // Depois do conteudo e antes das alcas: o menu precisa ser desenhado por
+    // cima das paginas, senao some atras delas.
+    AccountPanel {
+        open: root.account-open;
+        connected: root.sync-connected;
+        busy: root.sync-busy;
+        account: root.sync-account;
+        message: root.sync-message;
+        servers: root.servers;
+        selected-server: root.selected-server;
+        dismissed => { root.account-open = false; }
+        login-requested => { root.sync-login-requested(); }
+        logout-requested => { root.sync-logout-requested(); }
+        push-requested => { root.sync-push-requested(); }
+        pull-requested => { root.sync-pull-requested(); }
+        server-selected(id) => { root.server-selected(id); }
+    }
+
     ResizeEdges {
         enabled: !root.window-maximized;
         resize-started => { root.window-resize-started(); }

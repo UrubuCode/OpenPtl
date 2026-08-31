@@ -1,16 +1,13 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { UiIcon, Icons } from "../components/icon.slint";
-
-export enum Section { workspace, home, keychain, known-hosts, notes, sync, settings, about }
-
+export enum Section { workspace, home, keychain, known-hosts, notes, settings, about }
 component SidebarItem inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> active: false;
     in property <bool> collapsed: false;
     callback clicked();
-
     height: 34px;
     border-radius: Theme.radius-md;
     background: root.active ? Theme.sidebar-active
@@ -20,7 +17,6 @@ component SidebarItem inherits Rectangle {
         duration: Theme.motion-fast;
         easing: Theme.ease-smooth;
     }
-
     // Traço de seleção que cresce a partir do topo, em vez de piscar.
     Rectangle {
         x: 0;
@@ -34,18 +30,15 @@ component SidebarItem inherits Rectangle {
             easing: Theme.ease-out-soft;
         }
     }
-
     HorizontalLayout {
         padding-left: Theme.space-md;
         padding-right: Theme.space-sm;
         spacing: Theme.space-md;
-
         UiIcon {
             y: (parent.height - self.height) / 2;
             source: root.icon;
             tint: root.active ? Theme.accent : Theme.sidebar-text;
         }
-
         Text {
             horizontal-stretch: 1;
             text: root.label;
@@ -57,18 +50,15 @@ component SidebarItem inherits Rectangle {
             animate opacity { duration: Theme.motion-fast; }
         }
     }
-
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.clicked(); }
     }
 }
-
 export component Sidebar inherits Rectangle {
     in property <Section> active;
     in property <bool> collapsed: false;
     callback selected(Section);
-
     // Recolhida vira uma faixa de ícones; o conteúdo ao lado ganha o espaço.
     width: root.collapsed ? 56px : Theme.sidebar-width;
     // Sem fundo proprio: divide o da janela com a barra de titulo.
@@ -78,19 +68,15 @@ export component Sidebar inherits Rectangle {
         duration: Theme.motion-base;
         easing: Theme.ease-smooth;
     }
-
     VerticalLayout {
         padding: Theme.space-sm;
         padding-top: Theme.titlebar-height;
         spacing: 2px;
         alignment: start;
-
-        SidebarItem { icon: Icons.workspace; label: "Área de trabalho"; collapsed: root.collapsed; active: root.active == Section.workspace; clicked => { root.selected(Section.workspace); } }
         SidebarItem { icon: Icons.connections; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
         SidebarItem { icon: Icons.keychain; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
         SidebarItem { icon: Icons.shield; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
         SidebarItem { icon: Icons.notes; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
-        SidebarItem { icon: Icons.sync; label: "Sincronização"; collapsed: root.collapsed; active: root.active == Section.sync; clicked => { root.selected(Section.sync); } }
         SidebarItem { icon: Icons.settings; label: "Configurações"; collapsed: root.collapsed; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
         SidebarItem { icon: Icons.about; label: "Sobre"; collapsed: root.collapsed; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
     }

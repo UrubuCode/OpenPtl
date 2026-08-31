@@ -3,30 +3,37 @@ import { Type } from "../theme/typography.slint";
 
 export enum ButtonTone { neutral, primary, danger, ghost }
 
+/// Botão do produto, no formato do botão do cofre: alto, cantos generosos e
+/// borda de mesma família da cor de fundo.
+///
+/// A largura acompanha o texto. Antes era fixa e o rótulo transbordava a
+/// moldura em vez de o botão crescer.
 export component UiButton inherits Rectangle {
     in property <string> label;
     in property <ButtonTone> tone: ButtonTone.neutral;
     in property <bool> enabled: true;
+    in property <bool> wide: false;
+    /// Versao baixa, para caber em linhas de lista.
+    in property <bool> compact: false;
     callback clicked();
 
-    height: Theme.control-height;
-    min-width: 92px;
+    height: root.compact ? 26px : Theme.control-height;
+    horizontal-stretch: 0;
+    min-width: root.wide ? 0px : caption.min-width + 2 * root.side-padding;
     border-radius: Theme.radius-md;
-    border-width: root.tone == ButtonTone.ghost ? 0px : 1px;
+    border-width: 1px;
     opacity: root.enabled ? 1.0 : 0.45;
 
-    border-color: root.tone == ButtonTone.primary ? Theme.accent-bright
+    border-color: !root.enabled ? Theme.border
+        : root.tone == ButtonTone.primary ? Theme.accent-bright
         : root.tone == ButtonTone.danger ? Theme.danger
-        : Theme.border;
+        : root.tone == ButtonTone.ghost ? Theme.border
+        : Theme.border-strong;
 
     background: !root.enabled ? Theme.surface
         : touch.pressed ? pressed-tone()
         : touch.has-hover ? hover-tone()
         : rest-tone();
-
-    // O botão afunda um pouco ao ser pressionado: o toque ganha resposta
-    // física sem precisar de sombra.
-    property <float> depth: touch.pressed && root.enabled ? 0.97 : 1.0;
 
     animate background, border-color, opacity {
         duration: Theme.motion-fast;
@@ -52,22 +59,31 @@ export component UiButton inherits Rectangle {
             : Theme.surface;
     }
 
-    content := Rectangle {
-        width: parent.width * root.depth;
-        height: parent.height * root.depth;
-        animate width, height {
-            duration: Theme.motion-fast;
-            easing: Theme.ease-smooth;
-        }
+    property <length> side-padding: root.compact ? Theme.space-md : Theme.space-lg;
 
-        Text {
+    HorizontalLayout {
+        padding-left: root.side-padding;
+        padding-right: root.side-padding;
+
+        caption := Text {
             text: root.label;
-            font-size: Type.label;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: root.compact ? Type.caption : Type.label;
             font-weight: Type.weight-medium;
             color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
                 ? Theme.text-on-accent
                 : Theme.text-secondary;
         }
+    }
+
+    // Afunda ao ser pressionado: resposta física sem depender de sombra.
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: touch.pressed && root.enabled ? Theme.overlay.with-alpha(0.18) : transparent;
+        border-radius: parent.border-radius;
+        animate background { duration: Theme.motion-fast; }
     }
 
     touch := TouchArea {

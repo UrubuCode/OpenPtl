@@ -18,8 +18,8 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::libs::models::{
-    AppSettings, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry, Note,
-    SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
+    AppSettings, AuthServer, ConnectionProfile, ConnectionProtocol, KeychainEntry, KnownHostEntry,
+    Note, SftpEntry, SshConnectPurpose, SshConnectResult, VaultStatus,
 };
 use crate::libs::sync::{Reporter as SyncReporter, SyncManager};
 use crate::libs::transfer::{Direction, Registry as Transfers};
@@ -307,6 +307,23 @@ impl Backend {
                 .await;
             on_result(outcome);
         });
+    }
+
+    /// Servidores de autenticação disponíveis.
+    pub fn auth_servers(&self) -> Result<Vec<AuthServer>> {
+        self.vault()?.auth_servers_list()
+    }
+
+    pub fn selected_auth_server(&self) -> Result<AuthServer> {
+        self.vault()?.selected_auth_server()
+    }
+
+    /// Escolhe por qual servidor a autenticação passa.
+    pub fn select_auth_server(&self, id: &str) -> Result<()> {
+        let mut settings = self.settings()?;
+        settings.selected_auth_server_id = Some(id.to_owned());
+        self.settings_update(settings)?;
+        Ok(())
     }
 
     /// Fila de transferências, compartilhada com a interface.

@@ -16,7 +16,6 @@ import { SettingsPage } from "../pages/settings.slint";
 import { AboutPage } from "../pages/about.slint";
 import { NoteRow } from "../models/note.slint";
 import { NotesPage } from "../pages/notes.slint";
-import { SyncPage } from "../pages/sync.slint";
 import { FileRow } from "../models/file.slint";
 import { TransferRow } from "../models/transfer.slint";
 
@@ -109,6 +108,10 @@ export component AppShell inherits Rectangle {
     // comum da sidebar e da barra de titulo.
     background: Theme.canvas;
     border-top-left-radius: Theme.radius-lg;
+    // O canto inferior direito e o da janela: sem isto o conteudo pintava por
+    // cima do arredondamento e deixava o canto quadrado.
+    border-bottom-right-radius: Theme.window-radius;
+    clip: true;
 
     Rectangle {
         background: transparent;
@@ -158,18 +161,6 @@ export component AppShell inherits Rectangle {
                 edit-requested(id) => { root.note-edit-requested(id); }
                 pin-toggled(id) => { root.note-pin-toggled(id); }
                 delete-requested(id) => { root.note-delete-requested(id); }
-            }
-            if root.section == Section.sync: SyncPage {
-                connected: root.sync-connected;
-                busy: root.sync-busy;
-                account: root.sync-account;
-                message: root.sync-message;
-                progress: root.sync-progress;
-                login-requested => { root.sync-login-requested(); }
-                logout-requested => { root.sync-logout-requested(); }
-                push-requested => { root.sync-push-requested(); }
-                pull-requested => { root.sync-pull-requested(); }
-                cancel-requested => { root.sync-cancel-requested(); }
             }
             if root.section == Section.settings: SettingsPage {
                 settings: root.settings;

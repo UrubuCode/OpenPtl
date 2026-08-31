@@ -3,6 +3,7 @@ import { Type } from "../theme/typography.slint";
 import { WorkspaceTab } from "../models/workspace.slint";
 import { WorkspaceTabs } from "workspace-tabs.slint";
 import { UiIcon, Icons } from "../components/icon.slint";
+import { AccountAvatar, ServerRow } from "account-menu.slint";
 
 component WindowControl inherits Rectangle {
     in property <image> icon;
@@ -43,6 +44,11 @@ export component TitleBar inherits Rectangle {
     in property <string> active-tab;
     in property <bool> show-tabs: false;
     in property <bool> show-sidebar-toggle: true;
+    in property <bool> sync-connected;
+    in property <bool> sync-busy;
+    in property <string> sync-account;
+    in property <string> sync-initials;
+    in property <string> sync-message;
     callback drag-started();
     callback dragged(length, length);
     callback minimize-requested();
@@ -52,6 +58,7 @@ export component TitleBar inherits Rectangle {
     callback tab-selected(string);
     callback tab-closed(string);
     callback tab-created();
+    callback account-toggled();
 
     height: Theme.titlebar-height;
     // Sem fundo proprio: divide o da janela com a sidebar.
@@ -91,9 +98,9 @@ export component TitleBar inherits Rectangle {
                 // As abas só aparecem na área de trabalho. Mantê-las visíveis
                 // nas outras seções fazia parecer que cada página era uma área.
                 if root.show-tabs: WorkspaceTabs {
-                    // Centralizado pela altura da barra, não por um deslocamento
-                    // fixo que desalinha quando a barra muda de tamanho.
-                    y: (root.height - self.height) / 2;
+                    // O alinhamento vertical fica com cada aba: a faixa em si
+                    // acompanha a altura da barra.
+                    height: root.height;
                     tabs: root.tabs;
                     active: root.active-tab;
                     selected(id) => { root.tab-selected(id); }
@@ -118,6 +125,13 @@ export component TitleBar inherits Rectangle {
                 }
                 double-clicked => { root.maximize-toggled(); }
             }
+        }
+
+        if root.show-sidebar-toggle: AccountAvatar {
+            connected: root.sync-connected;
+            busy: root.sync-busy;
+            initials: root.sync-initials;
+            toggled => { root.account-toggled(); }
         }
 
         WindowControl {

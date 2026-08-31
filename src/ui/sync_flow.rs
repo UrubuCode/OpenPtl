@@ -7,9 +7,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use slint::{ComponentHandle, Timer, TimerMode};
+use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 
-use super::AppWindow;
+use super::{AppWindow, ServerRow};
 use crate::backend::Backend;
 
 /// Cadência de leitura do andamento. O login espera ação do usuário no
@@ -58,6 +58,19 @@ pub fn bind(window: &AppWindow, backend: Arc<Backend>) -> Timer {
         }
     });
 
+    let handle = window.as_weak();
+    let choosing = Arc::clone(&backend);
+    window.on_server_selected(move |id| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        match choosing.select_auth_server(&id) {
+            Ok(()) => refresh_servers(&window, &choosing),
+            Err(error) => window.set_sync_message(format!("{error}").into()),
+        }
+    });
+
+    refresh_servers(window, &backend);
     start_refresh(window, backend)
 }
 
@@ -77,11 +90,9 @@ fn start_refresh(window: &AppWindow, backend: Arc<Backend>) -> Timer {
 pub fn refresh(window: &AppWindow, backend: &Backend) {
     let user = backend.sync_user();
     window.set_sync_connected(user.is_some());
-    window.set_sync_account(
-        user.map(|user| account_label(&user))
-            .unwrap_or_default()
-            .into(),
-    );
+    let label = user.map(|user| account_label(&user)).unwrap_or_default();
+    window.set_sync_initials(initials_of(&label).as_str().into());
+    window.set_sync_account(label.as_str().into());
 
     let reporter = backend.sync_reporter();
     window.set_sync_message(reporter.message().message.as_str().into());
@@ -105,4 +116,67 @@ fn account_label(user: &crate::libs::models::SyncLoggedUser) -> String {
         return name;
     }
     user.email.as_deref().unwrap_or_default().trim().to_owned()
+}
+
+/// Lista de servidores de autenticação e qual está escolhido.
+pub fn refresh_servers(window: &AppWindow, backend: &Backend) {
+    let Ok(servers) = backend.auth_servers() else {
+        return;
+    };
+    let selected = backend
+        .selected_auth_server()
+        .map(|server| server.id)
+        .unwrap_or_default();
+
+    let rows: Vec<ServerRow> = servers
+        .iter()
+        .map(|server| ServerRow {
+            id: server.id.as_str().into(),
+            label: server.label.as_str().into(),
+            address: server.address.as_str().into(),
+        })
+        .collect();
+
+    window.set_servers(ModelRc::new(VecModel::from(rows)));
+    window.set_selected_server(selected.as_str().into());
+}
+
+/// Iniciais mostradas no avatar. O Slint não indexa string, então a montagem
+/// acontece aqui.
+fn initials_of(label: &str) -> String {
+    let mut parts = label.split_whitespace();
+    let first = parts.next().and_then(|part| part.chars().next());
+    let second = parts.next().and_then(|part| part.chars().next());
+
+    match (first, second) {
+        (Some(a), Some(b)) => format!("{a}{b}").to_uppercase(),
+        (Some(a), None) => a.to_uppercase().to_string(),
+        _ => "?".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::initials_of;
+
+    #[test]
+    fn two_names_give_two_letters() {
+        assert_eq!(initials_of("Daniel Souza"), "DS");
+    }
+
+    #[test]
+    fn one_name_gives_one_letter() {
+        assert_eq!(initials_of("daniel"), "D");
+    }
+
+    #[test]
+    fn an_email_uses_its_first_letter() {
+        assert_eq!(initials_of("urubucode@gmail.com"), "U");
+    }
+
+    #[test]
+    fn no_account_shows_a_question_mark() {
+        assert_eq!(initials_of(""), "?");
+        assert_eq!(initials_of("   "), "?");
+    }
 }

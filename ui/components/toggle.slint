@@ -1,41 +1,56 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
-import { UiIcon, Icons } from "./icon.slint";
 
+/// Interruptor. Substituiu a caixa de seleção: para uma preferência que liga e
+/// desliga na hora, o estado fica mais evidente com o botão deslizando do que
+/// com uma marca.
 export component UiToggle inherits HorizontalLayout {
     in property <string> label;
+    in property <bool> enabled: true;
     in-out property <bool> checked;
     callback toggled();
 
-    spacing: Theme.space-sm;
+    spacing: Theme.space-md;
+    vertical-stretch: 0;
 
-    Rectangle {
-        width: 18px;
-        height: 18px;
+    track := Rectangle {
+        width: 36px;
+        height: 20px;
         y: (parent.height - self.height) / 2;
-        border-radius: Theme.radius-sm;
+        border-radius: 10px;
+        opacity: root.enabled ? 1.0 : 0.45;
+        background: root.checked ? Theme.accent : Theme.surface-inset;
         border-width: 1px;
         border-color: root.checked ? Theme.accent-bright : Theme.border-strong;
-        background: root.checked ? Theme.accent : Theme.surface-inset;
-        animate background { duration: Theme.motion-fast; }
+        animate background, border-color {
+            duration: Theme.motion-fast;
+            easing: Theme.ease-smooth;
+        }
 
-        UiIcon {
-            width: 12px;
-            height: 12px;
-            visible: root.checked;
-            source: Icons.check;
-            tint: Theme.text-on-accent;
+        Rectangle {
+            width: 14px;
+            height: 14px;
+            y: 2px;
+            x: root.checked ? parent.width - self.width - 3px : 3px;
+            border-radius: 7px;
+            background: root.checked ? Theme.text-on-accent : Theme.text-muted;
+            animate x, background {
+                duration: Theme.motion-base;
+                easing: Theme.ease-out-soft;
+            }
         }
     }
 
     Text {
+        horizontal-stretch: 1;
         text: root.label;
         vertical-alignment: center;
         font-size: Type.body;
-        color: Theme.text-secondary;
+        color: root.enabled ? Theme.text-secondary : Theme.text-muted;
     }
 
     TouchArea {
+        enabled: root.enabled;
         mouse-cursor: MouseCursor.pointer;
         clicked => {
             root.checked = !root.checked;

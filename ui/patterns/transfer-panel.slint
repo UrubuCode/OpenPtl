@@ -46,8 +46,7 @@ export component TransferPanel inherits Rectangle {
                 color: Theme.text-secondary;
             }
             UiButton {
-                width: 100px;
-                height: 24px;
+                compact: true;
                 label: "Limpar";
                 tone: ButtonTone.ghost;
                 clicked => { root.cleared(); }

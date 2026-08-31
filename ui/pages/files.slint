@@ -58,9 +58,7 @@ component FileEntry inherits Rectangle {
             color: Theme.text-muted;
         }
         UiButton {
-            width: 76px;
-            height: 24px;
-            y: 5px;
+            compact: true;
             label: "Excluir";
             tone: ButtonTone.danger;
             clicked => { root.delete-requested(root.data); }
