@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use super::{AppWindow, HostChallenge, Section, SessionRow};
+use super::{AppWindow, HostChallenge, SessionRow};
 use crate::backend::Backend;
 use crate::libs::models::{ConnectionProtocol, SshConnectResult, SshSessionInfo};
 
@@ -122,18 +122,22 @@ fn clear_challenge(window: &AppWindow) {
     window.set_challenge(HostChallenge::default());
 }
 
-/// Um perfil só de SFTP não tem shell: a navegação de arquivos é o destino
-/// natural depois de conectar, e não uma aba de terminal vazia.
+/// Uma sessão aberta ganha um bloco na área de trabalho corrente, com terminal
+/// ou navegação de arquivos conforme o que o perfil suporta.
 fn open_workspace(window: &AppWindow, backend: &Arc<Backend>, profile_id: &str) {
-    let has_shell = backend
-        .connection(profile_id)
+    let profile = backend.connection(profile_id).ok();
+    let has_shell = profile
+        .as_ref()
         .map(|profile| profile.supports(ConnectionProtocol::Ssh))
         .unwrap_or(true);
+    let label = profile
+        .map(|profile| format!("{}@{}", profile.username, profile.host))
+        .unwrap_or_default();
 
-    if has_shell {
-        window.set_section(Section::Terminal);
-    } else {
-        window.set_section(Section::Files);
+    if !has_shell {
         super::files_flow::open_root(window, backend);
     }
+
+    let session = window.get_active_session().to_string();
+    super::workspace_flow::open_session_block(window, &session, &label, has_shell);
 }

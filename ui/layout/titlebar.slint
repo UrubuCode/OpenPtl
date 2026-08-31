@@ -1,5 +1,7 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { WorkspaceTab } from "../models/workspace.slint";
+import { WorkspaceTabs } from "workspace-tabs.slint";
 
 // Os controles eram glifos de texto (—, ▢, ✕) e nem toda fonte instalada os
 // desenha: em modo janela ficavam invisíveis. Agora são traçados próprios, que
@@ -49,12 +51,17 @@ component WindowControl inherits Rectangle {
 export component TitleBar inherits Rectangle {
     in property <string> title;
     in property <bool> maximized: false;
+    in property <[WorkspaceTab]> tabs;
+    in property <string> active-tab;
     callback drag-started();
     callback dragged(length, length);
     callback minimize-requested();
     callback maximize-toggled();
     callback close-requested();
     callback sidebar-toggled();
+    callback tab-selected(string);
+    callback tab-closed(string);
+    callback tab-created();
 
     height: Theme.titlebar-height;
     background: Theme.overlay;
@@ -91,6 +98,15 @@ export component TitleBar inherits Rectangle {
                     font-size: Type.label;
                     font-weight: Type.weight-semibold;
                     color: Theme.text-secondary;
+                }
+
+                WorkspaceTabs {
+                    y: 7px;
+                    tabs: root.tabs;
+                    active: root.active-tab;
+                    selected(id) => { root.tab-selected(id); }
+                    closed(id) => { root.tab-closed(id); }
+                    created => { root.tab-created(); }
                 }
             }
 

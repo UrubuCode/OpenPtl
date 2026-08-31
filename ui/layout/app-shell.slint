@@ -2,6 +2,8 @@ import { Theme } from "../theme/tokens.slint";
 import { Sidebar, Section } from "sidebar.slint";
 import { ConnectionRow } from "../models/connection.slint";
 import { PageTransition } from "../patterns/page-transition.slint";
+import { BlockRow } from "../models/workspace.slint";
+import { WorkspacePage } from "../pages/workspace.slint";
 import { ConnectionsPage } from "../pages/connections.slint";
 import { TerminalPage } from "../pages/terminal.slint";
 import { SessionRow } from "../models/session.slint";
@@ -25,6 +27,8 @@ export { Section }
 
 export component AppShell inherits HorizontalLayout {
     in property <bool> sidebar-collapsed: false;
+    in property <[BlockRow]> blocks;
+    in property <string> workspace-hint;
     in property <[ConnectionRow]> connections;
     in property <[SessionRow]> sessions;
     in property <[TermLine]> terminal-lines;
@@ -59,6 +63,13 @@ export component AppShell inherits HorizontalLayout {
     callback connection-connect-requested(string);
     callback connection-edit-requested(string);
     callback connection-delete-requested(string);
+    callback block-moved(string, length, length);
+    callback block-resized(string, length, length);
+    callback block-raised(string);
+    callback block-minimize-toggled(string);
+    callback block-closed(string);
+    callback block-add-terminal();
+    callback block-add-files();
     callback session-selected(string);
     callback session-closed(string);
     callback terminal-input-sent(string, bool, bool);
@@ -110,6 +121,22 @@ export component AppShell inherits HorizontalLayout {
         // transicao de entrada toca de novo.
         for key in [root.section]: PageTransition {
 
+            if root.section == Section.workspace: WorkspacePage {
+                blocks: root.blocks;
+                terminal-lines: root.terminal-lines;
+                files: root.files;
+                editor-surface: root.editor-surface;
+                hint: root.workspace-hint;
+                block-moved(id, dx, dy) => { root.block-moved(id, dx, dy); }
+                block-resized(id, dx, dy) => { root.block-resized(id, dx, dy); }
+                block-raised(id) => { root.block-raised(id); }
+                block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
+                block-closed(id) => { root.block-closed(id); }
+                terminal-input(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
+                file-opened(path) => { root.file-path-requested(path); }
+                add-terminal => { root.block-add-terminal(); }
+                add-files => { root.block-add-files(); }
+            }
             if root.section == Section.home: ConnectionsPage {
                 rows: root.connections;
                 create-requested => { root.connection-create-requested(); }

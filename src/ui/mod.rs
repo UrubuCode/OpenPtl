@@ -13,6 +13,7 @@ mod terminal_view;
 mod transfers_flow;
 mod update_flow;
 mod window_flow;
+mod workspace_flow;
 
 slint::include_modules!();
 

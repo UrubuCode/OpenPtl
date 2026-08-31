@@ -1,0 +1,158 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { BlockRow } from "../models/workspace.slint";
+
+component FrameButton inherits Rectangle {
+    in property <string> shape;
+    in property <bool> destructive: false;
+    callback clicked();
+
+    width: 22px;
+    height: 22px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover
+        ? (root.destructive ? Theme.danger : Theme.surface-hover)
+        : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    Path {
+        width: 8px;
+        height: 8px;
+        commands: root.shape;
+        stroke: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-muted;
+        stroke-width: 1px;
+        stroke-line-cap: round;
+        viewbox-width: 8;
+        viewbox-height: 8;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Moldura de um bloco flutuante: cabeçalho para arrastar, botões de minimizar
+/// e fechar, e uma alça de redimensionamento no canto.
+export component BlockFrame inherits Rectangle {
+    in property <BlockRow> data;
+    callback moved(length, length);
+    callback resized(length, length);
+    callback raised();
+    callback minimize-toggled();
+    callback closed();
+
+    x: root.data.x;
+    y: root.data.y;
+    width: root.data.width;
+    height: root.data.minimized ? header-height : root.data.height;
+
+    property <length> header-height: 30px;
+
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: root.data.active ? Theme.accent : Theme.border;
+    clip: true;
+
+    animate height, border-color {
+        duration: Theme.motion-base;
+        easing: Theme.ease-smooth;
+    }
+
+    header := Rectangle {
+        height: root.header-height;
+        background: root.data.active ? Theme.surface-raised : Theme.surface-inset;
+        animate background { duration: Theme.motion-fast; }
+
+        HorizontalLayout {
+            padding-left: Theme.space-md;
+            padding-right: Theme.space-xs;
+            spacing: Theme.space-sm;
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+
+                Text {
+                    text: root.data.title;
+                    font-size: Type.caption;
+                    font-weight: Type.weight-medium;
+                    color: root.data.active ? Theme.text-primary : Theme.text-secondary;
+                    overflow: elide;
+                }
+            }
+
+            if root.data.subtitle != "": Text {
+                text: root.data.subtitle;
+                vertical-alignment: center;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+
+            FrameButton {
+                y: 4px;
+                shape: root.data.minimized ? "M1 4 L7 4 M4 1 L4 7" : "M1 4 L7 4";
+                clicked => { root.minimize-toggled(); }
+            }
+            FrameButton {
+                y: 4px;
+                shape: "M1 1 L7 7 M7 1 L1 7";
+                destructive: true;
+                clicked => { root.closed(); }
+            }
+        }
+
+        drag := TouchArea {
+            mouse-cursor: MouseCursor.move;
+            moved => {
+                root.moved(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    root.raised();
+                }
+            }
+            double-clicked => { root.minimize-toggled(); }
+        }
+    }
+
+    body := Rectangle {
+        y: root.header-height;
+        height: parent.height - root.header-height;
+        visible: !root.data.minimized;
+        background: Theme.canvas;
+
+        @children
+    }
+
+    // Alça de redimensionamento no canto inferior direito.
+    if !root.data.minimized: Rectangle {
+        x: parent.width - 16px;
+        y: parent.height - 16px;
+        width: 16px;
+        height: 16px;
+
+        Path {
+            width: 8px;
+            height: 8px;
+            commands: "M8 0 L0 8 M8 4 L4 8";
+            stroke: grip.has-hover ? Theme.accent : Theme.text-muted;
+            stroke-width: 1px;
+            viewbox-width: 8;
+            viewbox-height: 8;
+        }
+
+        grip := TouchArea {
+            mouse-cursor: MouseCursor.nwse-resize;
+            moved => {
+                root.resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    root.raised();
+                }
+            }
+        }
+    }
+}

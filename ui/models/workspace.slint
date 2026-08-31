@@ -1,0 +1,23 @@
+export enum BlockKind { terminal, files, editor }
+
+export struct WorkspaceTab {
+    id: string,
+    name: string,
+}
+
+/// Um bloco flutuante dentro do canvas de um workspace. A geometria vive no
+/// Rust: arrastar e redimensionar mandam deslocamentos, não posições absolutas,
+/// para que a UI não precise conhecer os limites do canvas.
+export struct BlockRow {
+    id: string,
+    kind: BlockKind,
+    title: string,
+    subtitle: string,
+    session: string,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    minimized: bool,
+    active: bool,
+}

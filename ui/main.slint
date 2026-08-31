@@ -18,12 +18,14 @@ import { NoteRow, NoteDraft } from "models/note.slint";
 import { NoteForm } from "pages/note-form.slint";
 import { FileRow } from "models/file.slint";
 import { TransferRow } from "models/transfer.slint";
+import { BlockRow, WorkspaceTab } from "models/workspace.slint";
 
 export { Section } from "layout/sidebar.slint";
 export { ConnectionRow, ConnectionDraft, VaultState, HostChallenge, SessionRow }
 export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
 export { TransferRow }
+export { BlockRow, BlockKind, WorkspaceTab } from "models/workspace.slint";
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
@@ -36,9 +38,13 @@ export component AppWindow inherits Window {
     min-height: 560px;
     background: Theme.canvas;
 
-    in-out property <Section> section: Section.home;
-    in property <bool> maximized: false;
+    in-out property <Section> section: Section.workspace;
+    in property <bool> window-maximized: false;
     in-out property <bool> sidebar-collapsed: false;
+    in property <[BlockRow]> blocks;
+    in property <[WorkspaceTab]> tabs;
+    in property <string> active-tab;
+    in property <string> workspace-hint;
     in property <VaultState> vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
@@ -87,6 +93,16 @@ export component AppWindow inherits Window {
     callback window-minimize();
     callback window-maximize-toggle();
     callback window-close();
+    callback tab-selected(string);
+    callback tab-closed(string);
+    callback tab-created();
+    callback block-moved(string, length, length);
+    callback block-resized(string, length, length);
+    callback block-raised(string);
+    callback block-minimize-toggled(string);
+    callback block-closed(string);
+    callback block-add-terminal();
+    callback block-add-files();
     callback vault-submitted(string, string);
     callback connection-create-requested();
     callback connection-connect-requested(string);
@@ -140,13 +156,18 @@ export component AppWindow inherits Window {
     VerticalLayout {
         TitleBar {
             title: "OpenPtl";
-            maximized: root.maximized;
+            maximized: root.window-maximized;
             drag-started => { root.window-drag-started(); }
             dragged(dx, dy) => { root.window-dragged(dx, dy); }
             minimize-requested => { root.window-minimize(); }
             maximize-toggled => { root.window-maximize-toggle(); }
             close-requested => { root.window-close(); }
             sidebar-toggled => { root.sidebar-collapsed = !root.sidebar-collapsed; }
+            tabs: root.tabs;
+            active-tab: root.active-tab;
+            tab-selected(id) => { root.tab-selected(id); }
+            tab-closed(id) => { root.tab-closed(id); }
+            tab-created => { root.tab-created(); }
         }
 
         content := Rectangle {
@@ -162,6 +183,15 @@ export component AppWindow inherits Window {
 
             if root.vault.initialized && !root.vault.locked: AppShell {
                 sidebar-collapsed: root.sidebar-collapsed;
+                blocks: root.blocks;
+                workspace-hint: root.workspace-hint;
+                block-moved(id, dx, dy) => { root.block-moved(id, dx, dy); }
+                block-resized(id, dx, dy) => { root.block-resized(id, dx, dy); }
+                block-raised(id) => { root.block-raised(id); }
+                block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
+                block-closed(id) => { root.block-closed(id); }
+                block-add-terminal => { root.block-add-terminal(); }
+                block-add-files => { root.block-add-files(); }
                 section <=> root.section;
                 connections: root.connections;
                 sessions: root.sessions;

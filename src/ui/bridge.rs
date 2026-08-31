@@ -22,6 +22,7 @@ use super::terminal_view;
 use super::transfers_flow;
 use super::update_flow;
 use super::window_flow;
+use super::workspace_flow;
 use super::{AppWindow, ConnectionDraft, VaultState};
 use crate::backend::Backend;
 use crate::libs::deeplink;
@@ -36,6 +37,7 @@ pub fn run() -> Result<()> {
     apply_vault_status(&window, backend.status()?);
     apply_environment(&window, &backend);
     window_flow::bind(&window);
+    workspace_flow::bind(&window, Arc::clone(&backend));
     bind_vault(&window, Arc::clone(&backend));
     bind_connections(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));

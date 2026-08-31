@@ -36,7 +36,7 @@ pub fn bind(window: &AppWindow) {
         // manda o comportamento habitual do sistema.
         if window.window().is_maximized() {
             window.window().set_maximized(false);
-            window.set_maximized(false);
+            window.set_window_maximized(false);
             DRAG_ORIGIN.with(|slot| slot.set(Some(window.window().position())));
             return;
         }
@@ -62,7 +62,7 @@ pub fn bind(window: &AppWindow) {
         };
         let next = !window.window().is_maximized();
         window.window().set_maximized(next);
-        window.set_maximized(next);
+        window.set_window_maximized(next);
     });
 
     let handle = window.as_weak();

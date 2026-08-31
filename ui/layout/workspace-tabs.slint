@@ -1,0 +1,114 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { WorkspaceTab } from "../models/workspace.slint";
+
+component Tab inherits Rectangle {
+    in property <WorkspaceTab> data;
+    in property <bool> active: false;
+    callback selected();
+    callback closed();
+
+    width: label.preferred-width + 52px;
+    height: 26px;
+    border-radius: Theme.radius-sm;
+    background: root.active ? Theme.surface-raised
+        : touch.has-hover ? Theme.surface
+        : transparent;
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-smooth; }
+
+    // Sublinhado que cresce ao ativar, em vez de aparecer de uma vez.
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - 2px;
+        width: root.active ? parent.width - 16px : 0px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+        animate width { duration: Theme.motion-base; easing: Theme.ease-out-soft; }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-md;
+        padding-right: Theme.space-xs;
+        spacing: Theme.space-xs;
+
+        label := Text {
+            text: root.data.name;
+            vertical-alignment: center;
+            font-size: Type.caption;
+            font-weight: root.active ? Type.weight-medium : Type.weight-regular;
+            color: root.active ? Theme.text-primary : Theme.text-muted;
+        }
+
+        Rectangle {
+            width: 18px;
+            border-radius: Theme.radius-sm;
+            background: close-touch.has-hover ? Theme.danger : transparent;
+            animate background { duration: Theme.motion-fast; }
+
+            Path {
+                width: 6px;
+                height: 6px;
+                commands: "M1 1 L5 5 M5 1 L1 5";
+                stroke: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+                stroke-width: 1px;
+                stroke-line-cap: round;
+                viewbox-width: 6;
+                viewbox-height: 6;
+            }
+
+            close-touch := TouchArea {
+                clicked => { root.closed(); }
+            }
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.selected(); }
+    }
+}
+
+/// Faixa de abas de workspace, exibida na barra de título como no design
+/// anterior: cada aba é uma área de trabalho com seus próprios blocos.
+export component WorkspaceTabs inherits HorizontalLayout {
+    in property <[WorkspaceTab]> tabs;
+    in property <string> active;
+    callback selected(string);
+    callback closed(string);
+    callback created();
+
+    spacing: 2px;
+    alignment: start;
+
+    for tab in root.tabs: Tab {
+        data: tab;
+        active: tab.id == root.active;
+        selected => { root.selected(tab.id); }
+        closed => { root.closed(tab.id); }
+    }
+
+    Rectangle {
+        width: 26px;
+        height: 26px;
+        border-radius: Theme.radius-sm;
+        background: add.has-hover ? Theme.surface : transparent;
+        animate background { duration: Theme.motion-fast; }
+
+        Path {
+            width: 9px;
+            height: 9px;
+            commands: "M4.5 1 L4.5 8 M1 4.5 L8 4.5";
+            stroke: add.has-hover ? Theme.accent : Theme.text-muted;
+            stroke-width: 1px;
+            stroke-line-cap: round;
+            viewbox-width: 9;
+            viewbox-height: 9;
+        }
+
+        add := TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.created(); }
+        }
+    }
+}

@@ -1,0 +1,146 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { BlockRow, BlockKind } from "../models/workspace.slint";
+import { TermLine } from "../models/terminal.slint";
+import { FileRow } from "../models/file.slint";
+import { BlockFrame } from "../components/block-frame.slint";
+import { TerminalView } from "../components/terminal-view.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { PageHeader } from "../patterns/page-header.slint";
+
+component FileLine inherits Rectangle {
+    in property <FileRow> data;
+    callback opened(FileRow);
+
+    height: 24px;
+    background: touch.has-hover ? Theme.surface-inset : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-sm;
+        padding-right: Theme.space-sm;
+        spacing: Theme.space-sm;
+
+        Text {
+            width: 12px;
+            text: root.data.is-dir ? "▸" : "·";
+            vertical-alignment: center;
+            font-size: Type.caption;
+            color: root.data.is-dir ? Theme.accent : Theme.text-muted;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.data.name;
+            vertical-alignment: center;
+            font-size: Type.caption;
+            color: Theme.text-secondary;
+            overflow: elide;
+        }
+        Text {
+            text: root.data.size;
+            vertical-alignment: center;
+            font-size: Type.caption;
+            color: Theme.text-muted;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.data.is-dir ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            if (root.data.is-dir) {
+                root.opened(root.data);
+            }
+        }
+    }
+}
+
+export component WorkspacePage inherits Rectangle {
+    in property <[BlockRow]> blocks;
+    in property <[TermLine]> terminal-lines;
+    in property <[FileRow]> files;
+    in property <image> editor-surface;
+    in property <string> hint;
+
+    callback block-moved(string, length, length);
+    callback block-resized(string, length, length);
+    callback block-raised(string);
+    callback block-minimize-toggled(string);
+    callback block-closed(string);
+    callback terminal-input(string, bool, bool);
+    callback file-opened(string);
+    callback add-terminal();
+    callback add-files();
+
+    background: Theme.canvas;
+
+    // Malha de pontos: dá noção de superfície e de deslocamento ao arrastar,
+    // sem competir com o conteúdo dos blocos.
+    for column in 40: Rectangle {
+        width: 1px;
+        x: column * 32px;
+        background: Theme.surface;
+        opacity: 0.35;
+    }
+
+    if root.blocks.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: Theme.space-lg;
+
+        PageHeader {
+            title: "Área de trabalho";
+            subtitle: root.hint;
+        }
+
+        HorizontalLayout {
+            spacing: Theme.space-sm;
+            alignment: center;
+            UiButton {
+                label: "Novo terminal";
+                tone: ButtonTone.primary;
+                clicked => { root.add-terminal(); }
+            }
+            UiButton {
+                label: "Novo painel de arquivos";
+                clicked => { root.add-files(); }
+            }
+        }
+    }
+
+    for block in root.blocks: BlockFrame {
+        data: block;
+        moved(dx, dy) => { root.block-moved(block.id, dx, dy); }
+        resized(dx, dy) => { root.block-resized(block.id, dx, dy); }
+        raised => { root.block-raised(block.id); }
+        minimize-toggled => { root.block-minimize-toggled(block.id); }
+        closed => { root.block-closed(block.id); }
+
+        if block.kind == BlockKind.terminal: TerminalView {
+            width: parent.width;
+            height: parent.height;
+            lines: root.terminal-lines;
+            focused: block.active;
+            key-pressed(text, ctrl, alt) => { root.terminal-input(text, ctrl, alt); }
+        }
+
+        if block.kind == BlockKind.files: ScrollView {
+            width: parent.width;
+            height: parent.height;
+
+            VerticalLayout {
+                alignment: start;
+                for entry in root.files: FileLine {
+                    data: entry;
+                    opened(row) => { root.file-opened(row.path); }
+                }
+            }
+        }
+
+        if block.kind == BlockKind.editor: Image {
+            width: parent.width;
+            height: parent.height;
+            source: root.editor-surface;
+            image-rendering: pixelated;
+        }
+    }
+}
