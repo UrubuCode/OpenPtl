@@ -1,5 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 import { Type } from "../theme/typography.slint";
 import { BlockRow, BlockKind } from "../models/workspace.slint";
 import { TermLine } from "../models/terminal.slint";
@@ -22,12 +23,10 @@ component FileLine inherits Rectangle {
         padding-right: Theme.space-sm;
         spacing: Theme.space-sm;
 
-        Text {
-            width: 12px;
-            text: root.data.is-dir ? "▸" : "·";
-            vertical-alignment: center;
-            font-size: Type.caption;
-            color: root.data.is-dir ? Theme.accent : Theme.text-muted;
+        UiIcon {
+            y: (parent.height - self.height) / 2;
+            shape: root.data.is-dir ? Icons.folder : Icons.file;
+            tint: root.data.is-dir ? Theme.accent : Theme.text-muted;
         }
         Text {
             horizontal-stretch: 1;
@@ -116,17 +115,12 @@ export component WorkspacePage inherits Rectangle {
         closed => { root.block-closed(block.id); }
 
         if block.kind == BlockKind.terminal: TerminalView {
-            width: parent.width;
-            height: parent.height;
             lines: root.terminal-lines;
             focused: block.active;
             key-pressed(text, ctrl, alt) => { root.terminal-input(text, ctrl, alt); }
         }
 
         if block.kind == BlockKind.files: ScrollView {
-            width: parent.width;
-            height: parent.height;
-
             VerticalLayout {
                 alignment: start;
                 for entry in root.files: FileLine {
@@ -137,8 +131,6 @@ export component WorkspacePage inherits Rectangle {
         }
 
         if block.kind == BlockKind.editor: Image {
-            width: parent.width;
-            height: parent.height;
             source: root.editor-surface;
             image-rendering: pixelated;
         }

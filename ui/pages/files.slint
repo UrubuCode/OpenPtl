@@ -1,4 +1,5 @@
 import { Theme } from "../theme/tokens.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 import { Type } from "../theme/typography.slint";
 import { FileRow } from "../models/file.slint";
 import { SessionRow } from "../models/session.slint";
@@ -27,12 +28,10 @@ component FileEntry inherits Rectangle {
         padding-right: Theme.space-sm;
         spacing: Theme.space-md;
 
-        Text {
-            width: 18px;
-            text: root.data.is-dir ? "▸" : "·";
-            vertical-alignment: center;
-            font-size: Type.body;
-            color: root.data.is-dir ? Theme.accent-bright : Theme.text-muted;
+        UiIcon {
+            y: (parent.height - self.height) / 2;
+            shape: root.data.is-dir ? Icons.folder : Icons.file;
+            tint: root.data.is-dir ? Theme.accent : Theme.text-muted;
         }
         Text {
             horizontal-stretch: 1;

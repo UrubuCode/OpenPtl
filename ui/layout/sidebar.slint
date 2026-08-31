@@ -1,11 +1,12 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 
 export enum Section { workspace, home, terminal, files, editor, keychain, known-hosts, notes, sync, settings, about }
 
 component SidebarItem inherits Rectangle {
     in property <string> label;
-    in property <string> glyph;
+    in property <string> icon;
     in property <bool> active: false;
     in property <bool> collapsed: false;
     callback clicked();
@@ -39,13 +40,10 @@ component SidebarItem inherits Rectangle {
         padding-right: Theme.space-sm;
         spacing: Theme.space-md;
 
-        Text {
-            width: 16px;
-            text: root.glyph;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            font-size: Type.body;
-            color: root.active ? Theme.accent : Theme.sidebar-text;
+        UiIcon {
+            y: (parent.height - self.height) / 2;
+            shape: root.icon;
+            tint: root.active ? Theme.accent : Theme.sidebar-text;
         }
 
         Text {
@@ -91,16 +89,16 @@ export component Sidebar inherits Rectangle {
         spacing: 2px;
         alignment: start;
 
-        SidebarItem { glyph: "▦"; label: "Área de trabalho"; collapsed: root.collapsed; active: root.active == Section.workspace; clicked => { root.selected(Section.workspace); } }
-        SidebarItem { glyph: "◆"; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
-        SidebarItem { glyph: "▮"; label: "Terminal"; collapsed: root.collapsed; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
-        SidebarItem { glyph: "▤"; label: "Arquivos"; collapsed: root.collapsed; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
-        SidebarItem { glyph: "✎"; label: "Editor"; collapsed: root.collapsed; active: root.active == Section.editor; clicked => { root.selected(Section.editor); } }
-        SidebarItem { glyph: "⚿"; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
-        SidebarItem { glyph: "⛨"; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
-        SidebarItem { glyph: "✐"; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
-        SidebarItem { glyph: "⟳"; label: "Sincronização"; collapsed: root.collapsed; active: root.active == Section.sync; clicked => { root.selected(Section.sync); } }
-        SidebarItem { glyph: "⚙"; label: "Configurações"; collapsed: root.collapsed; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
-        SidebarItem { glyph: "◇"; label: "Sobre"; collapsed: root.collapsed; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
+        SidebarItem { icon: Icons.workspace; label: "Área de trabalho"; collapsed: root.collapsed; active: root.active == Section.workspace; clicked => { root.selected(Section.workspace); } }
+        SidebarItem { icon: Icons.connections; label: "Conexões"; collapsed: root.collapsed; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
+        SidebarItem { icon: Icons.terminal; label: "Terminal"; collapsed: root.collapsed; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }
+        SidebarItem { icon: Icons.files; label: "Arquivos"; collapsed: root.collapsed; active: root.active == Section.files; clicked => { root.selected(Section.files); } }
+        SidebarItem { icon: Icons.editor; label: "Editor"; collapsed: root.collapsed; active: root.active == Section.editor; clicked => { root.selected(Section.editor); } }
+        SidebarItem { icon: Icons.keychain; label: "Chaveiro"; collapsed: root.collapsed; active: root.active == Section.keychain; clicked => { root.selected(Section.keychain); } }
+        SidebarItem { icon: Icons.shield; label: "Hosts conhecidos"; collapsed: root.collapsed; active: root.active == Section.known-hosts; clicked => { root.selected(Section.known-hosts); } }
+        SidebarItem { icon: Icons.notes; label: "Notas"; collapsed: root.collapsed; active: root.active == Section.notes; clicked => { root.selected(Section.notes); } }
+        SidebarItem { icon: Icons.sync; label: "Sincronização"; collapsed: root.collapsed; active: root.active == Section.sync; clicked => { root.selected(Section.sync); } }
+        SidebarItem { icon: Icons.settings; label: "Configurações"; collapsed: root.collapsed; active: root.active == Section.settings; clicked => { root.selected(Section.settings); } }
+        SidebarItem { icon: Icons.about; label: "Sobre"; collapsed: root.collapsed; active: root.active == Section.about; clicked => { root.selected(Section.about); } }
     }
 }

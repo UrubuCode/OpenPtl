@@ -1,5 +1,6 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "./icon.slint";
 
 export component UiToggle inherits HorizontalLayout {
     in property <string> label;
@@ -18,11 +19,12 @@ export component UiToggle inherits HorizontalLayout {
         background: root.checked ? Theme.accent : Theme.surface-inset;
         animate background { duration: Theme.motion-fast; }
 
-        Text {
-            text: "✓";
+        UiIcon {
+            width: 12px;
+            height: 12px;
             visible: root.checked;
-            font-size: Type.caption;
-            color: Theme.text-on-accent;
+            shape: Icons.check;
+            tint: Theme.text-on-accent;
         }
     }
 

@@ -1,4 +1,5 @@
 import { Theme } from "../theme/tokens.slint";
+import { UiIcon } from "../components/icon.slint";
 import { Type } from "../theme/typography.slint";
 import { TermLine } from "../models/terminal.slint";
 import { SessionRow } from "../models/session.slint";
@@ -27,13 +28,23 @@ component SessionTab inherits Rectangle {
             font-size: Type.label;
             color: root.active ? Theme.text-primary : Theme.text-secondary;
         }
-        UiButton {
-            width: 24px;
-            height: 22px;
+        Rectangle {
+            width: 22px;
             y: 4px;
-            label: "×";
-            tone: ButtonTone.ghost;
-            clicked => { root.closed(); }
+            border-radius: Theme.radius-sm;
+            background: close-touch.has-hover ? Theme.danger : transparent;
+            animate background { duration: Theme.motion-fast; }
+
+            UiIcon {
+                width: 10px;
+                height: 10px;
+                shape: "M3 3 L13 13 M13 3 L3 13";
+                tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+            }
+
+            close-touch := TouchArea {
+                clicked => { root.closed(); }
+            }
         }
     }
 

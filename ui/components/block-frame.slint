@@ -117,11 +117,13 @@ export component BlockFrame inherits Rectangle {
         }
     }
 
-    body := Rectangle {
+    // Precisa ser um layout: o conteúdo é declarado como filho de `BlockFrame`,
+    // então o `parent` dele é a raiz do bloco, não este corpo. Sem o layout
+    // dimensionando, o conteúdo assume o tamanho da raiz e cobre o cabeçalho.
+    body := VerticalLayout {
         y: root.header-height;
         height: parent.height - root.header-height;
         visible: !root.data.minimized;
-        background: Theme.canvas;
 
         @children
     }
