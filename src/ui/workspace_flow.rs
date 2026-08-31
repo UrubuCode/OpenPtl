@@ -29,6 +29,8 @@ struct Workspaces {
     /// Bloco em foco. Guardado a parte da ordem de desenho para que focar nao
     /// precise reordenar a lista durante um gesto.
     focused: Option<String>,
+    /// Tamanho util do canvas, informado pela interface.
+    canvas: (f32, f32),
     next_id: u32,
 }
 
@@ -60,6 +62,7 @@ pub fn bind(window: &AppWindow, backend: Arc<Backend>) {
 
     bind_tabs(window);
     bind_blocks(window);
+    bind_canvas(window);
     let _ = backend;
 
     publish(window);
@@ -112,17 +115,21 @@ fn bind_tabs(window: &AppWindow) {
 fn bind_blocks(window: &AppWindow) {
     let handle = window.as_weak();
     window.on_block_moved(move |id, dx, dy| {
+        let canvas = canvas_size();
         with_block(&handle, &id, |block| {
-            block.x = (block.x + dx).max(0.0);
-            block.y = (block.y + dy).max(0.0);
+            block.x += dx;
+            block.y += dy;
+            contain(block, canvas);
         });
     });
 
     let handle = window.as_weak();
     window.on_block_resized(move |id, dx, dy| {
+        let canvas = canvas_size();
         with_block(&handle, &id, |block| {
             block.width = (block.width + dx).max(MIN_WIDTH);
             block.height = (block.height + dy).max(MIN_HEIGHT);
+            contain(block, canvas);
         });
     });
 
@@ -419,4 +426,122 @@ fn refresh_focus(window: &AppWindow) {
             rows.set_row_data(index, to_row(block, focused));
         }
     });
+}
+
+fn canvas_size() -> (f32, f32) {
+    STATE.with(|state| state.borrow().canvas)
+}
+
+/// Mantém o bloco dentro do canvas.
+///
+/// O tamanho é ajustado antes da posição: um bloco maior que a área precisa
+/// encolher, senão empurrá-lo para dentro só esconderia a outra ponta. Um
+/// canvas ainda sem medida deixa o bloco em paz.
+fn contain(block: &mut Block, canvas: (f32, f32)) {
+    let (width, height) = canvas;
+    if width <= 0.0 || height <= 0.0 {
+        return;
+    }
+
+    block.width = block.width.min(width).max(MIN_WIDTH);
+    block.height = block.height.min(height).max(MIN_HEIGHT);
+    block.x = block.x.clamp(0.0, (width - block.width).max(0.0));
+    block.y = block.y.clamp(0.0, (height - block.height).max(0.0));
+}
+
+/// A interface informa o tamanho do canvas; blocos que ficaram fora voltam.
+fn bind_canvas(window: &AppWindow) {
+    let handle = window.as_weak();
+    window.on_canvas_resized(move |width, height| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+
+        let changed = STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            if state.canvas == (width, height) {
+                return false;
+            }
+            state.canvas = (width, height);
+
+            let canvas = state.canvas;
+            let Some(tab) = active_tab_mut(&mut state) else {
+                return false;
+            };
+            for block in tab.blocks.iter_mut() {
+                contain(block, canvas);
+            }
+            true
+        });
+
+        if changed {
+            publish(&window);
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block(x: f32, y: f32, width: f32, height: f32) -> Block {
+        Block {
+            id: "b".into(),
+            kind: BlockKind::Terminal,
+            title: String::new(),
+            subtitle: String::new(),
+            session: String::new(),
+            x,
+            y,
+            width,
+            height,
+            minimized: false,
+        }
+    }
+
+    #[test]
+    fn a_block_cannot_leave_through_the_right_or_the_bottom() {
+        let mut moved = block(900.0, 700.0, 400.0, 300.0);
+        contain(&mut moved, (1000.0, 800.0));
+
+        assert_eq!(moved.x, 600.0);
+        assert_eq!(moved.y, 500.0);
+    }
+
+    #[test]
+    fn a_block_cannot_leave_through_the_left_or_the_top() {
+        let mut moved = block(-50.0, -30.0, 400.0, 300.0);
+        contain(&mut moved, (1000.0, 800.0));
+
+        assert_eq!(moved.x, 0.0);
+        assert_eq!(moved.y, 0.0);
+    }
+
+    #[test]
+    fn a_block_larger_than_the_canvas_shrinks_to_fit() {
+        let mut oversized = block(0.0, 0.0, 2000.0, 1500.0);
+        contain(&mut oversized, (1000.0, 800.0));
+
+        assert_eq!(oversized.width, 1000.0);
+        assert_eq!(oversized.height, 800.0);
+        assert_eq!(oversized.x, 0.0);
+    }
+
+    #[test]
+    fn the_minimum_size_wins_over_a_tiny_canvas() {
+        let mut squeezed = block(0.0, 0.0, 400.0, 300.0);
+        contain(&mut squeezed, (100.0, 90.0));
+
+        assert_eq!(squeezed.width, MIN_WIDTH);
+        assert_eq!(squeezed.height, MIN_HEIGHT);
+    }
+
+    #[test]
+    fn an_unmeasured_canvas_leaves_the_block_alone() {
+        let mut untouched = block(900.0, 700.0, 400.0, 300.0);
+        contain(&mut untouched, (0.0, 0.0));
+
+        assert_eq!(untouched.x, 900.0);
+        assert_eq!(untouched.y, 700.0);
+    }
 }

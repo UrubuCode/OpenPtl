@@ -1,0 +1,120 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { FocusSink } from "focus-sink.slint";
+
+/// Gaveta lateral, o formato que os formulários tinham antes do porte: entra
+/// deslizando pela direita, ocupa a altura toda e mantém o conteúdo da tela
+/// visível ao lado, em vez de cobri-la com um painel centralizado.
+export component Drawer inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> title;
+    in property <string> description;
+    in property <length> panel-width: 480px;
+    callback dismissed();
+
+    // Continua na árvore durante a saída para a transição ter de onde partir.
+    visible: root.open || root.veil > 0.01;
+    background: Theme.overlay.with-alpha(0.45 * root.veil);
+
+    property <float> veil: root.open ? 1.0 : 0.0;
+    animate veil {
+        duration: Theme.motion-base;
+        easing: Theme.ease-smooth;
+    }
+
+    TouchArea {
+        clicked => { root.dismissed(); }
+    }
+
+    panel := Rectangle {
+        width: root.panel-width;
+        // Desliza de fora da borda direita até encostar nela.
+        x: parent.width - self.width * root.veil;
+        background: Theme.surface;
+        // Filete na borda esquerda, para separar do conteudo sem contornar o
+        // painel inteiro.
+        Rectangle {
+            x: 0;
+            width: 1px;
+            background: Theme.border;
+        }
+        animate x {
+            duration: Theme.motion-base;
+            easing: Theme.ease-out-soft;
+        }
+
+        FocusSink { }
+
+        VerticalLayout {
+            Rectangle {
+                height: header.min-height;
+                vertical-stretch: 0;
+                background: Theme.surface-raised;
+
+                header := HorizontalLayout {
+                    padding: Theme.space-lg;
+                    spacing: Theme.space-md;
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: Theme.space-xs;
+                        alignment: center;
+
+                        Text {
+                            text: root.title;
+                            font-size: Type.title;
+                            font-weight: Type.weight-semibold;
+                            color: Theme.text-primary;
+                        }
+                        if root.description != "": Text {
+                            text: root.description;
+                            font-size: Type.caption;
+                            color: Theme.text-muted;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 28px;
+                        height: 28px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: Theme.radius-sm;
+                        background: close-touch.has-hover ? Theme.danger : transparent;
+                        animate background { duration: Theme.motion-fast; }
+
+                        UiIcon {
+                            width: 14px;
+                            height: 14px;
+                            source: Icons.close;
+                            tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+                        }
+
+                        close-touch := TouchArea {
+                            clicked => { root.dismissed(); }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.border;
+            }
+
+            ScrollView {
+                vertical-stretch: 1;
+
+                VerticalLayout {
+                    padding: Theme.space-lg;
+                    spacing: Theme.space-md;
+                    alignment: start;
+
+                    @children
+                }
+            }
+        }
+    }
+}

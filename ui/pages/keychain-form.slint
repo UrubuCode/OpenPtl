@@ -1,22 +1,31 @@
 import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
 import { KeychainDraft } from "../models/keychain.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
-import { UiToggle } from "../components/toggle.slint";
-import { Modal } from "../patterns/modal.slint";
+import { Drawer } from "../patterns/drawer.slint";
+import { TabBar } from "../patterns/tab-bar.slint";
 
-export component KeychainForm inherits Modal {
+/// Formulário do chaveiro em gaveta. O tipo da entrada vira aba em vez de
+/// interruptor: senha e par de chaves pedem campos diferentes, e a aba deixa
+/// claro que a escolha troca o formulário inteiro.
+export component KeychainForm inherits Drawer {
     in property <KeychainDraft> draft;
     in property <string> error;
     callback saved(KeychainDraft);
     callback cancelled();
 
-    panel-width: 520px;
     title: root.draft.id == "" ? "Nova entrada" : "Editar entrada";
+    description: "Senhas, chaves e segredos guardados no cofre.";
     dismissed => { root.cancelled(); }
 
     property <KeychainDraft> edited: root.draft;
-    property <bool> is-key: root.edited.kind == "ssh_key";
+    property <int> kind-tab: root.draft.kind == "ssh_key" ? 1 : root.draft.kind == "secret" ? 2 : 0;
+
+    TabBar {
+        tabs: ["Senha", "Chave SSH", "Segredo"];
+        current <=> root.kind-tab;
+    }
 
     UiField {
         label: "Nome";
@@ -24,41 +33,43 @@ export component KeychainForm inherits Modal {
         value <=> root.edited.name;
     }
 
-    UiToggle {
-        label: "Entrada é uma chave SSH";
-        checked: root.is-key;
-        toggled => { root.edited.kind = root.is-key ? "password" : "ssh_key"; }
-    }
-
-    if !root.is-key: UiField {
-        label: "Senha ou segredo";
+    if root.kind-tab == 0: UiField {
+        label: "Senha";
         placeholder: "Valor protegido";
         secret: true;
         value <=> root.edited.password;
     }
 
-    if root.is-key: UiField {
+    if root.kind-tab == 1: UiField {
         label: "Chave privada";
         placeholder: "Conteúdo PEM";
         secret: true;
         value <=> root.edited.private-key;
     }
 
-    if root.is-key: UiField {
+    if root.kind-tab == 1: UiField {
         label: "Chave pública";
         placeholder: "Opcional";
         value <=> root.edited.public-key;
     }
 
-    if root.is-key: UiField {
+    if root.kind-tab == 1: UiField {
         label: "Frase secreta";
         placeholder: "Opcional";
         secret: true;
         value <=> root.edited.passphrase;
     }
 
+    if root.kind-tab == 2: UiField {
+        label: "Segredo";
+        placeholder: "Valor protegido";
+        secret: true;
+        value <=> root.edited.password;
+    }
+
     if root.error != "": Text {
         text: root.error;
+        font-size: Type.label;
         color: Theme.danger;
         wrap: word-wrap;
     }
@@ -66,12 +77,23 @@ export component KeychainForm inherits Modal {
     HorizontalLayout {
         spacing: Theme.space-sm;
         alignment: end;
-        UiButton { label: "Cancelar"; tone: ButtonTone.ghost; clicked => { root.cancelled(); } }
+
+        UiButton {
+            label: "Cancelar";
+            tone: ButtonTone.ghost;
+            clicked => { root.cancelled(); }
+        }
         UiButton {
             label: "Salvar";
             tone: ButtonTone.primary;
             enabled: root.edited.name != "";
-            clicked => { root.saved(root.edited); }
+            clicked => {
+                // A aba escolhida é o tipo da entrada.
+                root.edited.kind = root.kind-tab == 1 ? "ssh_key"
+                    : root.kind-tab == 2 ? "secret"
+                    : "password";
+                root.saved(root.edited);
+            }
         }
     }
 }

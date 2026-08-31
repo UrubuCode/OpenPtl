@@ -111,6 +111,8 @@ export component AppWindow inherits Window {
     callback block-resized(string, length, length);
     callback block-raised(string);
     callback block-settled();
+    callback canvas-resized(length, length);
+    callback terminal-resized(string, length, length);
     callback block-minimize-toggled(string);
     callback block-closed(string);
     callback block-add-terminal();
@@ -197,16 +199,24 @@ export component AppWindow inherits Window {
                 show-sidebar-toggle: root.vault.initialized && !root.vault.locked;
                 tabs: root.tabs;
                 active-tab: root.active-tab;
-                show-tabs: root.section == Section.workspace;
+                // Sempre visiveis: sem o item na sidebar, as abas sao o unico
+                // caminho de volta para a area de trabalho.
+                show-tabs: root.vault.initialized && !root.vault.locked;
                 sync-connected: root.sync-connected;
                 sync-busy: root.sync-busy;
                 sync-account: root.sync-account;
                 sync-initials: root.sync-initials;
                 sync-message: root.sync-message;
                 account-toggled => { root.account-open = !root.account-open; }
-                tab-selected(id) => { root.tab-selected(id); }
+                tab-selected(id) => {
+                    root.section = Section.workspace;
+                    root.tab-selected(id);
+                }
                 tab-closed(id) => { root.tab-closed(id); }
-                tab-created => { root.tab-created(); }
+                tab-created => {
+                    root.section = Section.workspace;
+                    root.tab-created();
+                }
             }
 
             content := Rectangle {
@@ -227,6 +237,8 @@ export component AppWindow inherits Window {
                 block-resized(id, dx, dy) => { root.block-resized(id, dx, dy); }
                 block-raised(id) => { root.block-raised(id); }
                 block-settled => { root.block-settled(); }
+                canvas-resized(w, h) => { root.canvas-resized(w, h); }
+                terminal-resized(id, w, h) => { root.terminal-resized(id, w, h); }
                 block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
                 block-closed(id) => { root.block-closed(id); }
                 block-add-terminal => { root.block-add-terminal(); }

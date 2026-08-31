@@ -1,0 +1,52 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+/// Passos numerados, como no formulário de conexão anterior: mostra onde o
+/// usuário está e o que ainda falta, em vez de despejar todos os campos numa
+/// lista só.
+export component Stepper inherits HorizontalLayout {
+    in property <[string]> steps;
+    in-out property <int> current: 0;
+
+    spacing: Theme.space-sm;
+    alignment: start;
+    vertical-stretch: 0;
+
+    for label[index] in root.steps: HorizontalLayout {
+        spacing: Theme.space-sm;
+
+        Rectangle {
+            width: 22px;
+            height: 22px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 11px;
+            background: index <= root.current ? Theme.accent : Theme.surface-inset;
+            animate background {
+                duration: Theme.motion-base;
+                easing: Theme.ease-smooth;
+            }
+
+            Text {
+                text: index + 1;
+                font-size: Type.caption;
+                font-weight: Type.weight-medium;
+                color: index <= root.current ? Theme.text-on-accent : Theme.text-muted;
+            }
+        }
+
+        Text {
+            text: label;
+            vertical-alignment: center;
+            font-size: Type.caption;
+            color: index <= root.current ? Theme.text-primary : Theme.text-muted;
+        }
+
+        // Traço ligando um passo ao seguinte; o último não tem para onde ligar.
+        if index + 1 < root.steps.length: Rectangle {
+            width: 16px;
+            height: 1px;
+            y: (parent.height - self.height) / 2;
+            background: Theme.border-strong;
+        }
+    }
+}

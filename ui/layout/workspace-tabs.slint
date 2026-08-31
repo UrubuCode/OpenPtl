@@ -1,6 +1,7 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { WorkspaceTab } from "../models/workspace.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
 
 component Tab inherits Rectangle {
     in property <WorkspaceTab> data;
@@ -94,22 +95,21 @@ export component WorkspaceTabs inherits HorizontalLayout {
         closed => { root.closed(tab.id); }
     }
 
+    // Alvo generoso: com 26px o mais era dificil de acertar.
     Rectangle {
-        width: 26px;
+        width: 34px;
         height: 26px;
         border-radius: Theme.radius-sm;
-        background: add.has-hover ? Theme.surface : transparent;
-        animate background { duration: Theme.motion-fast; }
+        background: add.has-hover ? Theme.surface-hover : Theme.surface;
+        border-width: 1px;
+        border-color: add.has-hover ? Theme.border-strong : Theme.border;
+        animate background, border-color { duration: Theme.motion-fast; }
 
-        Path {
-            width: 9px;
-            height: 9px;
-            commands: "M4.5 1 L4.5 8 M1 4.5 L8 4.5";
-            stroke: add.has-hover ? Theme.accent : Theme.text-muted;
-            stroke-width: 1px;
-            stroke-line-cap: round;
-            viewbox-width: 9;
-            viewbox-height: 9;
+        UiIcon {
+            width: 13px;
+            height: 13px;
+            source: Icons.plus;
+            tint: add.has-hover ? Theme.accent : Theme.text-secondary;
         }
 
         add := TouchArea {

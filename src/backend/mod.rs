@@ -142,6 +142,20 @@ impl Backend {
         Ok(())
     }
 
+    /// Informa ao servidor o novo tamanho da janela do terminal, para que os
+    /// programas remotos reflitam a área disponível.
+    pub fn resize_pty(&self, session_id: &str, columns: u32, rows: u32) {
+        let ssh = Arc::clone(&self.ssh);
+        let session_id = session_id.to_owned();
+        self.runtime.spawn(async move {
+            let _ = ssh
+                .lock()
+                .await
+                .resize_pty(&session_id, columns, rows)
+                .await;
+        });
+    }
+
     /// Drena a saida pendente da sessao e devolve pelo callback. A interface
     /// chama isto num temporizador; nada bloqueia a thread de desenho.
     pub fn poll_output<F>(&self, session_id: &str, on_output: F)
