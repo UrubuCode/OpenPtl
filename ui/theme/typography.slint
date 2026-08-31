@@ -2,7 +2,13 @@ export global Type {
     // Inter era a fonte do design anterior; a fallback do sistema entra quando
     // ela não estiver instalada.
     out property <string> family: "Inter";
-    out property <string> mono-family: "Cascadia Code";
+    // Consolas existe em toda instalacao do Windows; uma fonte ausente cai
+    // numa proporcional e desalinha a grade do terminal.
+    out property <string> mono-family: "Consolas";
+    out property <length> mono-size: 13px;
+    // Metricas da celula do terminal, casadas com mono-size.
+    out property <length> cell-width: 7px;
+    out property <length> cell-height: 17px;
 
     out property <length> display: 20px;
     out property <length> title: 15px;

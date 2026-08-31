@@ -9,6 +9,7 @@ import { ServerRow, AccountPanel } from "layout/account-menu.slint";
 import { ResizeEdges } from "layout/resize-edges.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
+import { SelectOption } from "components/select.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
 import { HostChallenge, SessionRow } from "models/session.slint";
 import { TermLine } from "models/terminal.slint";
@@ -28,6 +29,7 @@ export { TermLine, TermSpan } from "models/terminal.slint";
 export { KeychainRow, KeychainDraft, KnownHostRow, SettingsDraft, NoteRow, NoteDraft, FileRow }
 export { TransferRow }
 export { ServerRow } from "layout/account-menu.slint";
+export { SelectOption } from "components/select.slint";
 export { BlockRow, BlockKind, WorkspaceTab } from "models/workspace.slint";
 
 export component AppWindow inherits Window {
@@ -57,6 +59,7 @@ export component AppWindow inherits Window {
     in property <bool> form-open: false;
     in property <ConnectionDraft> form-draft;
     in property <string> form-error;
+    in property <[SelectOption]> keychain-options;
     in property <HostChallenge> challenge;
     in property <[SessionRow]> sessions;
     in property <string> status-message;
@@ -321,6 +324,7 @@ export component AppWindow inherits Window {
         open: root.form-open;
         draft: root.form-draft;
         error: root.form-error;
+        keychain: root.keychain-options;
         saved(draft) => { root.connection-saved(draft); }
         cancelled => { root.connection-form-dismissed(); }
     }

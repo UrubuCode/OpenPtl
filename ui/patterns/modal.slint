@@ -1,16 +1,22 @@
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
-import { UiCard } from "../components/card.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { Stepper } from "stepper.slint";
 import { FocusSink } from "focus-sink.slint";
 
+/// Painel central. O cabeçalho aceita um título simples ou, quando o formulário
+/// tem etapas, o indicador de passos — era assim que o formulário de conexão se
+/// apresentava antes do porte.
 export component Modal inherits Rectangle {
     in property <bool> open: false;
     in property <string> title;
     in property <length> panel-width: 460px;
+    in property <[string]> stepper-steps;
+    in property <int> stepper-current: 0;
     callback dismissed();
 
-    // Fica na árvore mesmo fechado para a transição ter de onde partir; o
-    // `visible` só desliga depois que a saída termina.
+    // Fica na árvore mesmo fechado para a transição ter de onde partir.
     visible: root.open || root.veil > 0.01;
     background: Theme.overlay.with-alpha(0.72 * root.veil);
 
@@ -24,10 +30,14 @@ export component Modal inherits Rectangle {
         clicked => { root.dismissed(); }
     }
 
-    UiCard {
-        raised: true;
+    panel := Rectangle {
         width: root.panel-width;
-        height: content.min-height;
+        height: min(shell.min-height, parent.height - 2 * Theme.space-xl);
+        background: Theme.surface;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        clip: true;
 
         // Entra subindo e crescendo de leve, a mesma ideia do fade-in-up.
         y: (parent.height - self.height) / 2 + (1 - root.veil) * Theme.rise * 2;
@@ -37,22 +47,73 @@ export component Modal inherits Rectangle {
             easing: Theme.ease-out-soft;
         }
 
-        // Impede que o clique dentro do painel chegue ao veu e feche o modal,
-        // e tira o foco de um campo quando o clique vai para o vazio.
         FocusSink { }
 
-        content := VerticalLayout {
-            padding: Theme.space-lg;
-            spacing: Theme.space-md;
+        shell := VerticalLayout {
+            Rectangle {
+                height: 52px;
+                vertical-stretch: 0;
+                background: Theme.surface-raised;
 
-            Text {
-                text: root.title;
-                font-size: Type.title;
-                font-weight: Type.weight-semibold;
-                color: Theme.text-primary;
+                HorizontalLayout {
+                    padding-left: Theme.space-lg;
+                    padding-right: Theme.space-sm;
+                    spacing: Theme.space-md;
+
+                    if root.stepper-steps.length > 0: Stepper {
+                        horizontal-stretch: 1;
+                        steps: root.stepper-steps;
+                        current: root.stepper-current;
+                    }
+
+                    if root.stepper-steps.length == 0: Text {
+                        horizontal-stretch: 1;
+                        text: root.title;
+                        vertical-alignment: center;
+                        font-size: Type.title;
+                        font-weight: Type.weight-semibold;
+                        color: Theme.text-primary;
+                    }
+
+                    Rectangle {
+                        width: 28px;
+                        height: 28px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: Theme.radius-sm;
+                        background: close-touch.has-hover ? Theme.danger : transparent;
+                        animate background { duration: Theme.motion-fast; }
+
+                        UiIcon {
+                            width: 14px;
+                            height: 14px;
+                            source: Icons.close;
+                            tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+                        }
+
+                        close-touch := TouchArea {
+                            clicked => { root.dismissed(); }
+                        }
+                    }
+                }
             }
 
-            @children
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.border;
+            }
+
+            ScrollView {
+                vertical-stretch: 1;
+
+                VerticalLayout {
+                    padding: Theme.space-lg;
+                    spacing: Theme.space-md;
+                    alignment: start;
+
+                    @children
+                }
+            }
         }
     }
 }

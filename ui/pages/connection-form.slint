@@ -4,44 +4,90 @@ import { ConnectionDraft } from "../models/connection.slint";
 import { UiButton, ButtonTone } from "../components/button.slint";
 import { UiField } from "../components/field.slint";
 import { UiToggle } from "../components/toggle.slint";
-import { Drawer } from "../patterns/drawer.slint";
+import { UiSegmented } from "../components/segmented.slint";
+import { UiSelect, SelectOption } from "../components/select.slint";
+import { Modal } from "../patterns/modal.slint";
 import { Stepper } from "../patterns/stepper.slint";
 
-/// Formulário de conexão em gaveta e passos, como era antes do porte: os campos
-/// não cabem confortavelmente numa lista única e o passo a passo separa o que
-/// identifica o servidor do que autentica nele.
-export component ConnectionForm inherits Drawer {
+/// Formulário de conexão em três passos, no formato que tinha antes do porte:
+/// protocolo, dados do servidor e autenticação, cada passo com seu título e
+/// explicação, e o rodapé com voltar, cancelar e a ação principal.
+export component ConnectionForm inherits Modal {
     in property <ConnectionDraft> draft;
     in property <string> error;
+    in property <[SelectOption]> keychain;
     callback saved(ConnectionDraft);
     callback cancelled();
 
-    title: root.draft.id == "" ? "Nova conexão" : "Editar conexão";
-    description: "Os dados ficam criptografados no cofre.";
+    panel-width: 620px;
+    stepper-steps: ["Protocolo", "Conexão", "Autenticação"];
+    stepper-current: root.step;
     dismissed => { root.cancelled(); }
 
     property <ConnectionDraft> edited: root.draft;
     property <int> step: 0;
-    property <bool> identified: root.edited.name != "" && root.edited.host != "";
-    property <bool> complete: root.identified && root.edited.username != "";
 
-    Stepper {
-        steps: ["Servidor", "Acesso", "Protocolos"];
-        current: root.step;
+    // Abrir de novo recomeca do primeiro passo. Sem isto o formulario
+    // reaparecia onde o usuario tinha parado da vez anterior.
+    changed draft => {
+        root.step = 0;
+        root.auth = root.draft.private-key != "" ? 1 : 0;
+    }
+    /// 0 senha, 1 chave privada, 2 agente do sistema.
+    property <int> auth: root.draft.private-key != "" ? 1 : 0;
+    property <bool> has-protocol: root.edited.use-ssh || root.edited.use-sftp;
+    property <bool> has-connection: root.edited.name != ""
+        && root.edited.host != ""
+        && root.edited.username != "";
+
+    VerticalLayout {
+        spacing: Theme.space-xs;
+
+        Text {
+            text: root.step == 0 ? "Protocolo"
+                : root.step == 1 ? "Detalhes da conexão"
+                : "Autenticação";
+            font-size: Type.title;
+            font-weight: Type.weight-semibold;
+            color: Theme.text-primary;
+        }
+        Text {
+            text: root.step == 0 ? "Escolha o que esta conexão vai abrir."
+                : root.step == 1 ? "Configure host, porta e dados básicos."
+                : "Configure como a conexão será autenticada.";
+            font-size: Type.body;
+            color: Theme.text-muted;
+        }
+    }
+
+    if root.step == 0: UiToggle {
+        label: "Terminal SSH";
+        checked <=> root.edited.use-ssh;
+    }
+
+    if root.step == 0: UiToggle {
+        label: "Transferência de arquivos SFTP";
+        checked <=> root.edited.use-sftp;
     }
 
     if root.step == 0: UiField {
-        label: "Nome do perfil";
-        placeholder: "Ex.: Produção";
+        label: "Caminho remoto inicial";
+        placeholder: "/";
+        value <=> root.edited.remote-path;
+    }
+
+    if root.step == 1: UiField {
+        label: "Nome";
+        placeholder: "Ex: Produção - API";
         value <=> root.edited.name;
     }
 
-    if root.step == 0: HorizontalLayout {
+    if root.step == 1: HorizontalLayout {
         spacing: Theme.space-md;
         UiField {
             horizontal-stretch: 3;
-            label: "Host ou IP";
-            placeholder: "servidor.exemplo.com";
+            label: "Host/IP";
+            placeholder: "Ex: 123.123.123.123";
             value <=> root.edited.host;
         }
         UiField {
@@ -54,38 +100,43 @@ export component ConnectionForm inherits Drawer {
 
     if root.step == 1: UiField {
         label: "Usuário";
-        placeholder: "usuario";
+        placeholder: "root";
         value <=> root.edited.username;
     }
 
-    if root.step == 1: UiField {
+    if root.step == 2: UiSegmented {
+        options: ["Senha", "Chave SSH", "Agente"];
+        current <=> root.auth;
+    }
+
+    if root.step == 2: UiSelect {
+        label: "Chaveiro";
+        placeholder: "Sem chaveiro";
+        options: root.keychain;
+        current <=> root.edited.keychain-id;
+    }
+
+    if root.step == 2 && root.auth == 0: UiField {
         label: "Senha";
-        placeholder: "Opcional quando houver chave";
+        placeholder: "Senha (opcional)";
         secret: true;
+        revealable: true;
         value <=> root.edited.password;
     }
 
-    if root.step == 1: UiField {
+    if root.step == 2 && root.auth == 1: UiField {
         label: "Chave privada";
         placeholder: "Conteúdo PEM ou caminho do arquivo";
         secret: true;
+        revealable: true;
         value <=> root.edited.private-key;
     }
 
-    if root.step == 2: UiToggle {
-        label: "Terminal SSH";
-        checked <=> root.edited.use-ssh;
-    }
-
-    if root.step == 2: UiToggle {
-        label: "Transferência de arquivos SFTP";
-        checked <=> root.edited.use-sftp;
-    }
-
-    if root.step == 2: UiField {
-        label: "Caminho remoto inicial";
-        placeholder: "/";
-        value <=> root.edited.remote-path;
+    if root.step == 2 && root.auth == 2: Text {
+        text: "O agente do sistema responde pela autenticação; nada é guardado aqui.";
+        font-size: Type.label;
+        color: Theme.text-muted;
+        wrap: word-wrap;
     }
 
     if root.error != "": Text {
@@ -93,6 +144,11 @@ export component ConnectionForm inherits Drawer {
         font-size: Type.label;
         color: Theme.danger;
         wrap: word-wrap;
+    }
+
+    Rectangle {
+        height: 1px;
+        background: Theme.border;
     }
 
     HorizontalLayout {
@@ -105,17 +161,22 @@ export component ConnectionForm inherits Drawer {
             clicked => { root.step -= 1; }
         }
 
+        UiButton {
+            label: "Cancelar";
+            clicked => { root.cancelled(); }
+        }
+
         if root.step < 2: UiButton {
-            label: "Avançar";
+            label: "Próximo";
             tone: ButtonTone.primary;
-            enabled: root.step == 0 ? root.identified : root.complete;
+            enabled: root.step == 0 ? root.has-protocol : root.has-connection;
             clicked => { root.step += 1; }
         }
 
         if root.step == 2: UiButton {
-            label: root.draft.id == "" ? "Criar conexão" : "Salvar";
+            label: "Salvar conexão";
             tone: ButtonTone.primary;
-            enabled: root.complete && (root.edited.use-ssh || root.edited.use-sftp);
+            enabled: root.has-protocol && root.has-connection;
             clicked => { root.saved(root.edited); }
         }
     }

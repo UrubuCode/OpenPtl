@@ -1,5 +1,6 @@
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "./icon.slint";
 
 // `LineEdit` do std-widgets desenha o próprio Rectangle com fundo, borda e raio
 // da paleta Fluent. Envolvê-lo produzia duas molduras sobrepostas, a de dentro
@@ -9,6 +10,9 @@ export component UiField inherits VerticalLayout {
     in property <string> label;
     in property <string> placeholder;
     in property <bool> secret: false;
+    /// Mostra o olho que revela o conteudo, para conferir o que foi digitado.
+    in property <bool> revealable: false;
+    property <bool> revealed: false;
     in property <bool> enabled: true;
     in-out property <string> value;
     callback accepted();
@@ -61,9 +65,30 @@ export component UiField inherits VerticalLayout {
                     color: root.enabled ? Theme.text-primary : Theme.text-muted;
                     selection-background-color: Theme.accent;
                     selection-foreground-color: Theme.text-on-accent;
-                    input-type: root.secret ? InputType.password : InputType.text;
+                    input-type: root.secret && !root.revealed ? InputType.password : InputType.text;
                     text <=> root.value;
                     accepted => { root.accepted(); }
+                }
+            }
+
+            if root.revealable: Rectangle {
+                width: 26px;
+                y: (parent.height - self.height) / 2;
+                height: 26px;
+                border-radius: Theme.radius-sm;
+                background: eye-touch.has-hover ? Theme.surface-hover : transparent;
+                animate background { duration: Theme.motion-fast; }
+
+                UiIcon {
+                    width: 14px;
+                    height: 14px;
+                    source: root.revealed ? Icons.eye-off : Icons.eye;
+                    tint: eye-touch.has-hover ? Theme.text-secondary : Theme.text-muted;
+                }
+
+                eye-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.revealed = !root.revealed; }
                 }
             }
         }

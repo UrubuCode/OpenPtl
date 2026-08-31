@@ -82,6 +82,25 @@ export component TitleBar inherits Rectangle {
         Rectangle {
             horizontal-stretch: 1;
 
+            // Antes das abas na arvore: depois delas, esta area ficaria por cima
+            // e engoliria o clique nas abas e no mais.
+            drag := TouchArea {
+                // O deslocamento vai para o Rust, que reposiciona a janela: o
+                // Slint não move uma janela sem moldura por conta própria.
+                moved => {
+                    root.dragged(
+                        self.mouse-x - self.pressed-x,
+                        self.mouse-y - self.pressed-y
+                    );
+                }
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        root.drag-started();
+                    }
+                }
+                double-clicked => { root.maximize-toggled(); }
+            }
+
             HorizontalLayout {
                 padding-left: Theme.space-sm;
                 spacing: Theme.space-md;
@@ -109,22 +128,6 @@ export component TitleBar inherits Rectangle {
                 }
             }
 
-            drag := TouchArea {
-                // O deslocamento vai para o Rust, que reposiciona a janela: o
-                // Slint não move uma janela sem moldura por conta própria.
-                moved => {
-                    root.dragged(
-                        self.mouse-x - self.pressed-x,
-                        self.mouse-y - self.pressed-y
-                    );
-                }
-                pointer-event(event) => {
-                    if (event.kind == PointerEventKind.down) {
-                        root.drag-started();
-                    }
-                }
-                double-clicked => { root.maximize-toggled(); }
-            }
         }
 
         if root.show-sidebar-toggle: AccountAvatar {

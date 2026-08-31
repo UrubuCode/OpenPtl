@@ -8,7 +8,7 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
-use super::{AppWindow, KeychainDraft, KeychainRow};
+use super::{AppWindow, KeychainDraft, KeychainRow, SelectOption};
 use crate::backend::Backend;
 use crate::libs::models::{KeychainEntry, KeychainEntryType};
 
@@ -75,6 +75,18 @@ pub fn refresh(window: &AppWindow, backend: &Backend) {
         Ok(entries) => {
             let rows = entries.iter().map(to_row).collect::<Vec<_>>();
             window.set_keychain(ModelRc::new(VecModel::from(rows)));
+
+            // A mesma lista alimenta a escolha de chave no formulario de
+            // conexao, para o usuario escolher pelo nome em vez de digitar um
+            // identificador.
+            let options = entries
+                .iter()
+                .map(|entry| SelectOption {
+                    id: entry.id.as_str().into(),
+                    label: entry.name.as_str().into(),
+                })
+                .collect::<Vec<_>>();
+            window.set_keychain_options(ModelRc::new(VecModel::from(options)));
         }
         Err(error) => window.set_keychain_error(format!("{error}").into()),
     }

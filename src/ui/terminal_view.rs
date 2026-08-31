@@ -146,6 +146,9 @@ fn to_span(span: &Span) -> TermSpan {
         background: to_index(span.style.background),
         bold: span.style.bold,
         inverse: span.style.inverse,
+        // Contagem em celulas, nao em bytes: acentos e caracteres de caixa
+        // ocupam uma celula cada, mas mais de um byte.
+        cells: span.text.chars().count() as i32,
     }
 }
 
@@ -160,7 +163,7 @@ fn to_index(color: Color) -> i32 {
 
 /// Largura e altura aproximadas de uma célula com a fonte monoespaçada do tema.
 /// Servem para converter a área do bloco em colunas e linhas.
-const CELL_WIDTH: f32 = 7.6;
+const CELL_WIDTH: f32 = 7.0;
 const CELL_HEIGHT: f32 = 17.0;
 /// Menor grade utilizável; abaixo disso o shell remoto começa a se atrapalhar.
 const MIN_COLUMNS: usize = 20;

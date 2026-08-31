@@ -4,13 +4,17 @@ import { Type } from "../theme/typography.slint";
 import { Palette } from "../theme/palette.slint";
 import { TermLine } from "../models/terminal.slint";
 
-// Superfície de saída do terminal. Um nó de texto por trecho de mesmo estilo,
-// não por célula: uma linha de 120 colunas costuma render poucos nós.
+/// Superfície de saída do terminal.
+///
+/// Cada trecho recebe largura fixa, calculada pelo número de células que ocupa.
+/// Sem isso o texto era posicionado pela largura natural de cada pedaço e as
+/// colunas não fechavam — tabelas e desenhos de caixa saíam tortos, mesmo com
+/// fonte monoespaçada.
 export component TerminalView inherits Rectangle {
     in property <[TermLine]> lines;
     in property <bool> focused: false;
     callback key-pressed(string, bool, bool);
-    /// Tamanho util em pixels; o Rust converte em colunas e linhas.
+    /// Tamanho útil em pixels; o Rust converte em colunas e linhas.
     callback surface-resized(length, length);
 
     background: Theme.overlay;
@@ -18,6 +22,7 @@ export component TerminalView inherits Rectangle {
     border-width: 1px;
     border-color: root.focused ? Theme.accent : Theme.border;
     forward-focus: input;
+    clip: true;
 
     changed width => { root.surface-resized(self.width, self.height); }
     changed height => { root.surface-resized(self.width, self.height); }
@@ -26,18 +31,30 @@ export component TerminalView inherits Rectangle {
     ScrollView {
         VerticalLayout {
             padding: Theme.space-md;
+            spacing: 0px;
             alignment: start;
 
             for line in root.lines: HorizontalLayout {
+                spacing: 0px;
                 alignment: start;
+                height: Type.cell-height;
+
                 for span in line.spans: Rectangle {
-                    background: span.inverse ? Palette.foreground(span.foreground) : Palette.background(span.background);
+                    width: span.cells * Type.cell-width;
+                    background: span.inverse
+                        ? Palette.foreground(span.foreground)
+                        : Palette.background(span.background);
+
                     Text {
                         text: span.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: left;
                         font-family: Type.mono-family;
-                        font-size: Type.body;
+                        font-size: Type.mono-size;
                         font-weight: span.bold ? Type.weight-bold : Type.weight-regular;
-                        color: span.inverse ? Theme.overlay : Palette.foreground(span.foreground);
+                        color: span.inverse
+                            ? Theme.overlay
+                            : Palette.foreground(span.foreground);
                     }
                 }
             }

@@ -1,0 +1,150 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { UiIcon, Icons } from "./icon.slint";
+
+export struct SelectOption {
+    id: string,
+    label: string,
+}
+
+/// Lista suspensa. Escolher uma chave do chaveiro por digitação era pedir para
+/// o usuário decorar identificadores; aqui ele escolhe pelo nome.
+export component UiSelect inherits VerticalLayout {
+    in property <string> label;
+    in property <[SelectOption]> options;
+    in property <string> placeholder: "Nenhum";
+    in-out property <string> current;
+    /// Rótulo exibido. O Slint não tem laço dentro de função, então quem
+    /// escolhe também informa o rótulo, e o pai passa o inicial.
+    in-out property <string> current-label;
+    callback selected(string);
+
+    spacing: Theme.space-xs;
+    vertical-stretch: 0;
+
+    if root.label != "": Text {
+        text: root.label;
+        font-size: Type.caption;
+        color: Theme.text-muted;
+    }
+
+    field := Rectangle {
+        height: Theme.control-height;
+        vertical-stretch: 0;
+        background: Theme.surface-inset;
+        border-radius: Theme.radius-md;
+        border-width: 1px;
+        border-color: root.open ? Theme.accent : Theme.border;
+        animate border-color { duration: Theme.motion-fast; }
+
+        HorizontalLayout {
+            padding-left: Theme.space-md;
+            padding-right: Theme.space-md;
+            spacing: Theme.space-sm;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.current == "" ? root.placeholder : root.current-label;
+                vertical-alignment: center;
+                font-size: Type.body;
+                color: root.current == "" ? Theme.text-muted : Theme.text-primary;
+                overflow: elide;
+            }
+
+            UiIcon {
+                width: 14px;
+                height: 14px;
+                y: (parent.height - self.height) / 2;
+                source: Icons.folder;
+                tint: Theme.text-muted;
+                transform-rotation: 90deg;
+            }
+        }
+
+        TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.open = !root.open; }
+        }
+    }
+
+    property <bool> open: false;
+
+    if root.open: Rectangle {
+        height: list.min-height;
+        vertical-stretch: 0;
+        background: Theme.surface-raised;
+        border-radius: Theme.radius-md;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+
+        list := VerticalLayout {
+            padding: 3px;
+
+            Rectangle {
+                height: 30px;
+                border-radius: Theme.radius-sm;
+                background: none-touch.has-hover ? Theme.surface-hover : transparent;
+                animate background { duration: Theme.motion-fast; }
+
+                HorizontalLayout {
+                    padding-left: Theme.space-sm;
+                    Text {
+                        text: root.placeholder;
+                        vertical-alignment: center;
+                        font-size: Type.label;
+                        color: Theme.text-muted;
+                    }
+                }
+
+                none-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => {
+                        root.current = "";
+                        root.current-label = "";
+                        root.open = false;
+                        root.selected("");
+                    }
+                }
+            }
+
+            for option in root.options: Rectangle {
+                height: 30px;
+                border-radius: Theme.radius-sm;
+                background: option-touch.has-hover ? Theme.surface-hover : transparent;
+                animate background { duration: Theme.motion-fast; }
+
+                HorizontalLayout {
+                    padding-left: Theme.space-sm;
+                    padding-right: Theme.space-sm;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: option.label;
+                        vertical-alignment: center;
+                        font-size: Type.label;
+                        color: option.id == root.current ? Theme.text-primary : Theme.text-secondary;
+                        overflow: elide;
+                    }
+
+                    if option.id == root.current: UiIcon {
+                        width: 13px;
+                        height: 13px;
+                        y: (parent.height - self.height) / 2;
+                        source: Icons.check;
+                        tint: Theme.accent;
+                    }
+                }
+
+                option-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => {
+                        root.current = option.id;
+                        root.current-label = option.label;
+                        root.open = false;
+                        root.selected(option.id);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,47 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+/// Escolha entre poucas opções mutuamente exclusivas, no formato do seletor de
+/// autenticação anterior: uma trilha com a opção ativa preenchida em destaque.
+export component UiSegmented inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current: 0;
+
+    height: 34px;
+    vertical-stretch: 0;
+    border-radius: Theme.radius-md;
+    background: Theme.surface-inset;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    HorizontalLayout {
+        padding: 3px;
+        spacing: 2px;
+
+        for label[index] in root.options: Rectangle {
+            border-radius: Theme.radius-sm;
+            background: index == root.current ? Theme.accent
+                : touch.has-hover ? Theme.surface-hover
+                : transparent;
+            animate background {
+                duration: Theme.motion-fast;
+                easing: Theme.ease-smooth;
+            }
+
+            Text {
+                text: label;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                font-size: Type.label;
+                font-weight: index == root.current ? Type.weight-medium : Type.weight-regular;
+                color: index == root.current ? Theme.text-on-accent : Theme.text-muted;
+            }
+
+            touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { root.current = index; }
+            }
+        }
+    }
+}

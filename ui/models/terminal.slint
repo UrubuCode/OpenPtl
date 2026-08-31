@@ -4,6 +4,8 @@ export struct TermSpan {
     foreground: int,
     background: int,
     bold: bool,
+    // Quantas celulas o trecho ocupa; a largura vem daqui, nao do texto.
+    cells: int,
     inverse: bool,
 }
 
