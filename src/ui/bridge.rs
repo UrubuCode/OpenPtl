@@ -45,6 +45,7 @@ pub fn run() -> Result<()> {
     bind_connections(&window, Arc::clone(&backend));
     bind_connection_filters(&window, Arc::clone(&backend));
     bind_connection_picker(&window, Arc::clone(&backend));
+    bind_connection_detail(&window, Arc::clone(&backend));
     bind_connection_form(&window, Arc::clone(&backend));
     session_flow::bind(&window, Arc::clone(&backend));
     // O temporizador de drenagem vive enquanto a janela viver.
@@ -352,4 +353,19 @@ pub fn refresh_picker(window: &AppWindow, backend: &Backend) {
         .map(to_row)
         .collect::<Vec<_>>();
     window.set_picker_rows(ModelRc::new(VecModel::from(rows)));
+}
+
+/// Clicar num cartão abre o painel de detalhes com as ações do perfil.
+fn bind_connection_detail(window: &AppWindow, backend: Arc<Backend>) {
+    let handle = window.as_weak();
+    window.on_connection_opened(move |id| {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        let Ok(profile) = backend.connection(&id) else {
+            return;
+        };
+        window.set_detail_row(to_row(&profile));
+        window.set_detail_open(true);
+    });
 }

@@ -16,18 +16,13 @@ import { PageHeader } from "../patterns/page-header.slint";
 /// clique, para a grade continuar legível com muitos perfis.
 component ConnectionCard inherits UiCard {
     in property <ConnectionRow> data;
-    in property <bool> expanded: false;
-    callback opened();
-    callback connect-requested(string);
-    callback edit-requested(string);
-    callback delete-requested(string);
+    callback opened(string);
 
     interactive: true;
-    selected: root.expanded;
 
     TouchArea {
         mouse-cursor: MouseCursor.pointer;
-        clicked => { root.opened(); }
+        clicked => { root.opened(root.data.id); }
     }
 
     VerticalLayout {
@@ -110,28 +105,6 @@ component ConnectionCard inherits UiCard {
             }
         }
 
-        if root.expanded: HorizontalLayout {
-            spacing: Theme.space-sm;
-            alignment: end;
-
-            UiButton {
-                compact: true;
-                label: "Conectar";
-                tone: ButtonTone.primary;
-                clicked => { root.connect-requested(root.data.id); }
-            }
-            UiButton {
-                compact: true;
-                label: "Editar";
-                clicked => { root.edit-requested(root.data.id); }
-            }
-            UiButton {
-                compact: true;
-                label: "Excluir";
-                tone: ButtonTone.danger;
-                clicked => { root.delete-requested(root.data.id); }
-            }
-        }
     }
 }
 
@@ -145,15 +118,9 @@ export component ConnectionsPage inherits VerticalLayout {
     in-out property <string> filter;
     in-out property <string> filter-label;
     callback create-requested();
-    callback connect-requested(string);
-    callback edit-requested(string);
-    callback delete-requested(string);
+    callback opened(string);
     callback query-changed(string);
     callback filter-changed(string);
-
-    /// Perfil aberto. Só um por vez: dois cartões expandidos ao mesmo tempo
-    /// tiram justamente a leitura que a grade compacta oferece.
-    property <string> opened;
 
     padding: Theme.space-lg;
     spacing: Theme.space-lg;
@@ -221,6 +188,9 @@ export component ConnectionsPage inherits VerticalLayout {
 
     if !root.empty: ScrollView {
         vertical-stretch: 1;
+        // A grade acompanha a largura visivel; sem isto ela adota a largura
+        // minima dos cartoes e as tres colunas viram duas largas.
+        viewport-width: self.visible-width;
 
         VerticalLayout {
             spacing: Theme.space-md;
@@ -232,11 +202,7 @@ export component ConnectionsPage inherits VerticalLayout {
 
                 for cell in line.cells: ConnectionCard {
                     data: cell;
-                    expanded: root.opened == cell.id;
-                    opened => { root.opened = root.opened == cell.id ? "" : cell.id; }
-                    connect-requested(id) => { root.connect-requested(id); }
-                    edit-requested(id) => { root.edit-requested(id); }
-                    delete-requested(id) => { root.delete-requested(id); }
+                    opened(id) => { root.opened(id); }
                 }
 
                 // Preenche o resto da linha para o ultimo cartao nao esticar

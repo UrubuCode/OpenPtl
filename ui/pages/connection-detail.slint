@@ -1,0 +1,176 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+import { ConnectionRow } from "../models/connection.slint";
+import { UiButton, ButtonTone } from "../components/button.slint";
+import { UiIcon, Icons } from "../components/icon.slint";
+import { Modal } from "../patterns/modal.slint";
+
+component DetailRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    height: 36px;
+
+    HorizontalLayout {
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            vertical-alignment: center;
+            font-size: Type.label;
+            color: Theme.text-secondary;
+        }
+        Text {
+            text: root.value == "" ? "-" : root.value;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            font-family: Type.mono-family;
+            font-size: Type.caption;
+            color: Theme.text-primary;
+        }
+    }
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
+component IconAction inherits Rectangle {
+    in property <image> icon;
+    in property <bool> destructive: false;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover
+        ? (root.destructive ? Theme.danger : Theme.surface-hover)
+        : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    UiIcon {
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+        tint: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Detalhes de um perfil. Clicar no cartão abre este painel em vez de expandir
+/// o cartão na grade: a grade continua estável e as ações ficam num lugar só.
+export component ConnectionDetail inherits Modal {
+    in property <ConnectionRow> data;
+    callback connect-requested(string);
+    callback open-files-requested(string);
+    callback edit-requested(string);
+    callback delete-requested(string);
+
+    panel-width: 460px;
+    title: " ";
+
+    HorizontalLayout {
+        spacing: Theme.space-md;
+        height: 48px;
+
+        Rectangle {
+            width: 48px;
+            height: 48px;
+            horizontal-stretch: 0;
+            border-radius: Theme.radius-md;
+            background: Theme.accent.with-alpha(0.14);
+
+            UiIcon {
+                width: 22px;
+                height: 22px;
+                source: Icons.server;
+                tint: Theme.accent-bright;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.data.name;
+                font-size: Type.title;
+                font-weight: Type.weight-semibold;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.host + ":" + root.data.port;
+                font-family: Type.mono-family;
+                font-size: Type.caption;
+                color: Theme.text-muted;
+            }
+        }
+    }
+
+    DetailRow {
+        label: "Protocolos";
+        value: root.data.protocols;
+    }
+    DetailRow {
+        label: "Host/IP";
+        value: root.data.host;
+    }
+    DetailRow {
+        label: "Porta";
+        value: root.data.port;
+    }
+    DetailRow {
+        label: "Usuário";
+        value: root.data.username;
+    }
+    DetailRow {
+        label: "Diretório remoto inicial";
+        value: root.data.remote-path;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-sm;
+
+        if root.data.has-ssh: UiButton {
+            label: "Abrir SSH";
+            icon: Icons.terminal;
+            wide: true;
+            clicked => { root.connect-requested(root.data.id); }
+        }
+        if root.data.has-sftp: UiButton {
+            label: "Abrir arquivos";
+            icon: Icons.files;
+            wide: true;
+            clicked => { root.open-files-requested(root.data.id); }
+        }
+    }
+
+    Rectangle { height: 1px; background: Theme.border; }
+
+    HorizontalLayout {
+        spacing: Theme.space-xs;
+        alignment: end;
+
+        IconAction {
+            icon: Icons.trash;
+            destructive: true;
+            clicked => { root.delete-requested(root.data.id); }
+        }
+        IconAction {
+            icon: Icons.pencil;
+            clicked => { root.edit-requested(root.data.id); }
+        }
+        UiButton {
+            label: "Acessar";
+            tone: ButtonTone.primary;
+            clicked => { root.connect-requested(root.data.id); }
+        }
+    }
+}

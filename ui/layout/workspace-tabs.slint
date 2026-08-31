@@ -9,57 +9,63 @@ component Tab inherits Rectangle {
     callback selected();
     callback closed();
 
-    width: label.min-width + 58px;
-    height: 26px;
+    width: label.min-width + 72px;
+    height: 28px;
     border-radius: Theme.radius-sm;
-    background: root.active ? Theme.surface-raised
+    background: root.active ? Theme.accent.with-alpha(0.14)
         : touch.has-hover ? Theme.surface
         : transparent;
-    animate background { duration: Theme.motion-fast; easing: Theme.ease-smooth; }
-
-    // Sublinhado que cresce ao ativar, em vez de aparecer de uma vez.
-    Rectangle {
-        x: (parent.width - self.width) / 2;
-        y: parent.height - 2px;
-        width: root.active ? parent.width - 16px : 0px;
-        height: 2px;
-        border-radius: 1px;
-        background: Theme.accent;
-        animate width { duration: Theme.motion-base; easing: Theme.ease-out-soft; }
+    border-width: 1px;
+    border-color: root.active ? Theme.accent.with-alpha(0.5) : transparent;
+    animate background, border-color {
+        duration: Theme.motion-fast;
+        easing: Theme.ease-smooth;
     }
 
-    // Antes do conteudo: depois dele, esta area cobriria o botao de fechar.
+    // Antes do conteúdo: depois dele, esta área cobriria o botão de fechar.
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.selected(); }
     }
 
     HorizontalLayout {
-        padding-left: Theme.space-md;
+        padding-left: Theme.space-sm;
         padding-right: Theme.space-xs;
-        spacing: Theme.space-xs;
+        spacing: Theme.space-sm;
+
+        UiIcon {
+            width: 13px;
+            height: 13px;
+            y: (parent.height - self.height) / 2;
+            source: Icons.workspace;
+            tint: root.active ? Theme.accent-bright : Theme.text-muted;
+        }
 
         label := Text {
+            horizontal-stretch: 1;
             text: root.data.name;
             vertical-alignment: center;
             font-size: Type.caption;
             font-weight: root.active ? Type.weight-medium : Type.weight-regular;
-            color: root.active ? Theme.text-primary : Theme.text-muted;
+            color: root.active ? Theme.accent-bright : Theme.text-muted;
+            overflow: elide;
         }
 
         Rectangle {
-            width: 22px;
-            height: 22px;
-            y: 2px;
+            width: 20px;
+            height: 20px;
+            y: (parent.height - self.height) / 2;
             border-radius: Theme.radius-sm;
             background: close-touch.has-hover ? Theme.danger : transparent;
             animate background { duration: Theme.motion-fast; }
 
             UiIcon {
-                width: 12px;
-                height: 12px;
+                width: 11px;
+                height: 11px;
                 source: Icons.close;
-                tint: close-touch.has-hover ? Theme.text-on-accent : Theme.text-muted;
+                tint: close-touch.has-hover ? Theme.text-on-accent
+                    : root.active ? Theme.accent-bright
+                    : Theme.text-muted;
             }
 
             close-touch := TouchArea {
@@ -67,24 +73,22 @@ component Tab inherits Rectangle {
             }
         }
     }
-
 }
 
-/// Faixa de abas de workspace, exibida na barra de título como no design
-/// anterior: cada aba é uma área de trabalho com seus próprios blocos.
+/// Faixa de abas de área de trabalho. Cada aba é uma área com seus blocos; o
+/// mais cria uma nova. Sem áreas abertas a faixa é só o mais.
 export component WorkspaceTabs inherits HorizontalLayout {
-    // Centraliza as abas na altura da barra em vez de as encostar no topo.
-    padding-top: (Theme.titlebar-height - 26px) / 2;
-    padding-bottom: (Theme.titlebar-height - 26px) / 2;
     in property <[WorkspaceTab]> tabs;
     in property <string> active;
     callback selected(string);
     callback closed(string);
     callback created();
 
-    spacing: 2px;
+    // Centraliza as abas na altura da barra em vez de as encostar no topo.
+    padding-top: (Theme.titlebar-height - 28px) / 2;
+    padding-bottom: (Theme.titlebar-height - 28px) / 2;
+    spacing: Theme.space-xs;
     alignment: start;
-    // A faixa nao estica: sem isto as abas se espalhavam pela barra inteira.
     horizontal-stretch: 0;
     vertical-stretch: 0;
 
@@ -95,10 +99,10 @@ export component WorkspaceTabs inherits HorizontalLayout {
         closed => { root.closed(tab.id); }
     }
 
-    // Sem moldura: e um afixo da faixa de abas, nao um botao por si so.
+    // Sem moldura: é um afixo da faixa de abas, não um botão por si só.
     Rectangle {
-        width: 30px;
-        height: 26px;
+        width: 28px;
+        height: 28px;
         border-radius: Theme.radius-sm;
         background: add.has-hover ? Theme.surface : transparent;
         animate background { duration: Theme.motion-fast; }
@@ -107,7 +111,7 @@ export component WorkspaceTabs inherits HorizontalLayout {
             width: 13px;
             height: 13px;
             source: Icons.plus;
-            tint: add.has-hover ? Theme.accent : Theme.text-secondary;
+            tint: add.has-hover ? Theme.accent : Theme.text-muted;
         }
 
         add := TouchArea {

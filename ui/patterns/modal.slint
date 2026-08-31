@@ -107,6 +107,9 @@ export component Modal inherits Rectangle {
 
             ScrollView {
                 vertical-stretch: 1;
+                // Sem isto o conteudo recebe apenas a largura minima dele: as
+                // colunas de cartoes ficavam estreitas em vez de dividir o painel.
+                viewport-width: self.visible-width;
 
                 body := VerticalLayout {
                     padding: Theme.space-lg;

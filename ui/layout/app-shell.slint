@@ -67,6 +67,7 @@ export component AppShell inherits Rectangle {
     in-out property <Section> section: Section.home;
 
     callback connection-create-requested();
+    callback connection-opened(string);
     callback connection-query-changed(string);
     callback connection-filter-changed(string);
     callback connection-connect-requested(string);
@@ -166,9 +167,7 @@ export component AppShell inherits Rectangle {
                 query-changed(text) => { root.connection-query-changed(text); }
                 filter-changed(value) => { root.connection-filter-changed(value); }
                 create-requested => { root.connection-create-requested(); }
-                connect-requested(id) => { root.connection-connect-requested(id); }
-                edit-requested(id) => { root.connection-edit-requested(id); }
-                delete-requested(id) => { root.connection-delete-requested(id); }
+                opened(id) => { root.connection-opened(id); }
             }
             if root.section == Section.keychain: KeychainPage {
                 rows: root.keychain;

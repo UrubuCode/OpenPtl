@@ -106,14 +106,6 @@ export component TitleBar inherits Rectangle {
                 spacing: Theme.space-md;
                 alignment: start;
 
-                Text {
-                    text: root.title;
-                    vertical-alignment: center;
-                    font-size: Type.label;
-                    font-weight: Type.weight-semibold;
-                    color: Theme.text-secondary;
-                }
-
                 // As abas só aparecem na área de trabalho. Mantê-las visíveis
                 // nas outras seções fazia parecer que cada página era uma área.
                 if root.show-tabs: WorkspaceTabs {

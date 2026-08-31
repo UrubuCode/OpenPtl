@@ -58,8 +58,6 @@ thread_local! {
 }
 
 pub fn bind(window: &AppWindow, backend: Arc<Backend>) {
-    ensure_first_tab();
-
     bind_tabs(window);
     bind_blocks(window);
     bind_canvas(window);
@@ -98,14 +96,14 @@ fn bind_tabs(window: &AppWindow) {
         STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.tabs.retain(|tab| tab.id != id.as_str());
-            // Fechar a última aba deixa uma vazia no lugar: um canvas sem aba
-            // nenhuma não teria onde receber o próximo bloco.
-            if state.tabs.is_empty() {
-                let tab = new_tab(&mut state);
-                state.tabs.push(tab);
-            }
+            // Fechar a última área não cria outra: a faixa volta a ser só o
+            // mais, e a próxima área nasce quando um bloco precisar dela.
             if state.active == id.as_str() {
-                state.active = state.tabs[0].id.clone();
+                state.active = state
+                    .tabs
+                    .first()
+                    .map(|tab| tab.id.clone())
+                    .unwrap_or_default();
             }
         });
         publish(&window);
@@ -202,6 +200,7 @@ fn bind_blocks(window: &AppWindow) {
 
 /// Abre um bloco para a sessão recém-conectada e leva o usuário ao canvas.
 pub fn open_session_block(window: &AppWindow, session_id: &str, label: &str, has_shell: bool) {
+    ensure_tab_for_block();
     let (kind, title) = if has_shell {
         (BlockKind::Terminal, "Terminal")
     } else {
@@ -238,6 +237,7 @@ pub fn open_session_block(window: &AppWindow, session_id: &str, label: &str, has
 
 /// Acrescenta um bloco a area corrente, em cascata para nao cobrir o anterior.
 fn push_block(window: &AppWindow, kind: BlockKind, title: &str, subtitle: &str) {
+    ensure_tab_for_block();
     let session = window.get_active_session().to_string();
     STATE.with(|state| {
         let mut state = state.borrow_mut();
@@ -296,14 +296,20 @@ fn active_tab_mut(state: &mut Workspaces) -> Option<&mut Tab> {
     state.tabs.iter_mut().find(|tab| tab.id == active)
 }
 
-fn ensure_first_tab() {
+/// Garante que exista uma área para receber o bloco.
+///
+/// Nenhuma área nasce junto com o aplicativo: uma aba aberta sem nada rodando
+/// sugere que há uma sessão ali. A primeira só aparece quando um bloco precisa
+/// de lugar.
+fn ensure_tab_for_block() {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
-        if state.tabs.is_empty() {
-            let tab = new_tab(&mut state);
-            state.active = tab.id.clone();
-            state.tabs.push(tab);
+        if !state.tabs.is_empty() {
+            return;
         }
+        let tab = new_tab(&mut state);
+        state.active = tab.id.clone();
+        state.tabs.push(tab);
     });
 }
 

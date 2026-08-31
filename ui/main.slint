@@ -11,6 +11,7 @@ import { ResizeEdges } from "layout/resize-edges.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
 import { ConnectionPicker } from "pages/connection-picker.slint";
+import { ConnectionDetail } from "pages/connection-detail.slint";
 import { SelectOption } from "components/select.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
 import { HostChallenge, SessionRow } from "models/session.slint";
@@ -62,6 +63,8 @@ export component AppWindow inherits Window {
     in property <string> vault-error;
     in property <[ConnectionRow]> picker-rows;
     in-out property <bool> connection-picker-open: false;
+    in-out property <bool> detail-open: false;
+    in property <ConnectionRow> detail-row;
     in-out property <string> picker-query;
     in property <[ConnectionGridRow]> connection-grid;
     in property <bool> connection-empty: true;
@@ -138,6 +141,7 @@ export component AppWindow inherits Window {
     callback block-open-connection();
     callback vault-submitted(string, string);
     callback connection-create-requested();
+    callback connection-opened(string);
     callback connection-query-changed(string);
     callback connection-filter-changed(string);
     callback picker-picked(string);
@@ -310,6 +314,7 @@ export component AppWindow inherits Window {
                 sync-message: root.sync-message;
                 sync-progress: root.sync-progress;
                 connection-create-requested => { root.connection-create-requested(); }
+                connection-opened(id) => { root.connection-opened(id); }
                 connection-connect-requested(id) => { root.connection-connect-requested(id); }
                 connection-edit-requested(id) => { root.connection-edit-requested(id); }
                 connection-delete-requested(id) => { root.connection-delete-requested(id); }
@@ -419,6 +424,27 @@ export component AppWindow inherits Window {
         picked(id) => {
             root.connection-picker-open = false;
             root.picker-picked(id);
+        }
+    }
+    ConnectionDetail {
+        open: root.detail-open;
+        data: root.detail-row;
+        dismissed => { root.detail-open = false; }
+        connect-requested(id) => {
+            root.detail-open = false;
+            root.connection-connect-requested(id);
+        }
+        open-files-requested(id) => {
+            root.detail-open = false;
+            root.connection-connect-requested(id);
+        }
+        edit-requested(id) => {
+            root.detail-open = false;
+            root.connection-edit-requested(id);
+        }
+        delete-requested(id) => {
+            root.detail-open = false;
+            root.connection-delete-requested(id);
         }
     }
 }
