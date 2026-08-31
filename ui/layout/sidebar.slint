@@ -10,8 +10,8 @@ component SidebarItem inherits Rectangle {
 
     height: 36px;
     border-radius: Theme.radius-sm;
-    background: root.active ? Theme.surface-raised
-        : touch.has-hover ? Theme.surface-inset
+    background: root.active ? Theme.sidebar-active
+        : touch.has-hover ? Theme.surface
         : transparent;
     animate background { duration: Theme.motion-fast; }
 
@@ -23,7 +23,7 @@ component SidebarItem inherits Rectangle {
             vertical-alignment: center;
             font-size: Type.body;
             font-weight: root.active ? Type.weight-medium : Type.weight-regular;
-            color: root.active ? Theme.text-primary : Theme.text-secondary;
+            color: root.active ? Theme.text-primary : Theme.sidebar-text;
         }
     }
 
@@ -38,28 +38,18 @@ export component Sidebar inherits Rectangle {
     callback selected(Section);
 
     width: Theme.sidebar-width;
-    background: Theme.surface;
+    background: Theme.sidebar;
 
     Rectangle {
         width: 1px;
         x: parent.width - 1px;
-        background: Theme.border;
+        background: Theme.sidebar-border;
     }
 
     VerticalLayout {
         padding: Theme.space-md;
         spacing: Theme.space-xs;
         alignment: start;
-
-        Text {
-            text: "OpenPtl";
-            font-size: Type.title;
-            font-weight: Type.weight-bold;
-            color: Theme.text-primary;
-            height: Theme.header-height;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-        }
 
         SidebarItem { label: "Conexões"; active: root.active == Section.home; clicked => { root.selected(Section.home); } }
         SidebarItem { label: "Terminal"; active: root.active == Section.terminal; clicked => { root.selected(Section.terminal); } }

@@ -1,4 +1,4 @@
-import { TextEdit } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 import { Palette } from "../theme/palette.slint";
@@ -51,19 +51,34 @@ export component NoteForm inherits Modal {
             font-size: Type.caption;
             color: Theme.text-muted;
         }
+        // Mesmo motivo do UiField: o TextEdit do std-widgets traz a própria
+        // moldura e barra de rolagem, que ficariam sobrepostas a esta.
         Rectangle {
             height: 220px;
             background: Theme.surface-inset;
-            border-radius: Theme.radius-sm;
+            border-radius: Theme.radius-md;
             border-width: 1px;
-            border-color: Theme.border;
+            border-color: body.has-focus ? Theme.accent : Theme.border;
+            animate border-color { duration: Theme.motion-fast; }
+            clip: true;
 
-            TextEdit {
-                width: parent.width - 2 * Theme.space-sm;
+            ScrollView {
+                x: Theme.space-md;
+                y: Theme.space-sm;
+                width: parent.width - 2 * Theme.space-md;
                 height: parent.height - 2 * Theme.space-sm;
-                font-size: Type.body;
-                wrap: word-wrap;
-                text <=> root.edited.content;
+
+                body := TextInput {
+                    width: parent.width;
+                    single-line: false;
+                    wrap: word-wrap;
+                    font-family: Type.family;
+                    font-size: Type.body;
+                    color: Theme.text-primary;
+                    selection-background-color: Theme.accent;
+                    selection-foreground-color: Theme.text-on-accent;
+                    text <=> root.edited.content;
+                }
             }
         }
     }

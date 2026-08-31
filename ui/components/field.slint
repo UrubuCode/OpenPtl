@@ -1,7 +1,10 @@
-import { LineEdit } from "std-widgets.slint";
 import { Theme } from "../theme/tokens.slint";
 import { Type } from "../theme/typography.slint";
 
+// `LineEdit` do std-widgets desenha o próprio Rectangle com fundo, borda e raio
+// da paleta Fluent. Envolvê-lo produzia duas molduras sobrepostas, a de dentro
+// com cores claras brigando com o tema. Usamos `TextInput`, que é só o texto,
+// e a moldura fica sendo apenas esta.
 export component UiField inherits VerticalLayout {
     in property <string> label;
     in property <string> placeholder;
@@ -12,27 +15,53 @@ export component UiField inherits VerticalLayout {
 
     spacing: Theme.space-xs;
 
-    Text {
+    if root.label != "": Text {
         text: root.label;
+        font-family: Type.family;
         font-size: Type.caption;
         color: Theme.text-muted;
     }
 
     Rectangle {
         height: Theme.control-height;
-        background: Theme.surface-inset;
-        border-radius: Theme.radius-sm;
+        background: root.enabled ? Theme.surface-inset : Theme.surface;
+        border-radius: Theme.radius-md;
         border-width: 1px;
-        border-color: Theme.border;
+        border-color: input.has-focus ? Theme.accent : Theme.border;
+        animate border-color { duration: Theme.motion-fast; }
 
-        LineEdit {
-            width: parent.width - 2 * Theme.space-md;
-            font-size: Type.body;
-            enabled: root.enabled;
-            placeholder-text: root.placeholder;
-            input-type: root.secret ? InputType.password : InputType.text;
-            text <=> root.value;
-            accepted => { root.accepted(); }
+        HorizontalLayout {
+            padding-left: Theme.space-md;
+            padding-right: Theme.space-md;
+
+            Rectangle {
+                clip: true;
+
+                if root.value == "" && !input.has-focus: Text {
+                    x: 0;
+                    text: root.placeholder;
+                    vertical-alignment: center;
+                    font-family: Type.family;
+                    font-size: Type.body;
+                    color: Theme.text-muted;
+                }
+
+                input := TextInput {
+                    x: 0;
+                    width: max(parent.width, self.preferred-width);
+                    enabled: root.enabled;
+                    single-line: true;
+                    vertical-alignment: center;
+                    font-family: Type.family;
+                    font-size: Type.body;
+                    color: root.enabled ? Theme.text-primary : Theme.text-muted;
+                    selection-background-color: Theme.accent;
+                    selection-foreground-color: Theme.text-on-accent;
+                    input-type: root.secret ? InputType.password : InputType.text;
+                    text <=> root.value;
+                    accepted => { root.accepted(); }
+                }
+            }
         }
     }
 }

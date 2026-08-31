@@ -1,25 +1,35 @@
+// Paleta herdada do design anterior, convertida dos tokens HSL que viviam em
+// src/index.css. Os valores são os mesmos: o produto continua com a mesma cara,
+// só mudou quem desenha.
 export global Theme {
-    out property <color> canvas: #0d131c;
-    out property <color> surface: #151e2a;
-    out property <color> surface-raised: #182230;
-    out property <color> surface-inset: #1c2837;
-    out property <color> overlay: #060a11;
+    out property <color> canvas: #121317;
+    out property <color> surface: #191a1f;
+    out property <color> surface-raised: #1d1f25;
+    out property <color> surface-inset: #22232b;
+    out property <color> surface-hover: #282b33;
+    out property <color> overlay: #0d0e11;
 
-    out property <color> border: #29384a;
-    out property <color> border-strong: #3a4b60;
+    out property <color> border: #292b32;
+    out property <color> border-strong: #383b45;
 
-    out property <color> text-primary: #edf3fa;
-    out property <color> text-secondary: #aebdd0;
-    out property <color> text-muted: #8f9db1;
-    out property <color> text-on-accent: #f5f9ff;
+    out property <color> text-primary: #e7e9ef;
+    out property <color> text-secondary: #c2c9d6;
+    out property <color> text-muted: #737b8c;
+    out property <color> text-on-accent: #ffffff;
 
-    out property <color> accent: #3f7fc2;
-    out property <color> accent-bright: #84bbff;
-    out property <color> accent-pressed: #2e5f94;
-    out property <color> positive: #86dfae;
-    out property <color> warning: #ffd782;
-    out property <color> danger: #ff969f;
-    out property <color> danger-surface: #7f3b4a;
+    out property <color> accent: #4589f7;
+    out property <color> accent-bright: #7aaefa;
+    out property <color> accent-pressed: #2f6fd6;
+    out property <color> positive: #31c47f;
+    out property <color> warning: #f6a823;
+    out property <color> info: #0da2e7;
+    out property <color> danger: #df3a3a;
+    out property <color> danger-surface: #3a1d21;
+
+    out property <color> sidebar: #0d0e11;
+    out property <color> sidebar-border: #202227;
+    out property <color> sidebar-text: #818898;
+    out property <color> sidebar-active: #1b1c22;
 
     out property <length> space-xs: 4px;
     out property <length> space-sm: 8px;
@@ -27,13 +37,14 @@ export global Theme {
     out property <length> space-lg: 20px;
     out property <length> space-xl: 32px;
 
+    // --radius: 0.5rem no design anterior.
     out property <length> radius-sm: 6px;
     out property <length> radius-md: 8px;
-    out property <length> radius-lg: 14px;
+    out property <length> radius-lg: 12px;
 
-    out property <length> control-height: 40px;
+    out property <length> control-height: 36px;
     out property <length> sidebar-width: 232px;
-    out property <length> header-height: 48px;
+    out property <length> titlebar-height: 40px;
 
     out property <duration> motion-fast: 120ms;
     out property <duration> motion-base: 200ms;

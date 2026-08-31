@@ -1,8 +1,10 @@
 import { Theme } from "theme/tokens.slint";
+import { Type } from "theme/typography.slint";
 import { VaultState } from "models/vault.slint";
 import { ConnectionRow, ConnectionDraft } from "models/connection.slint";
 import { AppShell } from "layout/app-shell.slint";
 import { Section } from "layout/sidebar.slint";
+import { TitleBar } from "layout/titlebar.slint";
 import { VaultPage } from "pages/vault.slint";
 import { ConnectionForm } from "pages/connection-form.slint";
 import { HostChallengeDialog } from "pages/host-challenge.slint";
@@ -25,6 +27,9 @@ export { TransferRow }
 
 export component AppWindow inherits Window {
     title: "OpenPtl";
+    no-frame: true;
+    default-font-family: Type.family;
+    default-font-size: Type.body;
     preferred-width: 1180px;
     preferred-height: 760px;
     min-width: 880px;
@@ -32,6 +37,7 @@ export component AppWindow inherits Window {
     background: Theme.canvas;
 
     in-out property <Section> section: Section.home;
+    in property <bool> maximized: false;
     in property <VaultState> vault;
     in property <bool> vault-busy: false;
     in property <string> vault-error;
@@ -75,6 +81,11 @@ export component AppWindow inherits Window {
     in property <string> sync-message;
     in property <int> sync-progress;
 
+    callback window-drag-started();
+    callback window-dragged(length, length);
+    callback window-minimize();
+    callback window-maximize-toggle();
+    callback window-close();
     callback vault-submitted(string, string);
     callback connection-create-requested();
     callback connection-connect-requested(string);
@@ -125,83 +136,100 @@ export component AppWindow inherits Window {
     callback sync-pull-requested();
     callback sync-cancel-requested();
 
-    if root.vault.locked || !root.vault.initialized: VaultPage {
-        state: root.vault;
-        busy: root.vault-busy;
-        error: root.vault-error;
-        submitted(password, confirmation) => { root.vault-submitted(password, confirmation); }
-    }
+    VerticalLayout {
+        TitleBar {
+            title: "OpenPtl";
+            maximized: root.maximized;
+            drag-started => { root.window-drag-started(); }
+            dragged(dx, dy) => { root.window-dragged(dx, dy); }
+            minimize-requested => { root.window-minimize(); }
+            maximize-toggled => { root.window-maximize-toggle(); }
+            close-requested => { root.window-close(); }
+        }
 
-    if root.vault.initialized && !root.vault.locked: AppShell {
-        section <=> root.section;
-        connections: root.connections;
-        sessions: root.sessions;
-        terminal-lines: root.terminal-lines;
-        active-session: root.active-session;
-        keychain: root.keychain;
-        known-hosts: root.known-hosts;
-        known-hosts-path: root.known-hosts-path;
-        settings: root.settings;
-        settings-message: root.settings-message;
-        update-canary: root.update-canary;
-        update-status: root.update-status;
-        update-ready: root.update-ready;
-        version: root.version;
-        storage-path: root.storage-path;
-        notes: root.notes;
-        files: root.files;
-        files-path: root.files-path;
-        files-message: root.files-message;
-        transfers: root.transfers;
-        editor-path: root.editor-path;
-        editor-surface: root.editor-surface;
-        editor-dirty: root.editor-dirty;
-        editor-message: root.editor-message;
-        sync-connected: root.sync-connected;
-        sync-busy: root.sync-busy;
-        sync-account: root.sync-account;
-        sync-message: root.sync-message;
-        sync-progress: root.sync-progress;
-        connection-create-requested => { root.connection-create-requested(); }
-        connection-connect-requested(id) => { root.connection-connect-requested(id); }
-        connection-edit-requested(id) => { root.connection-edit-requested(id); }
-        connection-delete-requested(id) => { root.connection-delete-requested(id); }
-        session-selected(id) => { root.session-selected(id); }
-        session-closed(id) => { root.session-closed(id); }
-        terminal-input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
-        keychain-create-requested => { root.keychain-create-requested(); }
-        keychain-edit-requested(id) => { root.keychain-edit-requested(id); }
-        keychain-delete-requested(id) => { root.keychain-delete-requested(id); }
-        known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
-        settings-saved(draft) => { root.settings-saved(draft); }
-        vault-lock-requested => { root.vault-lock-requested(); }
-        update-check-requested => { root.update-check-requested(); }
-        update-download-requested => { root.update-download-requested(); }
-        update-install-requested => { root.update-install-requested(); }
-        update-channel-changed(canary) => { root.update-channel-changed(canary); }
-        note-create-requested => { root.note-create-requested(); }
-        note-edit-requested(id) => { root.note-edit-requested(id); }
-        note-pin-toggled(id) => { root.note-pin-toggled(id); }
-        note-delete-requested(id) => { root.note-delete-requested(id); }
-        file-path-requested(path) => { root.file-path-requested(path); }
-        file-parent-requested => { root.file-parent-requested(); }
-        file-reload-requested => { root.file-reload-requested(); }
-        file-folder-created(name) => { root.file-folder-created(name); }
-        file-delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
-        download-requested(path) => { root.download-requested(path); }
-        upload-requested => { root.upload-requested(); }
-        transfers-cleared => { root.transfers-cleared(); }
-        editor-open-requested(path) => { root.editor-open-requested(path); }
-        editor-key-pressed(text, ctrl, shift) => { root.editor-key-pressed(text, ctrl, shift); }
-        editor-clicked(x, y) => { root.editor-clicked(x, y); }
-        editor-resized(w, h) => { root.editor-resized(w, h); }
-        editor-save-requested => { root.editor-save-requested(); }
-        editor-close-requested => { root.editor-close-requested(); }
-        sync-login-requested => { root.sync-login-requested(); }
-        sync-logout-requested => { root.sync-logout-requested(); }
-        sync-push-requested => { root.sync-push-requested(); }
-        sync-pull-requested => { root.sync-pull-requested(); }
-        sync-cancel-requested => { root.sync-cancel-requested(); }
+        content := Rectangle {
+            vertical-stretch: 1;
+            background: Theme.canvas;
+
+            if root.vault.locked || !root.vault.initialized: VaultPage {
+                state: root.vault;
+                busy: root.vault-busy;
+                error: root.vault-error;
+                submitted(password, confirmation) => { root.vault-submitted(password, confirmation); }
+            }
+
+            if root.vault.initialized && !root.vault.locked: AppShell {
+                section <=> root.section;
+                connections: root.connections;
+                sessions: root.sessions;
+                terminal-lines: root.terminal-lines;
+                active-session: root.active-session;
+                keychain: root.keychain;
+                known-hosts: root.known-hosts;
+                known-hosts-path: root.known-hosts-path;
+                settings: root.settings;
+                settings-message: root.settings-message;
+                update-canary: root.update-canary;
+                update-status: root.update-status;
+                update-ready: root.update-ready;
+                version: root.version;
+                storage-path: root.storage-path;
+                notes: root.notes;
+                files: root.files;
+                files-path: root.files-path;
+                files-message: root.files-message;
+                transfers: root.transfers;
+                editor-path: root.editor-path;
+                editor-surface: root.editor-surface;
+                editor-dirty: root.editor-dirty;
+                editor-message: root.editor-message;
+                sync-connected: root.sync-connected;
+                sync-busy: root.sync-busy;
+                sync-account: root.sync-account;
+                sync-message: root.sync-message;
+                sync-progress: root.sync-progress;
+                connection-create-requested => { root.connection-create-requested(); }
+                connection-connect-requested(id) => { root.connection-connect-requested(id); }
+                connection-edit-requested(id) => { root.connection-edit-requested(id); }
+                connection-delete-requested(id) => { root.connection-delete-requested(id); }
+                session-selected(id) => { root.session-selected(id); }
+                session-closed(id) => { root.session-closed(id); }
+                terminal-input-sent(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }
+                keychain-create-requested => { root.keychain-create-requested(); }
+                keychain-edit-requested(id) => { root.keychain-edit-requested(id); }
+                keychain-delete-requested(id) => { root.keychain-delete-requested(id); }
+                known-host-remove-requested(line) => { root.known-host-remove-requested(line); }
+                settings-saved(draft) => { root.settings-saved(draft); }
+                vault-lock-requested => { root.vault-lock-requested(); }
+                update-check-requested => { root.update-check-requested(); }
+                update-download-requested => { root.update-download-requested(); }
+                update-install-requested => { root.update-install-requested(); }
+                update-channel-changed(canary) => { root.update-channel-changed(canary); }
+                note-create-requested => { root.note-create-requested(); }
+                note-edit-requested(id) => { root.note-edit-requested(id); }
+                note-pin-toggled(id) => { root.note-pin-toggled(id); }
+                note-delete-requested(id) => { root.note-delete-requested(id); }
+                file-path-requested(path) => { root.file-path-requested(path); }
+                file-parent-requested => { root.file-parent-requested(); }
+                file-reload-requested => { root.file-reload-requested(); }
+                file-folder-created(name) => { root.file-folder-created(name); }
+                file-delete-requested(path, is-dir) => { root.file-delete-requested(path, is-dir); }
+                download-requested(path) => { root.download-requested(path); }
+                upload-requested => { root.upload-requested(); }
+                transfers-cleared => { root.transfers-cleared(); }
+                editor-open-requested(path) => { root.editor-open-requested(path); }
+                editor-key-pressed(text, ctrl, shift) => { root.editor-key-pressed(text, ctrl, shift); }
+                editor-clicked(x, y) => { root.editor-clicked(x, y); }
+                editor-resized(w, h) => { root.editor-resized(w, h); }
+                editor-save-requested => { root.editor-save-requested(); }
+                editor-close-requested => { root.editor-close-requested(); }
+                sync-login-requested => { root.sync-login-requested(); }
+                sync-logout-requested => { root.sync-logout-requested(); }
+                sync-push-requested => { root.sync-push-requested(); }
+                sync-pull-requested => { root.sync-pull-requested(); }
+                sync-cancel-requested => { root.sync-cancel-requested(); }
+            }
+        }
     }
 
     ConnectionForm {

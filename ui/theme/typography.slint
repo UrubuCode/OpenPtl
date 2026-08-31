@@ -1,13 +1,17 @@
 export global Type {
-    out property <length> display: 22px;
-    out property <length> title: 17px;
+    // Inter era a fonte do design anterior; a fallback do sistema entra quando
+    // ela não estiver instalada.
+    out property <string> family: "Inter";
+    out property <string> mono-family: "Cascadia Code";
+
+    out property <length> display: 20px;
+    out property <length> title: 15px;
     out property <length> body: 13px;
     out property <length> label: 12px;
     out property <length> caption: 11px;
 
     out property <int> weight-regular: 400;
     out property <int> weight-medium: 500;
+    out property <int> weight-semibold: 600;
     out property <int> weight-bold: 700;
-
-    out property <string> mono-family: "Consolas";
 }

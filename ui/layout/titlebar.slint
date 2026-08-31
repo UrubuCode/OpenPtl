@@ -1,0 +1,96 @@
+import { Theme } from "../theme/tokens.slint";
+import { Type } from "../theme/typography.slint";
+
+component WindowControl inherits Rectangle {
+    in property <string> glyph;
+    in property <bool> destructive: false;
+    callback clicked();
+
+    width: 44px;
+    background: touch.has-hover
+        ? (root.destructive ? Theme.danger : Theme.surface-hover)
+        : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    Text {
+        text: root.glyph;
+        font-size: Type.caption;
+        color: touch.has-hover && root.destructive ? Theme.text-on-accent : Theme.text-secondary;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Barra de título própria: a janela roda sem moldura do sistema, então o
+// arrasto e os botões precisam existir aqui.
+export component TitleBar inherits Rectangle {
+    in property <string> title;
+    in property <bool> maximized: false;
+    callback drag-started();
+    callback dragged(length, length);
+    callback minimize-requested();
+    callback maximize-toggled();
+    callback close-requested();
+
+    height: Theme.titlebar-height;
+    background: Theme.overlay;
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.sidebar-border;
+    }
+
+    HorizontalLayout {
+        Rectangle {
+            horizontal-stretch: 1;
+
+            HorizontalLayout {
+                padding-left: Theme.space-md;
+                alignment: start;
+
+                Text {
+                    text: root.title;
+                    vertical-alignment: center;
+                    font-family: Type.family;
+                    font-size: Type.label;
+                    font-weight: Type.weight-semibold;
+                    color: Theme.text-secondary;
+                }
+            }
+
+            drag := TouchArea {
+                // O deslocamento vai para o Rust, que reposiciona a janela: o
+                // Slint não move uma janela sem moldura por conta própria.
+                moved => {
+                    root.dragged(
+                        self.mouse-x - self.pressed-x,
+                        self.mouse-y - self.pressed-y
+                    );
+                }
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        root.drag-started();
+                    }
+                }
+                double-clicked => { root.maximize-toggled(); }
+            }
+        }
+
+        WindowControl {
+            glyph: "—";
+            clicked => { root.minimize-requested(); }
+        }
+        WindowControl {
+            glyph: root.maximized ? "❐" : "▢";
+            clicked => { root.maximize-toggled(); }
+        }
+        WindowControl {
+            glyph: "✕";
+            destructive: true;
+            clicked => { root.close-requested(); }
+        }
+    }
+}
