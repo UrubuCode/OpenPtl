@@ -63,6 +63,7 @@ export component WorkspacePage inherits Rectangle {
     callback block-moved(string, length, length);
     callback block-resized(string, length, length);
     callback block-raised(string);
+    callback block-settled();
     callback block-minimize-toggled(string);
     callback block-closed(string);
     callback terminal-input(string, bool, bool);
@@ -121,6 +122,7 @@ export component WorkspacePage inherits Rectangle {
         moved(dx, dy) => { root.block-moved(block.id, dx, dy); }
         resized(dx, dy) => { root.block-resized(block.id, dx, dy); }
         raised => { root.block-raised(block.id); }
+        settled => { root.block-settled(); }
         minimize-toggled => { root.block-minimize-toggled(block.id); }
         closed => { root.block-closed(block.id); }
 

@@ -26,6 +26,9 @@ const CASCADE: f32 = 28.0;
 struct Workspaces {
     tabs: Vec<Tab>,
     active: String,
+    /// Bloco em foco. Guardado a parte da ordem de desenho para que focar nao
+    /// precise reordenar a lista durante um gesto.
+    focused: Option<String>,
     next_id: u32,
 }
 
@@ -128,18 +131,37 @@ fn bind_blocks(window: &AppWindow) {
         let Some(window) = handle.upgrade() else {
             return;
         };
-        // Trazer para a frente é mover para o fim da lista: o Slint desenha na
-        // ordem do modelo, então o último fica por cima.
-        STATE.with(|state| {
+        // Só marca o foco. Reordenar aqui trocaria o modelo no exato instante
+        // em que a TouchArea capturou o ponteiro: o elemento seria recriado e a
+        // captura se perderia, deixando arrastar e redimensionar sem efeito.
+        STATE.with(|state| state.borrow_mut().focused = Some(id.to_string()));
+        refresh_focus(&window);
+    });
+
+    let handle = window.as_weak();
+    window.on_block_settled(move || {
+        let Some(window) = handle.upgrade() else {
+            return;
+        };
+        // O gesto terminou: agora dá para trazer o bloco à frente de fato, que
+        // no Slint é movê-lo para o fim do modelo, já que o desenho segue essa
+        // ordem.
+        let reordered = STATE.with(|state| {
             let mut state = state.borrow_mut();
-            if let Some(tab) = active_tab_mut(&mut state) {
-                if let Some(index) = tab.blocks.iter().position(|block| block.id == id.as_str()) {
-                    let block = tab.blocks.remove(index);
-                    tab.blocks.push(block);
-                }
+            let focused = state.focused.clone()?;
+            let tab = active_tab_mut(&mut state)?;
+            let index = tab.blocks.iter().position(|block| block.id == focused)?;
+            if index + 1 == tab.blocks.len() {
+                return None;
             }
+            let block = tab.blocks.remove(index);
+            tab.blocks.push(block);
+            Some(())
         });
-        publish(&window);
+
+        if reordered.is_some() {
+            publish(&window);
+        }
     });
 
     let handle = window.as_weak();
@@ -382,4 +404,19 @@ pub fn open_editor_block(window: &AppWindow, path: &str) {
 
     window.set_section(Section::Workspace);
     publish(window);
+}
+
+/// Atualiza só a marca de foco das linhas, sem trocar o modelo.
+fn refresh_focus(window: &AppWindow) {
+    let rows = window.get_blocks();
+    STATE.with(|state| {
+        let state = state.borrow();
+        let Some(tab) = state.tabs.iter().find(|tab| tab.id == state.active) else {
+            return;
+        };
+        for (index, block) in tab.blocks.iter().enumerate() {
+            let focused = state.focused.as_deref() == Some(block.id.as_str());
+            rows.set_row_data(index, to_row(block, focused));
+        }
+    });
 }

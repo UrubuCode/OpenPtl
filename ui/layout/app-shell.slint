@@ -63,6 +63,7 @@ export component AppShell inherits Rectangle {
     callback block-moved(string, length, length);
     callback block-resized(string, length, length);
     callback block-raised(string);
+    callback block-settled();
     callback block-minimize-toggled(string);
     callback block-closed(string);
     callback block-add-terminal();
@@ -125,6 +126,7 @@ export component AppShell inherits Rectangle {
                 block-moved(id, dx, dy) => { root.block-moved(id, dx, dy); }
                 block-resized(id, dx, dy) => { root.block-resized(id, dx, dy); }
                 block-raised(id) => { root.block-raised(id); }
+                block-settled => { root.block-settled(); }
                 block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
                 block-closed(id) => { root.block-closed(id); }
                 terminal-input(text, ctrl, alt) => { root.terminal-input-sent(text, ctrl, alt); }

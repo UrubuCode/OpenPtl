@@ -39,6 +39,8 @@ export component BlockFrame inherits Rectangle {
     callback moved(length, length);
     callback resized(length, length);
     callback raised();
+    /// O gesto terminou: e a hora de reordenar sem interromper a captura.
+    callback settled();
     callback minimize-toggled();
     callback closed();
 
@@ -74,6 +76,9 @@ export component BlockFrame inherits Rectangle {
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.down) {
                         root.raised();
+                    }
+                    if (event.kind == PointerEventKind.up) {
+                        root.settled();
                     }
                 }
                 double-clicked => { root.minimize-toggled(); }
@@ -154,6 +159,9 @@ export component BlockFrame inherits Rectangle {
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     root.raised();
+                }
+                if (event.kind == PointerEventKind.up) {
+                    root.settled();
                 }
             }
         }
