@@ -137,31 +137,14 @@ jobs:
         shell: bash
         run: cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "${{ matrix.artifact }}"
 
-      # A chave e a mesma de sempre: o aplicativo instalado confere a assinatura
-      # com a chave publica embutida em src/constants.rs.
-      - name: Assinar com minisign
-        shell: bash
-        env:
-          MINISIGN_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          MINISIGN_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "${MINISIGN_KEY}" ]; then
-            echo "::error::Sem chave de assinatura. Uma release sem assinatura seria recusada pelo proprio aplicativo."
-            exit 1
-          fi
-          cargo install minisign --locked
-          printf '%s' "$MINISIGN_KEY" > minisign.key
-          printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s minisign.key -m "${{ matrix.artifact }}"
-          rm -f minisign.key
-
+      # A assinatura acontece uma vez so, no job de publicacao. Assinar aqui
+      # exigiria instalar o minisign em tres sistemas diferentes e exporia a
+      # chave privada a quatro maquinas em vez de uma.
       - name: Publicar plataforma
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: |
-            ${{ matrix.artifact }}
-            ${{ matrix.artifact }}.minisig
+          path: ${{ matrix.artifact }}
 
   publish:
     name: Publicar release
@@ -173,6 +156,68 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      # O `minisign` do crates.io e biblioteca, nao programa: `cargo install`
+      # sempre falhou aqui com "has no binaries", e nenhuma release chegou a ser
+      # assinada. O binario oficial vem do apt, com o release do autor como
+      # reserva caso o pacote nao exista na imagem.
+      - name: Instalar minisign
+        run: |
+          set -euo pipefail
+          if sudo apt-get update && sudo apt-get install -y minisign; then
+            minisign -v
+            exit 0
+          fi
+
+          version="0.12"
+          url="https://github.com/jedisct1/minisign/releases/download/${version}/minisign-${version}-linux-x86_64.tar.gz"
+          curl -fsSL "$url" -o minisign.tar.gz
+          tar -xzf minisign.tar.gz
+          sudo install -m 0755 "minisign-linux/x86_64/minisign" /usr/local/bin/minisign
+          minisign -v
+
+      # A chave e a mesma de sempre: o aplicativo instalado confere a assinatura
+      # com a chave publica embutida em src/constants.rs.
+      - name: Assinar os artefatos
+        env:
+          MINISIGN_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MINISIGN_KEY}" ]; then
+            echo "::error::Sem chave de assinatura. Uma release sem assinatura seria recusada pelo proprio aplicativo."
+            exit 1
+          fi
+
+          printf '%s' "$MINISIGN_KEY" > minisign.key
+          # O segredo pode estar guardado como o arquivo de chave ou como o
+          # base64 dele, que e como o Tauri costumava exporta-lo.
+          if ! grep -q 'untrusted comment' minisign.key; then
+            base64 -d minisign.key > minisign.decoded && mv minisign.decoded minisign.key
+          fi
+
+          trap 'rm -f minisign.key' EXIT
+          for artifact in artifacts/*/*; do
+            case "$artifact" in
+              *.minisig) continue ;;
+            esac
+            printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s minisign.key -m "$artifact"
+          done
+
+      # Conferir com a chave publica que o aplicativo carrega: uma assinatura
+      # feita com a chave errada so seria descoberta na maquina do usuario, no
+      # momento em que a atualizacao fosse recusada.
+      - name: Conferir as assinaturas
+        run: |
+          set -euo pipefail
+          public_key=$(grep -A1 'RELEASE_PUBLIC_KEY' src/constants.rs | grep -o 'RWS[A-Za-z0-9+/=]*')
+          printf 'untrusted comment: minisign public key\n%s\n' "$public_key" > minisign.pub
+          for artifact in artifacts/*/*; do
+            case "$artifact" in
+              *.minisig) continue ;;
+            esac
+            minisign -V -p minisign.pub -m "$artifact"
+          done
 
       # latest.json mantem o formato que o updater ja espera: versao, notas e um
       # par url/signature por plataforma.
