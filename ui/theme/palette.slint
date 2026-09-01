@@ -17,11 +17,17 @@ export global Palette {
         #a9d1ff, #e6c6ff, #a5e8e2, #edf3fa,
     ];
 
-    pure public function foreground(index: int) -> color {
-        return index < 0 ? Theme.text-primary : self.ansi[index];
+    // -2 significa "a cor ja veio resolvida"; e o caso do cubo de 256 e do
+    // truecolor, que nao cabem nesta paleta.
+    pure public function foreground(index: int, rgb: color) -> color {
+        return index == -2 ? rgb
+            : index < 0 ? Theme.text-primary
+            : self.ansi[index];
     }
 
-    pure public function background(index: int) -> color {
-        return index < 0 ? transparent : self.ansi[index];
+    pure public function background(index: int, rgb: color) -> color {
+        return index == -2 ? rgb
+            : index < 0 ? transparent
+            : self.ansi[index];
     }
 }

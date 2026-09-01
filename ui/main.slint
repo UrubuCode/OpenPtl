@@ -137,7 +137,7 @@ export component AppWindow inherits Window {
     callback block-raised(string);
     callback block-settled();
     callback canvas-resized(length, length);
-    callback terminal-resized(string, length, length);
+    callback terminal-resized(string, length, length, length, length);
     callback block-minimize-toggled(string);
     callback block-closed(string);
     callback block-open-connection();
@@ -277,7 +277,7 @@ export component AppWindow inherits Window {
                 block-raised(id) => { root.block-raised(id); }
                 block-settled => { root.block-settled(); }
                 canvas-resized(w, h) => { root.canvas-resized(w, h); }
-                terminal-resized(id, w, h) => { root.terminal-resized(id, w, h); }
+                terminal-resized(id, w, h, cw, ch) => { root.terminal-resized(id, w, h, cw, ch); }
                 block-minimize-toggled(id) => { root.block-minimize-toggled(id); }
                 block-closed(id) => { root.block-closed(id); }
                 block-open-connection => { root.block-open-connection(); }

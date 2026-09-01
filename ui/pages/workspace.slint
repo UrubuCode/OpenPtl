@@ -68,7 +68,7 @@ export component WorkspacePage inherits Rectangle {
     callback block-minimize-toggled(string);
     callback block-closed(string);
     callback terminal-input(string, bool, bool);
-    callback terminal-resized(string, length, length);
+    callback terminal-resized(string, length, length, length, length);
     callback file-opened(string);
     callback open-connection();
     /// O canvas informa seu tamanho para que o Rust possa manter os blocos
@@ -158,7 +158,7 @@ export component WorkspacePage inherits Rectangle {
             lines: root.terminal-lines;
             focused: block.active;
             key-pressed(text, ctrl, alt) => { root.terminal-input(text, ctrl, alt); }
-            surface-resized(w, h) => { root.terminal-resized(block.session, w, h); }
+            surface-resized(w, h, cw, ch) => { root.terminal-resized(block.session, w, h, cw, ch); }
         }
 
         if block.kind == BlockKind.files: ScrollView {

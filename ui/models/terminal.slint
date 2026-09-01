@@ -1,8 +1,12 @@
 export struct TermSpan {
     text: string,
-    // Índice na paleta ANSI de 16 cores, ou -1 para a cor padrão do tema.
+    // Índice na paleta ANSI de 16 cores, -1 para a cor padrão do tema ou -2
+    // para usar o RGB que vem ao lado. O cubo de 256 cores e o truecolor não
+    // cabem numa paleta de 16 e chegam já resolvidos.
     foreground: int,
     background: int,
+    foreground-rgb: color,
+    background-rgb: color,
     bold: bool,
     // Quantas celulas o trecho ocupa; a largura vem daqui, nao do texto.
     cells: int,

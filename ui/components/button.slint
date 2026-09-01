@@ -16,13 +16,19 @@ export component UiButton inherits Rectangle {
     in property <bool> wide: false;
     /// Versao baixa, para caber em linhas de lista.
     in property <bool> compact: false;
+    /// So o icone, para a barra lateral recolhida. O rotulo perde a largura
+    /// em vez de apenas ficar invisivel: escondido mas ocupando espaco, ele
+    /// empurrava o icone para fora do centro.
+    in property <bool> icon-only: false;
     /// Icone opcional a esquerda do rotulo.
     in property <image> icon;
     callback clicked();
 
     height: root.compact ? 26px : Theme.control-height;
     horizontal-stretch: 0;
-    min-width: root.wide ? 0px : caption.min-width + 2 * root.side-padding;
+    min-width: root.icon-only ? root.height
+        : root.wide ? 0px
+        : caption.min-width + 2 * root.side-padding;
     border-radius: Theme.radius-md;
     border-width: 1px;
     opacity: root.enabled ? 1.0 : 0.45;
@@ -65,9 +71,9 @@ export component UiButton inherits Rectangle {
     property <length> side-padding: root.compact ? Theme.space-md : Theme.space-lg;
 
     HorizontalLayout {
-        padding-left: root.side-padding;
-        padding-right: root.side-padding;
-        spacing: Theme.space-sm;
+        padding-left: root.icon-only ? 0px : root.side-padding;
+        padding-right: root.icon-only ? 0px : root.side-padding;
+        spacing: root.icon-only ? 0px : Theme.space-sm;
         alignment: center;
 
         if root.icon.width > 0: UiIcon {
@@ -80,15 +86,24 @@ export component UiButton inherits Rectangle {
                 : Theme.text-secondary;
         }
 
-        caption := Text {
-            text: root.label;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            font-size: root.compact ? Type.caption : Type.label;
-            font-weight: Type.weight-medium;
-            color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
-                ? Theme.text-on-accent
-                : Theme.text-secondary;
+        // O rotulo mora numa caixa de largura controlada. Recolhido, a caixa
+        // vai a zero e recorta o texto, em vez de o layout continuar
+        // reservando espaco para ele.
+        Rectangle {
+            horizontal-stretch: 0;
+            clip: true;
+            width: root.icon-only ? 0px : caption.preferred-width;
+
+            caption := Text {
+                text: root.label;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                font-size: root.compact ? Type.caption : Type.label;
+                font-weight: Type.weight-medium;
+                color: root.tone == ButtonTone.primary || root.tone == ButtonTone.danger
+                    ? Theme.text-on-accent
+                    : Theme.text-secondary;
+            }
         }
     }
 

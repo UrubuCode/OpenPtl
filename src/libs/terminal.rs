@@ -43,6 +43,11 @@ pub struct Style {
 pub struct Span {
     pub text: String,
     pub style: Style,
+    /// Quantas colunas o trecho ocupa na grade.
+    ///
+    /// Não é o número de caracteres: um glifo largo — CJK, emoji — vale duas
+    /// colunas, e contar caracteres empurrava o resto da linha para a esquerda.
+    pub cells: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,12 +137,21 @@ impl Terminal {
             if indexed.point == cursor {
                 style.inverse = !style.inverse;
             }
+            let cells = if indexed.cell.flags.contains(Flags::WIDE_CHAR) {
+                2
+            } else {
+                1
+            };
             let spans = lines.last_mut().expect("uma linha foi aberta acima");
             match spans.last_mut() {
-                Some(last) if last.style == style => last.text.push(indexed.cell.c),
+                Some(last) if last.style == style => {
+                    last.text.push(indexed.cell.c);
+                    last.cells += cells;
+                }
                 _ => spans.push(Span {
                     text: indexed.cell.c.to_string(),
                     style,
+                    cells,
                 }),
             }
         }

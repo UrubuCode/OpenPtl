@@ -6,9 +6,9 @@ export global Type {
     // numa proporcional e desalinha a grade do terminal.
     out property <string> mono-family: "Consolas";
     out property <length> mono-size: 13px;
-    // Metricas da celula do terminal, casadas com mono-size.
-    out property <length> cell-width: 7px;
-    out property <length> cell-height: 17px;
+    // A celula do terminal nao e mais um token: a largura vinha de um chute de
+    // 7px que nao batia com o avanco real do Consolas, e o erro se acumulava
+    // ao longo da linha. `TerminalView` mede a fonte e deriva dela.
 
     out property <length> display: 20px;
     out property <length> title: 15px;
