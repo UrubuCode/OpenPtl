@@ -1,8 +1,16 @@
 name: Update Pages
 
+# Disparado pela conclusao da Release, e nao pelo evento `release`.
+#
+# O ambiente `github-pages` so aceita deploy a partir da branch main, e um
+# evento de release roda no ref da tag: o job era recusado antes de executar
+# qualquer passo, o que aparecia como uma falha de 1 segundo sem log nenhum.
+# `workflow_run` roda sempre no ref da branch padrao, entao passa na politica e
+# ainda acontece depois de cada release publicada.
 on:
-  release:
-    types: [published, edited, deleted]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -16,12 +24,21 @@ concurrency:
 
 jobs:
   deploy:
+    # Uma release que falhou nao tem o que anunciar na pagina.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # O script usa so modulos nativos do Node; nao ha package.json para
+      # instalar desde que a cadeia de build JS saiu do projeto.
       - name: Build landing page
         run: node scripts/build-pages.mjs
         env:
