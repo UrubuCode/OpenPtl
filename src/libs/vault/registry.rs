@@ -15,8 +15,9 @@ use directories::ProjectDirs;
 
 use super::crypto::{is_bin_file_name, read_bin_file, write_bin_file};
 use crate::constants::{
-    CURRENT_PAYLOAD_VERSION, DEFAULT_VAULT_LABEL, OPENPTL_FILE_NAME, STORAGE_DIR_NAME,
-    VAULTS_DIR_NAME, VAULTS_REGISTRY_FILE_NAME, VAULT_LABEL_MAX_LEN,
+    CURRENT_PAYLOAD_VERSION, CURRENT_STORAGE_VERSION, DEFAULT_VAULT_LABEL, LEGACY_PROFILE_DIR_NAME,
+    LEGACY_VAULT_FILE_NAME, OPENPTL_FILE_NAME, STORAGE_DIR_NAME, VAULTS_DIR_NAME,
+    VAULTS_REGISTRY_FILE_NAME, VAULT_LABEL_MAX_LEN,
 };
 use crate::libs::models::{VaultEntry, VaultsBinPayload};
 
@@ -56,10 +57,56 @@ impl VaultRegistry {
             payload,
         };
 
+        registry.purge_legacy_artifacts();
         registry.adopt_single_vault_layout()?;
         registry.forget_missing()?;
+        registry.drop_outdated_vaults()?;
         registry.ensure_selection()?;
         Ok(registry)
+    }
+
+    /// Apaga restos de instalações anteriores que nenhuma versão atual lê.
+    ///
+    /// São o `vault.enc.json` do tempo do Tauri e a pasta `default` do layout
+    /// que precedeu os cofres por diretório. Falhar aqui não interrompe a
+    /// abertura: é limpeza, não pré-requisito.
+    fn purge_legacy_artifacts(&self) {
+        if let Some(data_dir) = self.storage_root.parent() {
+            let _ = fs::remove_file(data_dir.join(LEGACY_VAULT_FILE_NAME));
+        }
+
+        let legacy_default = self.storage_root.join(LEGACY_PROFILE_DIR_NAME);
+        if legacy_default.is_dir() {
+            let _ = fs::remove_dir_all(&legacy_default);
+        }
+    }
+
+    /// Remove cofres gravados num formato que esta versão não abre mais.
+    ///
+    /// Só apaga o que consegue identificar como anterior: um `openptl.bin`
+    /// legível cuja versão é menor que a atual. Arquivo ilegível ou de versão
+    /// mais nova fica onde está — pode ser um cofre gravado por uma versão
+    /// posterior do aplicativo, e apagá-lo destruiria dados válidos.
+    fn drop_outdated_vaults(&mut self) -> Result<()> {
+        let outdated: Vec<String> = self
+            .payload
+            .vaults
+            .iter()
+            .filter(|entry| is_outdated_vault(&self.vaults_root.join(&entry.id)))
+            .map(|entry| entry.id.clone())
+            .collect();
+
+        if outdated.is_empty() {
+            return Ok(());
+        }
+
+        for id in &outdated {
+            let _ = fs::remove_dir_all(self.vaults_root.join(id));
+        }
+        self.payload
+            .vaults
+            .retain(|entry| !outdated.contains(&entry.id));
+        self.persist()
     }
 
     /// Move uma instalação de cofre único para dentro de `vaults/<id>`.
@@ -69,6 +116,12 @@ impl VaultRegistry {
     fn adopt_single_vault_layout(&mut self) -> Result<()> {
         if !self.storage_root.join(OPENPTL_FILE_NAME).exists() {
             return Ok(());
+        }
+
+        // Cofre único gravado no formato anterior: adotá-lo só adiaria o erro
+        // para a tela de senha, que não teria como abri-lo.
+        if is_outdated_vault(&self.storage_root) {
+            return self.discard_single_vault_layout();
         }
 
         let entry = self.new_entry(DEFAULT_VAULT_LABEL);
@@ -100,6 +153,29 @@ impl VaultRegistry {
         self.payload.selected = Some(adopted.id.clone());
         self.payload.vaults.push(adopted);
         self.persist()
+    }
+
+    /// Apaga os arquivos soltos na raiz do cofre único antigo.
+    fn discard_single_vault_layout(&self) -> Result<()> {
+        for item in fs::read_dir(&self.storage_root)
+            .with_context(|| format!("Falha ao listar {}", self.storage_root.display()))?
+        {
+            let path = item?.path();
+            if path.is_dir() {
+                continue;
+            }
+            let Some(name) = path
+                .file_name()
+                .map(|value| value.to_string_lossy().to_string())
+            else {
+                continue;
+            };
+            if name == VAULTS_REGISTRY_FILE_NAME {
+                continue;
+            }
+            let _ = fs::remove_file(&path);
+        }
+        Ok(())
     }
 
     /// Descarta do índice cofres cujo diretório sumiu — apagados à mão, por
@@ -292,125 +368,25 @@ impl VaultRegistry {
     }
 }
 
+/// Um diretório guarda um cofre de formato anterior?
+///
+/// Um cofre ainda sem `openptl.bin` é novo, não velho. A versão só conta como
+/// antiga quando pode ser lida e é menor que a atual.
+fn is_outdated_vault(dir: &Path) -> bool {
+    let path = dir.join(OPENPTL_FILE_NAME);
+    if !path.exists() {
+        return false;
+    }
+
+    read_bin_file::<super::OpenPtlBin>(&path)
+        .map(|file| file.version < CURRENT_STORAGE_VERSION)
+        .unwrap_or(false)
+}
+
 fn normalize_label(input: &str) -> String {
     input.trim().chars().take(VAULT_LABEL_MAX_LEN).collect()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    fn registry(dir: &Path) -> VaultRegistry {
-        VaultRegistry::new_in(dir.to_path_buf()).expect("registry")
-    }
-
-    #[test]
-    fn a_fresh_install_starts_with_no_vaults() {
-        let temp = tempdir().expect("temp");
-        let registry = registry(temp.path());
-        assert!(registry.list().is_empty());
-        assert!(registry.selected_id().is_none());
-    }
-
-    #[test]
-    fn creating_a_vault_selects_it() {
-        let temp = tempdir().expect("temp");
-        let mut registry = registry(temp.path());
-        let entry = registry.create("Empresa").expect("create");
-
-        assert_eq!(registry.selected_id().as_deref(), Some(entry.id.as_str()));
-        assert!(registry.path_of(&entry.id).expect("path").is_dir());
-    }
-
-    #[test]
-    fn two_vaults_never_share_a_directory() {
-        let temp = tempdir().expect("temp");
-        let mut registry = registry(temp.path());
-        let first = registry.create("Pessoal").expect("create");
-        let second = registry.create("Empresa").expect("create");
-
-        assert_ne!(first.id, second.id);
-        assert_ne!(
-            registry.path_of(&first.id).expect("path"),
-            registry.path_of(&second.id).expect("path")
-        );
-    }
-
-    #[test]
-    fn labels_do_not_repeat() {
-        let temp = tempdir().expect("temp");
-        let mut registry = registry(temp.path());
-        registry.create("Empresa").expect("create");
-        assert!(registry.create("  empresa ").is_err());
-    }
-
-    #[test]
-    fn the_selection_survives_a_reopen() {
-        let temp = tempdir().expect("temp");
-        let chosen = {
-            let mut registry = registry(temp.path());
-            registry.create("Pessoal").expect("create");
-            let second = registry.create("Empresa").expect("create");
-            registry.select(&second.id).expect("select");
-            second.id
-        };
-
-        let reopened = registry(temp.path());
-        assert_eq!(reopened.selected_id(), Some(chosen));
-        assert_eq!(reopened.list().len(), 2);
-    }
-
-    #[test]
-    fn removing_the_selected_vault_falls_back_to_another() {
-        let temp = tempdir().expect("temp");
-        let mut registry = registry(temp.path());
-        let first = registry.create("Pessoal").expect("create");
-        let second = registry.create("Empresa").expect("create");
-
-        registry.remove(&second.id).expect("remove");
-        assert_eq!(registry.selected_id(), Some(first.id));
-        assert!(!registry.vaults_root.join(&second.id).exists());
-    }
-
-    #[test]
-    fn a_single_vault_install_is_adopted_instead_of_lost() {
-        let temp = tempdir().expect("temp");
-        let storage_root = temp.path().join(STORAGE_DIR_NAME);
-        fs::create_dir_all(&storage_root).expect("dir");
-        fs::write(storage_root.join(OPENPTL_FILE_NAME), b"metadados").expect("write");
-        fs::write(storage_root.join("notes.bin"), b"notas").expect("write");
-        fs::write(storage_root.join("known_hosts"), b"host").expect("write");
-
-        let registry = registry(temp.path());
-        let entries = registry.list();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].label, DEFAULT_VAULT_LABEL);
-        assert!(entries[0].initialized);
-
-        let moved = registry.path_of(&entries[0].id).expect("path");
-        assert!(moved.join(OPENPTL_FILE_NAME).exists());
-        assert!(moved.join("notes.bin").exists());
-        assert!(!storage_root.join(OPENPTL_FILE_NAME).exists());
-        assert!(
-            !moved.join("known_hosts").exists(),
-            "o known_hosts em claro e regenerado, nao migrado"
-        );
-    }
-
-    #[test]
-    fn a_vault_whose_directory_vanished_leaves_the_index() {
-        let temp = tempdir().expect("temp");
-        let orphan = {
-            let mut registry = registry(temp.path());
-            registry.create("Pessoal").expect("create");
-            let gone = registry.create("Empresa").expect("create");
-            fs::remove_dir_all(registry.vaults_root.join(&gone.id)).expect("remove");
-            gone.id
-        };
-
-        let reopened = registry(temp.path());
-        assert_eq!(reopened.list().len(), 1);
-        assert!(reopened.list().iter().all(|entry| entry.id != orphan));
-    }
-}
+#[path = "registry_tests.rs"]
+mod tests;

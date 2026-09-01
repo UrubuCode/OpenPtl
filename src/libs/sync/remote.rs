@@ -19,11 +19,27 @@ use crate::libs::mutations::RemoteHeader;
 /// entregaria ao Google quantos aparelhos existem e qual muda mais. O prefixo
 /// dos snapshots é a única concessão — sem ele, achar o snapshot obrigaria a
 /// baixar a pasta inteira a cada sincronia.
+/// Nomes que só o esquema anterior — um arquivo fixo por área — produzia.
+///
+/// O log de mutações nunca gera nenhum deles: um lote é um UUID, o snapshot
+/// tem prefixo próprio e o cabeçalho é `header.bin`. Encontrar um destes é
+/// prova de que sobrou de antes, e por isso pode ser apagado sem ambiguidade —
+/// diferente de um arquivo que apenas não descriptografa, que pode pertencer a
+/// outra chave mestre.
+const LEGACY_REMOTE_NAMES: [&str; 5] = [
+    "openptl.bin",
+    "profile.bin",
+    "manifest.bin",
+    "known_hosts.bin",
+    "notes.bin",
+];
+
 #[derive(Debug, Default)]
 pub(crate) struct RemoteLayout {
     pub(crate) header: Option<DriveFileMetadata>,
     pub(crate) snapshots: Vec<DriveFileMetadata>,
     pub(crate) batches: Vec<DriveFileMetadata>,
+    pub(crate) legacy: Vec<DriveFileMetadata>,
 }
 
 impl RemoteLayout {
@@ -32,7 +48,9 @@ impl RemoteLayout {
 
         for file in files {
             let name = file.file_name().to_string();
-            if name == REMOTE_HEADER_FILE_NAME {
+            if LEGACY_REMOTE_NAMES.contains(&name.as_str()) {
+                layout.legacy.push(file);
+            } else if name == REMOTE_HEADER_FILE_NAME {
                 layout.header = Some(file);
             } else if name.starts_with(REMOTE_SNAPSHOT_PREFIX) {
                 layout.snapshots.push(file);

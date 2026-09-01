@@ -174,7 +174,9 @@ impl SyncManager {
                 // Um lote ilegível pertence a outra chave mestre ou está
                 // corrompido. Ignorar é melhor que travar a sincronia inteira:
                 // os demais lotes continuam válidos.
-                Err(_) => fetch.unreadable += 1,
+                // Marcado como visto mesmo assim: sem isso o arquivo seria
+                // rebaixado em toda sincronia, para sempre.
+                Err(_) => fetch.unreadable.push(file.id.clone()),
             }
             report_progress(reporter, "downloading", None, index + 1, total);
         }
@@ -308,6 +310,56 @@ impl SyncManager {
             .map(Some)
     }
 
+    /// Apaga no Drive o que sobrou dos esquemas anteriores.
+    ///
+    /// São duas fontes. Os arquivos soltos na raiz `OpenPtl/`, que hoje só
+    /// abriga pastas de cofre — qualquer arquivo ali é de antes de os cofres
+    /// ganharem diretório. E, dentro da pasta do cofre, os nomes fixos do
+    /// esquema que precedeu o log de mutações.
+    ///
+    /// Nada é apagado por não descriptografar: isso também aconteceria com um
+    /// lote de outra chave mestre, e confundir os dois destruiria histórico
+    /// válido.
+    pub async fn purge_legacy(&mut self, reporter: &Reporter) -> Result<usize> {
+        let client = Client::new();
+        let access_token = self.access_token().await?;
+
+        let Some(root_id) = ensure_named_folder(
+            &client,
+            &access_token,
+            DRIVE_ROOT_FOLDER_NAME,
+            DRIVE_TOP_PARENT_ID,
+            false,
+        )
+        .await?
+        else {
+            return Ok(0);
+        };
+
+        let mut stale = list_drive_files(&client, &access_token, &root_id).await?;
+
+        if let Some(folder_id) =
+            ensure_vault_folder(&client, &access_token, &vault_scope(), false).await?
+        {
+            let layout =
+                RemoteLayout::classify(list_drive_files(&client, &access_token, &folder_id).await?);
+            stale.extend(layout.legacy);
+        }
+
+        let total = stale.len();
+        if total == 0 {
+            return Ok(0);
+        }
+
+        report_progress(reporter, "cleaning_remote", None, 0, total);
+        for (index, file) in stale.iter().enumerate() {
+            delete_drive_file(&client, &access_token, &file.id).await?;
+            report_progress(reporter, "cleaning_remote", None, index + 1, total);
+        }
+        report_progress(reporter, "complete", None, total, total);
+        Ok(total)
+    }
+
     /// Endereços do servidor de auth, guardados para as chamadas seguintes.
     pub fn use_servers(&mut self, address: String, fallbacks: Vec<String>) {
         set_auth_endpoints(address, fallbacks);
@@ -331,8 +383,9 @@ pub struct RemoteFetch {
     pub batches: Vec<(String, MutationBatch)>,
     /// Quantos lotes existem lá, para decidir se é hora de compactar.
     pub remote_batch_count: usize,
-    /// Lotes que não abriram com a chave atual.
-    pub unreadable: usize,
+    /// Arquivos que nao abriram com a chave atual. Ficam registrados como
+    /// vistos para nao voltarem a ser baixados a cada rodada.
+    pub unreadable: Vec<String>,
 }
 
 fn batch_id_from_name(name: &str) -> Option<Uuid> {

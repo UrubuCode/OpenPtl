@@ -16,6 +16,10 @@ pub const VAULTS_DIR_NAME: &str = "vaults";
 pub const VAULTS_REGISTRY_FILE_NAME: &str = "vaults.bin";
 /// Rótulo do cofre criado ao migrar uma instalação de cofre único.
 pub const DEFAULT_VAULT_LABEL: &str = "Pessoal";
+/// Restos de instalacoes anteriores, apagados na abertura. Nenhuma versao
+/// atual le qualquer um dos dois.
+pub const LEGACY_VAULT_FILE_NAME: &str = "vault.enc.json";
+pub const LEGACY_PROFILE_DIR_NAME: &str = "default";
 /// Limite do rótulo, para o índice não virar depósito de texto.
 pub const VAULT_LABEL_MAX_LEN: usize = 60;
 /// Arquivo principal de metadados do vault.

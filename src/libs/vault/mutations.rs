@@ -213,6 +213,21 @@ impl VaultManager {
         Ok(self.read_mutation_store()?.has_seen_file(file_id))
     }
 
+    /// Registra arquivos remotos como já processados sem aplicá-los.
+    ///
+    /// Serve para os que não descriptografam: sem isso o aplicativo os
+    /// baixaria de novo em toda sincronia, sem nunca conseguir usá-los.
+    pub fn mark_files_seen(&mut self, file_ids: &[String]) -> Result<()> {
+        if file_ids.is_empty() {
+            return Ok(());
+        }
+        let mut store = self.read_mutation_store()?;
+        for id in file_ids {
+            store.mark_file_seen(id);
+        }
+        self.write_mutation_store(&store)
+    }
+
     /// Confirma o envio de um lote e guarda o id do arquivo criado no Drive.
     pub fn confirm_pushed(&mut self, mutation_id: uuid::Uuid, file_id: &str) -> Result<()> {
         let mut store = self.read_mutation_store()?;

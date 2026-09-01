@@ -5,6 +5,7 @@
 //! que faz a chamada, nunca dentro da tarefa assíncrona, para não segurar o
 //! cadeado durante a rede.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -14,6 +15,9 @@ use crate::constants::REMOTE_COMPACTION_THRESHOLD;
 use crate::libs::models::{AuthServer, SyncLoggedUser};
 use crate::libs::sync::{fetch_official_servers, request_sync_cancel, Reporter};
 use crate::libs::vault::SyncContext;
+
+/// Guarda que a varredura de restos antigos ja aconteceu nesta execucao.
+static LEGACY_PURGED: AtomicBool = AtomicBool::new(false);
 
 impl Backend {
     pub fn sync_reporter(&self) -> Reporter {
@@ -79,6 +83,13 @@ impl Backend {
             manager.use_servers(address, fallbacks);
             manager.use_vault(context.vault_id.clone());
 
+            // Uma vez por execução: o que sobrou dos esquemas anteriores é
+            // finito e não volta a aparecer, então varrer a cada rodada só
+            // gastaria chamadas de API.
+            if !LEGACY_PURGED.swap(true, Ordering::Relaxed) {
+                let _ = manager.purge_legacy(&reporter).await;
+            }
+
             let fetched = manager
                 .fetch_remote(
                     &reporter,
@@ -102,6 +113,7 @@ impl Backend {
                 if let Err(error) = vault.ingest_remote(&fetched.batches, fetched.snapshot) {
                     return report_failure(&reporter, Some(error));
                 }
+                let _ = vault.mark_files_seen(&fetched.unreadable);
                 match vault.pending_batches() {
                     Ok(batches) => batches,
                     Err(error) => return report_failure(&reporter, Some(error)),
